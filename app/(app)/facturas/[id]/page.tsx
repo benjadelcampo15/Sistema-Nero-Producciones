@@ -89,7 +89,9 @@ export default async function PaginaFactura({ params }: PageProps<"/facturas/[id
         <div className="space-y-4">
           {revisable ? (
             <>
+              {/* key: si la factura se vuelve a leer con IA, el formulario se arma de nuevo con los datos nuevos. */}
               <FormularioAprobacion
+                key={factura.actualizado_en}
                 factura={factura}
                 categorias={categorias}
                 eventos={eventos}

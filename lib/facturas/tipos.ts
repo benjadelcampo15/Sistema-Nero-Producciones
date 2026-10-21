@@ -42,4 +42,5 @@ export type Factura = {
   total: number | null;
   duplicada_de: string | null;
   creado_en: string;
+  actualizado_en: string;
 };

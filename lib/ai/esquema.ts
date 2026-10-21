@@ -22,7 +22,13 @@ export const esquemaDatosFactura = z.object({
   moneda: z.enum(["ARS", "USD"]),
   descripcion: z.string(),
   items: z.array(
-    z.object({ descripcion: z.string(), cantidad: z.number(), precio_unitario: z.number(), importe: z.number() }),
+    z.object({
+      descripcion: z.string(),
+      cantidad: z.number(),
+      subtotal_neto: z.number(),
+      impuestos_internos: z.number(),
+      importe: z.number(),
+    }),
   ),
   emitida_por_nero: z.boolean(),
   es_compra_mercaderia: z.boolean(),
@@ -54,16 +60,19 @@ export function jsonSchemaFactura(categorias: string[]) {
     descripcion: texto("Resumen corto de qué se factura (máx. 80 caracteres)"),
     items: {
       type: "array",
-      description: "Renglones del detalle (máximo 20)",
+      description: "Todos los renglones del detalle, sin omitir ninguno",
       items: {
         type: "object",
         properties: {
           descripcion: texto("Detalle del renglón (producto o servicio)"),
           cantidad: numero("Cantidad. 1 si no figura"),
-          precio_unitario: numero("Precio unitario sin IVA. 0 si no figura"),
-          importe: numero("Importe del renglón"),
+          subtotal_neto: numero(
+            "Subtotal neto del renglón SIN IVA y DESPUÉS de descuentos, copiado tal cual de la factura (columna 'Subt. Neto' o similar). 0 si no figura",
+          ),
+          impuestos_internos: numero("Impuestos internos del renglón (columna 'Imp. Interno'). 0 si no figura"),
+          importe: numero("Importe final del renglón (con IVA si la factura lo muestra así)"),
         },
-        required: ["descripcion", "cantidad", "precio_unitario", "importe"],
+        required: ["descripcion", "cantidad", "subtotal_neto", "impuestos_internos", "importe"],
         additionalProperties: false,
       },
     },
@@ -107,6 +116,7 @@ export function instruccionesFactura(nombresCategorias: string[]) {
     "- Fechas en formato YYYY-MM-DD.",
     '- Si un dato no figura o es ilegible, devolvé "" (texto) o 0 (número) y mencionalo en observaciones. No inventes datos.',
     "- Verificá que neto + IVA + otros impuestos ≈ total; si no cierra, decilo en observaciones.",
+    "- items: incluí TODOS los renglones de productos o servicios, aunque sean muchos o la letra sea chica. No incluyas percepciones ni totales como renglones.",
     `- categoria_sugerida tiene que ser una de: ${nombresCategorias.join(", ")}.`,
   ].join("\n");
 }

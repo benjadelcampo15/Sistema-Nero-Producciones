@@ -3,7 +3,25 @@
 import { useState } from "react";
 import { UNIDADES, type Deposito, type Producto } from "@/lib/stock/tipos";
 
-export type ItemFactura = { descripcion: string; cantidad?: number; precio_unitario?: number; importe?: number };
+export type ItemFactura = {
+  descripcion: string;
+  cantidad?: number;
+  subtotal_neto?: number;
+  impuestos_internos?: number;
+  /** Lecturas anteriores de la IA traían el precio unitario directo. */
+  precio_unitario?: number;
+  importe?: number;
+};
+
+/**
+ * Costo unitario real sin IVA = (subtotal neto con descuentos + impuestos internos) / cantidad.
+ * Lo calcula la app (no la IA) para que no dependa de que el modelo haga bien la cuenta.
+ */
+function costoUnitario(it: ItemFactura) {
+  const cantidad = it.cantidad || 1;
+  if (it.subtotal_neto) return (it.subtotal_neto + (it.impuestos_internos ?? 0)) / cantidad;
+  return it.precio_unitario || undefined;
+}
 
 type Renglon = { incluir: boolean; producto: string; nombre: string; unidad: string; cantidad: string; costo: string };
 
@@ -35,7 +53,7 @@ export function SeccionStock({
   const [renglones, setRenglones] = useState<Renglon[]>(() =>
     (items.length ? items : [{ descripcion: "" }]).map((it) => {
       const existente = productoParecido(it.descripcion, productos);
-      const costo = it.precio_unitario || (it.importe && it.cantidad ? it.importe / it.cantidad : undefined);
+      const costo = costoUnitario(it);
       return {
         incluir: true,
         producto: existente?.id ?? "nuevo",
@@ -68,7 +86,7 @@ export function SeccionStock({
             <div className="flex flex-wrap gap-2">
               {depositos.map((d) => (
                 <label key={d.id} className="flex cursor-pointer items-center gap-2 rounded-md border border-stone-300 bg-white px-3 py-2 text-sm has-[:checked]:border-stone-900 has-[:checked]:bg-stone-900 has-[:checked]:text-white">
-                  <input type="radio" name="stock_deposito_id" value={d.id} required checked={deposito === d.id} onChange={() => setDeposito(d.id)} className="sr-only" />
+                  <input type="radio" name="stock_deposito_id" value={d.id} checked={deposito === d.id} onChange={() => setDeposito(d.id)} className="sr-only" />
                   {d.nombre}
                 </label>
               ))}
