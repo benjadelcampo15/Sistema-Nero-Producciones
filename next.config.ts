@@ -29,6 +29,9 @@ const nextConfig: NextConfig = {
     // Facturas de hasta 10 MB (se suben de a una).
     serverActions: { bodySizeLimit: "11mb" },
     proxyClientMaxBodySize: "11mb",
+    // Panel interno: todas las pantallas piden datos frescos al servidor (nada
+    // se cachea), así que no se valida "navegación instantánea" por defecto.
+    instantInsights: { validationLevel: "manual-warning" },
   },
   turbopack: {
     rules: {

@@ -14,14 +14,30 @@ export type Proveedor = (pedido: PedidoExtraccion) => Promise<string>;
 
 const TIEMPO_MAXIMO_MS = 120_000;
 
-async function pedirJson(url: string, init: RequestInit) {
-  const respuesta = await fetch(url, { ...init, signal: AbortSignal.timeout(TIEMPO_MAXIMO_MS) });
-  const cuerpo = await respuesta.json().catch(() => null);
-  if (!respuesta.ok) {
-    const mensaje = cuerpo?.error?.message ?? respuesta.statusText;
-    throw new Error(`El servicio de IA respondió ${respuesta.status}: ${mensaje}`);
+/** Error del servicio de IA. `temporal`: el modelo está saturado o sin cupo; conviene probar otro. */
+export class ErrorIA extends Error {
+  constructor(
+    mensaje: string,
+    readonly temporal: boolean,
+  ) {
+    super(mensaje);
   }
-  return cuerpo;
+}
+
+const TEMPORALES = new Set([429, 500, 502, 503, 504]);
+
+async function pedirJson(url: string, init: RequestInit) {
+  let respuesta: Response;
+  try {
+    respuesta = await fetch(url, { ...init, signal: AbortSignal.timeout(TIEMPO_MAXIMO_MS) });
+  } catch {
+    throw new ErrorIA("No se pudo conectar con el servicio de IA (o tardó demasiado)", true);
+  }
+  const cuerpo = await respuesta.json().catch(() => null);
+  if (respuesta.ok) return cuerpo;
+
+  const mensaje = cuerpo?.error?.message ?? respuesta.statusText;
+  throw new ErrorIA(`El servicio de IA respondió ${respuesta.status}: ${mensaje}`, TEMPORALES.has(respuesta.status));
 }
 
 /** Gemini (Google). Plan gratuito para desarrollo. */
