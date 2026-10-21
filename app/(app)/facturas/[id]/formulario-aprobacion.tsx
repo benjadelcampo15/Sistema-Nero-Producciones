@@ -13,8 +13,16 @@ import {
   type TipoMovimiento,
 } from "@/lib/financiero/tipos";
 import { formatoFecha, hoy } from "@/lib/formato";
+import type { Deposito, Producto } from "@/lib/stock/tipos";
+import { SeccionStock, type ItemFactura } from "./seccion-stock";
 
-type DatosIA = { emitida_por_nero?: boolean; categoria_sugerida?: string; descripcion?: string };
+type DatosIA = {
+  emitida_por_nero?: boolean;
+  es_compra_mercaderia?: boolean;
+  categoria_sugerida?: string;
+  descripcion?: string;
+  items?: ItemFactura[];
+};
 
 const aTexto = (n: number | null) => (n === null ? "" : String(n).replace(".", ","));
 
@@ -22,10 +30,14 @@ export function FormularioAprobacion({
   factura,
   categorias,
   eventos,
+  productos,
+  depositos,
 }: {
   factura: Factura;
   categorias: Categoria[];
   eventos: EventoResumido[];
+  productos: Producto[];
+  depositos: Deposito[];
 }) {
   const [estado, accion, enviando] = useActionState(aprobarFactura.bind(null, factura.id), {});
   const ia = (factura.datos_ia ?? {}) as DatosIA;
@@ -149,6 +161,15 @@ export function FormularioAprobacion({
           {campo("notas", "Notas (opcional)", "", { maxLength: 500 })}
         </div>
       </fieldset>
+
+      {tipo === "egreso" && depositos.length > 0 && (
+        <SeccionStock
+          items={ia.items ?? []}
+          productos={productos}
+          depositos={depositos}
+          ingresaInicial={!!ia.es_compra_mercaderia}
+        />
+      )}
 
       <button type="submit" disabled={enviando} className="boton w-full">
         {enviando ? "Aprobando…" : "Aprobar y cargar en Financiero"}

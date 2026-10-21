@@ -2,6 +2,7 @@ export const SECCIONES = [
   { id: "financiero", nombre: "Financiero", href: "/financiero" },
   { id: "eventos", nombre: "Eventos", href: "/eventos" },
   { id: "facturas", nombre: "Facturas", href: "/facturas" },
+  { id: "stock", nombre: "Stock", href: "/stock" },
 ] as const;
 
 export type Seccion = (typeof SECCIONES)[number]["id"];
@@ -24,5 +25,5 @@ export function alcanza(nivel: NivelPermiso, requerido: NivelPermiso) {
 }
 
 export function sinPermisos(): Permisos {
-  return { financiero: "ninguno", eventos: "ninguno", facturas: "ninguno" };
+  return { financiero: "ninguno", eventos: "ninguno", facturas: "ninguno", stock: "ninguno" };
 }

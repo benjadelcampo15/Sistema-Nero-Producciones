@@ -21,8 +21,11 @@ export const esquemaDatosFactura = z.object({
   total: z.number(),
   moneda: z.enum(["ARS", "USD"]),
   descripcion: z.string(),
-  items: z.array(z.object({ descripcion: z.string(), importe: z.number() })),
+  items: z.array(
+    z.object({ descripcion: z.string(), cantidad: z.number(), precio_unitario: z.number(), importe: z.number() }),
+  ),
   emitida_por_nero: z.boolean(),
+  es_compra_mercaderia: z.boolean(),
   categoria_sugerida: z.string(),
   confianza: z.enum(["alta", "media", "baja"]),
   observaciones: z.string(),
@@ -54,14 +57,24 @@ export function jsonSchemaFactura(categorias: string[]) {
       description: "Renglones del detalle (máximo 20)",
       items: {
         type: "object",
-        properties: { descripcion: texto("Detalle del renglón"), importe: numero("Importe del renglón") },
-        required: ["descripcion", "importe"],
+        properties: {
+          descripcion: texto("Detalle del renglón (producto o servicio)"),
+          cantidad: numero("Cantidad. 1 si no figura"),
+          precio_unitario: numero("Precio unitario sin IVA. 0 si no figura"),
+          importe: numero("Importe del renglón"),
+        },
+        required: ["descripcion", "cantidad", "precio_unitario", "importe"],
         additionalProperties: false,
       },
     },
     emitida_por_nero: {
       type: "boolean",
       description: "true si el EMISOR es Nero Producciones (es un ingreso); false si Nero la recibe (es un gasto)",
+    },
+    es_compra_mercaderia: {
+      type: "boolean",
+      description:
+        "true si Nero compra productos físicos que van a un depósito (bebidas, vasos, insumos, mercadería). false si son servicios (sonido, alquiler, honorarios, fletes…)",
     },
     categoria_sugerida: {
       type: "string",

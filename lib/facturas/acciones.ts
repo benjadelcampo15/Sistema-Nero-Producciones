@@ -153,6 +153,43 @@ export async function rechazarFactura(id: string): Promise<{ error?: string }> {
 
 export type EstadoAprobacion = { error?: string; valores?: Record<string, string> };
 
+type ItemStock = { producto_id?: string; producto_nuevo?: string; unidad?: string; cantidad: number; costo_unitario?: number };
+
+/**
+ * Sección "Ingreso a stock" del formulario de aprobación. Campos:
+ * stock_ingresa, stock_deposito_id, stock_items y por renglón i:
+ * stock_incluir_i, stock_producto_i ("nuevo" o id), stock_nombre_i, stock_unidad_i,
+ * stock_cantidad_i, stock_costo_i.
+ */
+function leerIngresoStock(v: Record<string, string>): { ingreso: object | null } | { error: string } {
+  if (v.stock_ingresa !== "on") return { ingreso: null };
+  if (!/^[0-9a-f-]{36}$/i.test(v.stock_deposito_id ?? "")) return { error: "Elegí a qué depósito va la mercadería" };
+
+  const items: ItemStock[] = [];
+  const total = Math.min(Number(v.stock_items) || 0, 50);
+  for (let i = 0; i < total; i++) {
+    if (v[`stock_incluir_${i}`] !== "on") continue;
+    const cantidad = parsearMonto(v[`stock_cantidad_${i}`] ?? "");
+    if (cantidad === null || cantidad <= 0) return { error: `Renglón ${i + 1}: cantidad inválida` };
+    const costoTexto = v[`stock_costo_${i}`]?.trim() ?? "";
+    const costo = costoTexto ? parsearMonto(costoTexto) : null;
+    if (costoTexto && costo === null) return { error: `Renglón ${i + 1}: costo inválido` };
+
+    const producto = v[`stock_producto_${i}`] ?? "nuevo";
+    if (producto === "nuevo") {
+      const nombre = (v[`stock_nombre_${i}`] ?? "").trim().slice(0, 120);
+      if (!nombre) return { error: `Renglón ${i + 1}: falta el nombre del producto nuevo` };
+      items.push({ producto_nuevo: nombre, unidad: v[`stock_unidad_${i}`] || "unidad", cantidad, costo_unitario: costo ?? undefined });
+    } else if (/^[0-9a-f-]{36}$/i.test(producto)) {
+      items.push({ producto_id: producto, cantidad, costo_unitario: costo ?? undefined });
+    } else {
+      return { error: `Renglón ${i + 1}: producto inválido` };
+    }
+  }
+  if (!items.length) return { error: "Marcaste ingreso a stock pero no incluiste ningún renglón" };
+  return { ingreso: { deposito_id: v.stock_deposito_id, items } };
+}
+
 const textoOpcional = z
   .string()
   .trim()
@@ -216,6 +253,9 @@ export async function aprobarFactura(
     .filter(Boolean)
     .join(" ");
 
+  const stock = leerIngresoStock(valores);
+  if ("error" in stock) return { error: stock.error, valores };
+
   const supabase = await crearClienteServidor();
   const { error } = await supabase.rpc("aprobar_factura", {
     p_factura_id: id,
@@ -245,6 +285,7 @@ export async function aprobarFactura(
       iva: iva ?? "",
       notas: [comprobante && `Factura ${comprobante}`, d.notas].filter(Boolean).join(" · "),
     },
+    p_stock: stock.ingreso,
   });
 
   if (error) {
@@ -255,7 +296,9 @@ export async function aprobarFactura(
           ? "No tenés permiso para cargar movimientos en Financiero"
           : error.message.includes("categoría")
             ? "La categoría no corresponde al tipo de movimiento"
-            : "No se pudo aprobar la factura";
+            : error.message.includes("depósito")
+              ? "Elegí a qué depósito va la mercadería"
+              : "No se pudo aprobar la factura";
     return { error: mensaje, valores };
   }
 

@@ -7,6 +7,7 @@ import {
   urlTemporalArchivo,
 } from "@/lib/facturas/consultas";
 import { obtenerCategorias, obtenerEventosResumidos } from "@/lib/financiero/consultas";
+import { listarDepositos, listarProductos } from "@/lib/stock/consultas";
 import { COLOR_ESTADO_FACTURA, NOMBRE_ESTADO_FACTURA } from "@/lib/facturas/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { SinAcceso } from "../../sin-acceso";
@@ -23,11 +24,13 @@ export default async function PaginaFactura({ params }: PageProps<"/facturas/[id
 
   const editable = puede(usuario, "facturas", "editar");
   const revisable = editable && (factura.estado === "por_revisar" || factura.estado === "error");
-  const [url, movimiento, categorias, eventos] = await Promise.all([
+  const [url, movimiento, categorias, eventos, productos, depositos] = await Promise.all([
     urlTemporalArchivo(factura.archivo_path),
     factura.estado === "aprobada" ? obtenerMovimientoDeFactura(factura.id) : null,
     revisable ? obtenerCategorias() : [],
     revisable ? obtenerEventosResumidos() : [],
+    revisable ? listarProductos() : [],
+    revisable ? listarDepositos() : [],
   ]);
 
   const ia = factura.datos_ia as { confianza?: string; observaciones?: string } | null;
@@ -86,7 +89,13 @@ export default async function PaginaFactura({ params }: PageProps<"/facturas/[id
         <div className="space-y-4">
           {revisable ? (
             <>
-              <FormularioAprobacion factura={factura} categorias={categorias} eventos={eventos} />
+              <FormularioAprobacion
+                factura={factura}
+                categorias={categorias}
+                eventos={eventos}
+                productos={productos}
+                depositos={depositos}
+              />
               <AccionesFactura id={factura.id} puedeReintentar />
             </>
           ) : (

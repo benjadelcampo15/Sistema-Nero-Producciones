@@ -125,6 +125,17 @@ lib/ai/
 - Ambos proveedores devuelven el mismo `DatosFactura`, validado con Zod.
 - **Plan gratis de Gemini: solo con facturas de prueba.** En el plan gratuito Google puede usar los datos enviados para mejorar sus productos, y las facturas tienen CUITs, montos y proveedores reales. Las facturas reales van solo con el proveedor pago (OpenAI), cuyas condiciones de API no usan los datos para entrenar.
 
+### Stock
+- **Depósitos** (Isidris, Centro, y los que se agreguen) y **productos** (unidad, código, stock mínimo).
+- El stock no se guarda: se calcula sumando `movimientos_stock` (vista `stock_actual`), como un libro contable.
+  Entradas en positivo, salidas en negativo, ajustes con signo. Los movimientos no se editan ni se borran: se corrige con un ajuste.
+- **Transferencia** = salida del origen + entrada al destino con el mismo `transferencia_id`, grabadas en un solo insert.
+- **Ajuste de inventario**: se ingresa lo contado; se registra la diferencia con el sistema.
+- Vista general (columna por depósito + total, valorizado a costo promedio, alerta bajo mínimo) y vista por depósito.
+- **Desde facturas**: la IA marca si es compra de mercadería y extrae cantidad y precio unitario por renglón. Al revisar
+  se elige el depósito y se vincula cada renglón a un producto (o se crea). `aprobar_factura` graba en una sola
+  operación factura + movimiento financiero + entradas de stock.
+
 ## 5. Seguridad
 
 - **Sin registro público**: solo el admin crea usuarios (ver 5.1).

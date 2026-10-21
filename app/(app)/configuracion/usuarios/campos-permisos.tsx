@@ -12,7 +12,7 @@ export function CamposPermisos({
 }) {
   return (
     <div className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {SECCIONES.map((s) => (
           <div key={s.id}>
             <label htmlFor={`permiso_${s.id}`} className="etiqueta">{s.nombre}</label>
