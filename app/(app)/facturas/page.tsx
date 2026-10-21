@@ -63,12 +63,13 @@ export default async function PaginaFacturas({ searchParams }: PageProps<"/factu
               <th className="px-4 py-3">Fecha</th>
               <th className="px-4 py-3 text-right">Total</th>
               <th className="px-4 py-3">Estado</th>
+              <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100">
             {facturas.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-stone-500">No hay facturas.</td>
+                <td colSpan={7} className="px-4 py-10 text-center text-stone-500">No hay facturas.</td>
               </tr>
             )}
             {facturas.map((f) => (
@@ -100,6 +101,12 @@ export default async function PaginaFacturas({ searchParams }: PageProps<"/factu
                       ¿Duplicada?
                     </span>
                   )}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-right">
+                  {/* Ruta que verifica permisos y redirige a un link temporal del archivo. */}
+                  <a href={`/facturas/${f.id}/archivo`} target="_blank" rel="noreferrer" className="boton-secundario">
+                    Ver
+                  </a>
                 </td>
               </tr>
             ))}
