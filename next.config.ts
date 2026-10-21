@@ -9,7 +9,9 @@ const politicaContenido = [
   `script-src 'self' 'unsafe-inline'${esDesarrollo ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   // data: para el QR del 2FA.
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: " + supabase,
+  // Vista previa de facturas (links temporales firmados de Supabase Storage).
+  "frame-src " + (supabase || "'none'"),
   "font-src 'self'",
   // ws: para la recarga en caliente del servidor de desarrollo.
   `connect-src 'self' ${supabase}${esDesarrollo ? " ws:" : ""}`,
@@ -23,6 +25,11 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
+  experimental: {
+    // Facturas de hasta 10 MB (se suben de a una).
+    serverActions: { bodySizeLimit: "11mb" },
+    proxyClientMaxBodySize: "11mb",
+  },
   turbopack: {
     rules: {
       "*.css": {

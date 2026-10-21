@@ -11,7 +11,8 @@
     "mock": "node --env-file=.env.local scripts/mock.mts",
     "mock:borrar": "node --env-file=.env.local scripts/mock.mts borrar",
     "totp": "node --env-file=.env.local scripts/totp.mts",
-    "importar": "node --env-file=.env.local scripts/importar-planilla.mts"
+    "importar": "node --env-file=.env.local scripts/importar-planilla.mts",
+    "ia:modelos": "node --env-file=.env.local scripts/ia-modelos.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
