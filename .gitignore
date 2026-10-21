@@ -43,3 +43,6 @@ next-env.d.ts
 
 # datos reales descargados (no subir)
 /.planilla/
+
+# certificados y claves de ARCA (no subir)
+/.arca/
