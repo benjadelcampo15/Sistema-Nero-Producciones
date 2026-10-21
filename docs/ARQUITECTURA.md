@@ -9,7 +9,7 @@
 | Base de datos | **PostgreSQL (Supabase)** | Relacional (ideal para contabilidad), Row Level Security |
 | Auth | **Supabase Auth** + MFA (TOTP) | Login seguro, 2FA con Google Authenticator, sin registro público |
 | Archivos | Supabase Storage (bucket privado) | PDFs/fotos de facturas, acceso solo por URLs firmadas que expiran |
-| IA | **Claude API** (`claude-sonnet-5-5`) | Lee PDF/imagen de la factura y devuelve JSON estructurado |
+| IA | **OpenAI API** en producción · **Gemini API** (plan gratis) en desarrollo | Lee PDF/imagen de la factura y devuelve JSON estructurado. Proveedor intercambiable por variable de entorno (ver 4.1) |
 | Validación | Zod | Mismo esquema en formularios, servidor y respuesta de la IA |
 | Deploy | Vercel + Supabase | HTTPS automático, backups de la base |
 
@@ -26,7 +26,7 @@
  │        │            │            │             │         │
  │        └──── Server Actions (validación Zod + rol) ──────┤
  │                                     │                    │
- │                         lib/ai/leer-factura.ts ──► Claude API
+ │                         lib/ai/leer-factura.ts ──► OpenAI / Gemini
  └─────────────────────────────────────┼────────────────────┘
                                        ▼
                  Supabase: Postgres (RLS) + Storage privado
@@ -103,12 +103,27 @@ Todos los montos están en **pesos argentinos (ARS)**; no hay multimoneda.
 ### Facturas (con IA)
 Flujo:
 1. Usuario sube PDF o foto → se guarda en Storage privado → registro `facturas` con estado `procesando`.
-2. Server Action manda el archivo a Claude con un esquema JSON (tool use / structured output): tipo, número, punto de venta, CUIT, razón social, fecha, neto, IVA, total, moneda, ítems, categoría sugerida.
+2. Server Action manda el archivo al proveedor de IA configurado con un esquema JSON (structured output): tipo, número, punto de venta, CUIT, razón social, fecha, neto, IVA, total, ítems, categoría sugerida.
 3. Respuesta validada con Zod → estado `por_revisar`.
 4. **Pantalla de revisión**: archivo a la izquierda, datos extraídos editables a la derecha; el usuario elige ingreso/egreso, categoría y evento (opcional).
 5. Al aprobar → se crea la transacción (en una transacción SQL) y se vincula con la factura.
 
 > La IA nunca escribe directo en Financiero: siempre pasa por revisión humana. En contabilidad un error de lectura (un 0 de más) no puede entrar sin que alguien lo vea.
+
+### 4.1 Proveedor de IA intercambiable
+
+```
+lib/ai/
+├─ leer-factura.ts      leerFactura(archivo) → DatosFactura   (lo único que usa la app)
+├─ esquema.ts           esquema Zod de DatosFactura + prompt común
+└─ proveedores/
+   ├─ openai.ts         producción
+   └─ gemini.ts         desarrollo (plan gratis)
+```
+
+- `AI_PROVIDER=openai|gemini` y `AI_MODEL=...` en variables de entorno eligen proveedor y modelo sin tocar código.
+- Ambos proveedores devuelven el mismo `DatosFactura`, validado con Zod.
+- **Plan gratis de Gemini: solo con facturas de prueba.** En el plan gratuito Google puede usar los datos enviados para mejorar sus productos, y las facturas tienen CUITs, montos y proveedores reales. Las facturas reales van solo con el proveedor pago (OpenAI), cuyas condiciones de API no usan los datos para entrenar.
 
 ## 5. Seguridad
 
@@ -121,7 +136,7 @@ Flujo:
 - **Row Level Security** en todas las tablas: aunque alguien obtenga la clave pública, la base no devuelve nada sin sesión válida y rol adecuado.
 - Validación Zod de todo input en el servidor; nada se confía del cliente.
 - Bucket de facturas privado, URLs firmadas de pocos minutos, validación de tipo y tamaño de archivo.
-- Claves (`ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) solo en variables de entorno del servidor.
+- Claves (`OPENAI_API_KEY`, `GEMINI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) solo en variables de entorno del servidor.
 - Headers: CSP, HSTS, X-Frame-Options.
 - **Auditoría**: cada alta/edición/borrado queda en `auditoria` con quién, cuándo y antes/después.
 - **Soft delete**: los movimientos no se borran físicamente (requisito contable).
@@ -170,7 +185,7 @@ nero-admin/
 ├─ components/                 tablas, formularios, UI
 ├─ lib/
 │  ├─ supabase/                clientes server/browser
-│  ├─ ai/leer-factura.ts       llamada a Claude + esquema
+│  ├─ ai/                      leerFactura + proveedores OpenAI/Gemini
 │  ├─ schemas/                 Zod (transaccion, evento, factura)
 │  └─ auth/                    helpers de rol y MFA
 ├─ actions/                    Server Actions por dominio
