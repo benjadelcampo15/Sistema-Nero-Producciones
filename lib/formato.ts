@@ -17,12 +17,35 @@ export function hoy() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: ZONA }).format(new Date());
 }
 
+const dos = (n: number) => String(n).padStart(2, "0");
+const ultimoDia = (anio: number, mes: number) => new Date(Date.UTC(anio, mes, 0)).getUTCDate();
+
+/** Rango desde el primer día de un mes hasta el último de otro (meses 1-12; se normalizan desbordes). */
+function rangoMeses(anio: number, mesInicio: number, mesFin: number) {
+  const inicio = new Date(Date.UTC(anio, mesInicio - 1, 1));
+  const fin = new Date(Date.UTC(anio, mesFin - 1, 1));
+  const [ai, mi] = [inicio.getUTCFullYear(), inicio.getUTCMonth() + 1];
+  const [af, mf] = [fin.getUTCFullYear(), fin.getUTCMonth() + 1];
+  return { desde: `${ai}-${dos(mi)}-01`, hasta: `${af}-${dos(mf)}-${dos(ultimoDia(af, mf))}` };
+}
+
 /** Primer y último día del mes actual en Argentina. */
 export function mesActual() {
   const [anio, mes] = hoy().split("-").map(Number);
-  const ultimoDia = new Date(Date.UTC(anio, mes, 0)).getUTCDate();
-  const mm = String(mes).padStart(2, "0");
-  return { desde: `${anio}-${mm}-01`, hasta: `${anio}-${mm}-${String(ultimoDia).padStart(2, "0")}` };
+  return rangoMeses(anio, mes, mes);
+}
+
+export type Periodo = { nombre: string; desde: string; hasta: string };
+
+/** Atajos de período para los filtros. */
+export function periodosRapidos(): Periodo[] {
+  const [anio, mes] = hoy().split("-").map(Number);
+  return [
+    { nombre: "Este mes", ...rangoMeses(anio, mes, mes) },
+    { nombre: "Mes anterior", ...rangoMeses(anio, mes - 1, mes - 1) },
+    { nombre: "Últimos 3 meses", ...rangoMeses(anio, mes - 2, mes) },
+    { nombre: "Este año", ...rangoMeses(anio, 1, 12) },
+  ];
 }
 
 /**

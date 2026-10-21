@@ -1,9 +1,13 @@
 import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 
 /** Cliente con la sesión del usuario (respeta RLS). Para Server Components y Server Actions. */
 export async function crearClienteServidor() {
+  // Todo lo que usa la sesión es por request: nunca se prerenderiza
+  // (Supabase consulta la hora para validar el token).
+  await connection();
   const cookieStore = await cookies();
 
   return createServerClient(

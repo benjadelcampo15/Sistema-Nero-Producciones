@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "crear-admin": "node --env-file=.env.local scripts/crear-admin.mts"
+    "crear-admin": "node --env-file=.env.local scripts/crear-admin.mts",
+    "mock": "node --env-file=.env.local scripts/mock.mts",
+    "mock:borrar": "node --env-file=.env.local scripts/mock.mts borrar",
+    "totp": "node --env-file=.env.local scripts/totp.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
