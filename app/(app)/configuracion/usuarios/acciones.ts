@@ -21,6 +21,7 @@ const esquemaPermisos = z.object({
   eventos: z.enum(NIVELES),
   facturas: z.enum(NIVELES),
   stock: z.enum(NIVELES),
+  facturar: z.enum(NIVELES),
 });
 
 function leerPermisos(formData: FormData) {
