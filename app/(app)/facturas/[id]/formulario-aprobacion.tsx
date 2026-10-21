@@ -171,6 +171,9 @@ export function FormularioAprobacion({
         />
       )}
 
+      {/* El formulario es largo: el error se repite junto al botón para que se vea. */}
+      {estado.error && <p className="alerta-error" role="alert">{estado.error}</p>}
+
       <button type="submit" disabled={enviando} className="boton w-full">
         {enviando ? "Aprobando…" : "Aprobar y cargar en Financiero"}
       </button>
