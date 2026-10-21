@@ -12,13 +12,17 @@ export type PedidoExtraccion = {
 /** Devuelve el JSON (como texto) que generó el modelo. */
 export type Proveedor = (pedido: PedidoExtraccion) => Promise<string>;
 
-const TIEMPO_MAXIMO_MS = 120_000;
+const TIEMPO_MAXIMO_MS = 60_000;
 
-/** Error del servicio de IA. `temporal`: el modelo está saturado o sin cupo; conviene probar otro. */
+/**
+ * Error del servicio de IA. `temporal`: saturado, sin cupo o sin conexión;
+ * conviene probar otro modelo. `estado`: código HTTP (0 si no hubo respuesta).
+ */
 export class ErrorIA extends Error {
   constructor(
     mensaje: string,
     readonly temporal: boolean,
+    readonly estado: number,
   ) {
     super(mensaje);
   }
@@ -31,13 +35,17 @@ async function pedirJson(url: string, init: RequestInit) {
   try {
     respuesta = await fetch(url, { ...init, signal: AbortSignal.timeout(TIEMPO_MAXIMO_MS) });
   } catch {
-    throw new ErrorIA("No se pudo conectar con el servicio de IA (o tardó demasiado)", true);
+    throw new ErrorIA("No se pudo conectar con el servicio de IA (o tardó demasiado)", true, 0);
   }
   const cuerpo = await respuesta.json().catch(() => null);
   if (respuesta.ok) return cuerpo;
 
   const mensaje = cuerpo?.error?.message ?? respuesta.statusText;
-  throw new ErrorIA(`El servicio de IA respondió ${respuesta.status}: ${mensaje}`, TEMPORALES.has(respuesta.status));
+  throw new ErrorIA(
+    `El servicio de IA respondió ${respuesta.status}: ${mensaje}`,
+    TEMPORALES.has(respuesta.status),
+    respuesta.status,
+  );
 }
 
 /** Gemini (Google). Plan gratuito para desarrollo. */
