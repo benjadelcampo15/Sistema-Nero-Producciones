@@ -7,7 +7,7 @@ import {
   obtenerEventosResumidos,
   obtenerTransacciones,
 } from "@/lib/financiero/consultas";
-import { formatoPesos, periodosRapidos } from "@/lib/formato";
+import { formatoPesos, hoy, periodosRapidos } from "@/lib/formato";
 import { SinAcceso } from "../sin-acceso";
 import { TablaMovimientos } from "@/components/tabla-movimientos";
 import { Filtros, ProveedorFiltros, ZonaResultados } from "./filtros";
@@ -28,6 +28,11 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
   const consulta = new URLSearchParams(
     Object.entries(filtros).filter((e): e is [string, string] => typeof e[1] === "string" && e[1] !== ""),
   ).toString();
+  // Primero lo que ya pasó (más reciente arriba); lo de fecha futura va aparte, del más cercano al más lejano.
+  const fechaHoy = hoy();
+  const pasados = transacciones.filter((t) => t.fecha <= fechaHoy);
+  const proximos = transacciones.filter((t) => t.fecha > fechaHoy).reverse();
+
   const volverA = `/financiero?${consulta}`;
 
   return (
@@ -82,8 +87,17 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
             </p>
           )}
 
-          <TablaMovimientos transacciones={transacciones} editable={editable} volverA={volverA} />
-          <p className="text-xs text-stone-500">{transacciones.length} movimientos</p>
+          <TablaMovimientos transacciones={pasados} editable={editable} volverA={volverA} />
+          <p className="text-xs text-stone-500">{pasados.length} movimientos</p>
+
+          {proximos.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-lg font-semibold">
+                Próximos <span className="text-sm font-normal text-stone-500">· con fecha posterior a hoy</span>
+              </h2>
+              <TablaMovimientos transacciones={proximos} editable={editable} volverA={volverA} />
+            </section>
+          )}
         </ZonaResultados>
       </div>
     </ProveedorFiltros>
