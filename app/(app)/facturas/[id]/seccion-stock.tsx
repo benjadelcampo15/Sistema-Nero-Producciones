@@ -29,8 +29,25 @@ const aTexto = (n?: number) => (n ? String(n).replace(".", ",") : "");
 
 /** Busca un producto existente con el mismo nombre que el renglón de la factura. */
 function productoParecido(descripcion: string, productos: Producto[]) {
-  const d = descripcion.trim().toLowerCase();
-  return productos.find((p) => p.nombre.toLowerCase() === d || (p.nombre.length > 3 && d.includes(p.nombre.toLowerCase())));
+  const d = normalizarNombre(descripcion);
+  return productos.find((p) => {
+    const n = normalizarNombre(p.nombre);
+    return n === d || (n.length > 3 && d.includes(n));
+  });
+}
+
+/**
+ * "FERNET BRANCA X 750 CC" y "Fernet Branca 750cc" quedan iguales: sin mayúsculas,
+ * acentos, la "x" suelta ni nada que no sea letra o número. Igual que
+ * public.normalizar_nombre() en la base.
+ */
+function normalizarNombre(texto: string) {
+  return texto
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\bx\b/g, "")
+    .replace(/[^a-z0-9]/g, "");
 }
 
 /**
