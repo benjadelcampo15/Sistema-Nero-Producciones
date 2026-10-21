@@ -51,6 +51,13 @@ function leerItems(v: Record<string, string>, clase: string): ItemComprobante[] 
   return items.length ? items : "Agregá al menos un ítem";
 }
 
+/** "Activación de marca" o "Sonido, Iluminación (+2 ítems)" para la descripción del ingreso. */
+function descripcionDeItems(items: ItemComprobante[]) {
+  const primeros = items.slice(0, 2).map((i) => i.descripcion).join(", ");
+  const resto = items.length > 2 ? ` (+${items.length - 2} ítems)` : "";
+  return `${primeros}${resto}`.slice(0, 200);
+}
+
 /** Valida el CUIT con su dígito verificador. */
 function cuitValido(cuit: string) {
   if (!/^\d{11}$/.test(cuit)) return false;
@@ -174,7 +181,8 @@ export async function emitirFactura(_previo: EstadoEmision, formData: FormData):
         tipo: "ingreso",
         monto: totales.total,
         fecha: d.fecha,
-        descripcion: `${nombreTipoCbte(d.tipo_cbte)} ${numeroTexto}${d.receptor_nombre ? ` – ${d.receptor_nombre}` : ""}`,
+        // Lo que se facturó (los ítems); el número de factura y el CAE van en las notas.
+        descripcion: descripcionDeItems(items),
         categoria_id: d.categoria_id,
         evento_id: d.evento_id || null,
         contraparte: d.receptor_nombre || null,
@@ -182,7 +190,7 @@ export async function emitirFactura(_previo: EstadoEmision, formData: FormData):
         estado: "pendiente",
         facturado: true,
         iva: totales.iva || null,
-        notas: `CAE ${respuesta.cae}${entorno === "homologacion" ? " · PRUEBA (homologación)" : ""}`,
+        notas: `${nombreTipoCbte(d.tipo_cbte)} ${numeroTexto} · CAE ${respuesta.cae}${entorno === "homologacion" ? " · PRUEBA (homologación)" : ""}`,
       })
       .select("id")
       .single();
