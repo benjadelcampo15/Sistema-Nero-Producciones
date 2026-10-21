@@ -52,7 +52,7 @@ const { error: errorPerfil } = await supabase.from("perfiles").insert({
 const { error: errorPermisos } = errorPerfil
   ? { error: errorPerfil }
   : await supabase.from("permisos").insert(
-      ["financiero", "eventos", "facturas", "stock", "facturar"].map((seccion) => ({ usuario_id: id, seccion, nivel: "editar" })),
+      ["financiero", "eventos", "facturas", "stock", "facturar", "presupuestos"].map((seccion) => ({ usuario_id: id, seccion, nivel: "editar" })),
     );
 
 if (errorPerfil || errorPermisos) {

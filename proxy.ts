@@ -4,7 +4,14 @@ import { NextResponse, type NextRequest } from "next/server";
 /** Pantallas del ingreso: el usuario va a una sola según su estado. */
 const PASOS_INGRESO = ["/login", "/cambiar-contrasena", "/mfa/configurar", "/mfa/verificar"];
 
+/** Páginas públicas por link con token (presupuestos para clientes, etc.): no piden sesión. */
+const PUBLICAS = /^\/p\//;
+
 export async function proxy(request: NextRequest) {
+  if (PUBLICAS.test(request.nextUrl.pathname)) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
