@@ -29,6 +29,10 @@ const nextConfig: NextConfig = {
     // Facturas de hasta 10 MB (se suben de a una).
     serverActions: { bodySizeLimit: "11mb" },
     proxyClientMaxBodySize: "11mb",
+    // Panel interno: todas las pantallas piden datos frescos al servidor (nada
+    // se cachea). Sin esto, en desarrollo Next abre un cartel de aviso por cada
+    // pantalla que tapa la página.
+    instantInsights: { validationLevel: "manual-warning" },
   },
   turbopack: {
     rules: {
