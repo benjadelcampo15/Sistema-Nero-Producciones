@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
 import { leerFiltros, obtenerTransacciones } from "@/lib/financiero/consultas";
-import { NOMBRE_MEDIO_PAGO } from "@/lib/financiero/tipos";
+import { NOMBRE_ESTADO_MOVIMIENTO, NOMBRE_MEDIO_PAGO } from "@/lib/financiero/tipos";
 import { formatoFecha } from "@/lib/formato";
 
 /** CSV para Excel en español: separador ";" , coma decimal y BOM para los acentos. */
@@ -21,26 +21,34 @@ export async function GET(request: NextRequest) {
   };
   const numero = (n: number) => n.toFixed(2).replace(".", ",");
 
-  const filas = [
-    ["Fecha", "Tipo", "Descripción", "Categoría", "Evento", "Proveedor / Cliente", "Medio de pago", "Monto", "Notas"],
-    ...transacciones.map((t) => [
-      formatoFecha(t.fecha),
-      t.tipo === "ingreso" ? "Ingreso" : "Egreso",
-      t.descripcion,
-      t.categoria.nombre,
-      t.evento?.nombre ?? "",
-      t.contraparte ?? "",
-      NOMBRE_MEDIO_PAGO[t.medio_pago],
-      numero(t.tipo === "ingreso" ? t.monto : -t.monto),
-      t.notas ?? "",
-    ]),
+  const encabezado = [
+    "Fecha", "Tipo", "Estado", "Descripción", "Categoría", "Evento", "Proveedor / Cuenta",
+    "Medio de pago", "Monto", "Facturado", "IVA", "IIBB", "Notas",
   ];
+  // Columnas numéricas: van sin comillas para que Excel las tome como números.
+  const numericas = new Set(["Monto", "IVA", "IIBB"].map((c) => encabezado.indexOf(c)));
+
+  const filas = transacciones.map((t) => [
+    formatoFecha(t.fecha),
+    t.tipo === "ingreso" ? "Ingreso" : "Egreso",
+    NOMBRE_ESTADO_MOVIMIENTO[t.estado],
+    t.descripcion,
+    t.categoria.nombre,
+    t.evento?.nombre ?? "",
+    t.contraparte ?? "",
+    NOMBRE_MEDIO_PAGO[t.medio_pago],
+    numero(t.tipo === "ingreso" ? t.monto : -t.monto),
+    t.facturado ? "Sí" : "No",
+    t.iva !== null ? numero(t.iva) : "",
+    t.iibb !== null ? numero(t.iibb) : "",
+    t.notas ?? "",
+  ]);
 
   const csv =
     "﻿" +
-    filas
-      .map((fila) => fila.map((v, i) => (i === 7 && v !== "Monto" ? v : celda(v))).join(";"))
-      .join("\r\n");
+    [encabezado.map(celda).join(";"), ...filas.map((f) => f.map((v, i) => (numericas.has(i) ? v : celda(v))).join(";"))].join(
+      "\r\n",
+    );
 
   return new Response(csv, {
     headers: {

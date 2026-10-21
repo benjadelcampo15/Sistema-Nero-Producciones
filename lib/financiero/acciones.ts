@@ -6,7 +6,7 @@ import { z } from "zod";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { parsearMonto } from "@/lib/formato";
-import { MEDIOS_PAGO, TIPOS } from "./tipos";
+import { ESTADOS_MOVIMIENTO, MEDIOS_PAGO, TIPOS } from "./tipos";
 
 export type EstadoFormulario = {
   error?: string;
@@ -36,6 +36,14 @@ const esquemaTransaccion = z.object({
   evento_id: z.union([z.uuid(), z.literal("")]).transform((v) => v || null),
   contraparte: textoOpcional,
   medio_pago: z.enum(MEDIOS_PAGO, "Elegí el medio de pago"),
+  estado: z.enum(ESTADOS_MOVIMIENTO, "Elegí el estado"),
+  // Casilla: llega "on" si está marcada y no llega si no.
+  facturado: z
+    .string()
+    .optional()
+    .transform((v) => v === "on"),
+  iva: z.string().optional().default(""),
+  iibb: z.string().optional().default(""),
   notas: textoOpcional,
 });
 
@@ -68,7 +76,13 @@ export async function guardarTransaccion(
     return { error: "No tenés permiso para cargar este movimiento", valores };
   }
 
-  const fila = { ...datos.data, monto };
+  const iva = datos.data.iva.trim() ? parsearMonto(datos.data.iva) : null;
+  const iibb = datos.data.iibb.trim() ? parsearMonto(datos.data.iibb) : null;
+  if ((datos.data.iva.trim() && iva === null) || (datos.data.iibb.trim() && iibb === null)) {
+    return { error: "IVA o IIBB inválido", valores };
+  }
+
+  const fila = { ...datos.data, monto, iva, iibb };
   const supabase = await crearClienteServidor();
   // Con .select() se detecta cuando RLS no deja escribir (no da error, afecta 0 filas).
   const { data: escritas, error } = id

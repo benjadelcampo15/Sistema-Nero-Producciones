@@ -2,7 +2,14 @@ import "server-only";
 import { z } from "zod";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { mesActual, sumar } from "@/lib/formato";
-import { TIPOS, type Categoria, type EventoResumido, type Transaccion } from "./tipos";
+import {
+  ESTADOS_MOVIMIENTO,
+  TIPOS,
+  type Categoria,
+  type EventoResumido,
+  type Totales,
+  type Transaccion,
+} from "./tipos";
 
 export const LIMITE_LISTADO = 2000;
 
@@ -12,6 +19,7 @@ const esquemaFiltros = z.object({
   desde: fecha.optional().catch(undefined),
   hasta: fecha.optional().catch(undefined),
   tipo: z.enum(TIPOS).optional().catch(undefined),
+  estado: z.enum(ESTADOS_MOVIMIENTO).optional().catch(undefined),
   categoria: z.uuid().optional().catch(undefined),
   evento: z.union([z.uuid(), z.literal("sin")]).optional().catch(undefined),
   q: z.string().trim().max(100).optional().catch(undefined),
@@ -29,15 +37,25 @@ export function leerFiltros(params: Record<string, string | string[] | undefined
   return { ...filtros, desde: filtros.desde ?? mes.desde, hasta: filtros.hasta ?? mes.hasta };
 }
 
-const CAMPOS =
-  "id, tipo, monto, fecha, descripcion, contraparte, medio_pago, notas, categoria:categorias(id, nombre), evento:eventos(id, nombre)";
+export const CAMPOS_TRANSACCION =
+  "id, tipo, monto, fecha, descripcion, contraparte, medio_pago, estado, facturado, iva, iibb, notas, categoria:categorias(id, nombre), evento:eventos(id, nombre)";
+
+/** PostgREST devuelve los numeric como texto o número según el caso: se normalizan. */
+export function normalizarTransacciones(filas: unknown[] | null): Transaccion[] {
+  return ((filas ?? []) as Transaccion[]).map((t) => ({
+    ...t,
+    monto: Number(t.monto),
+    iva: t.iva === null ? null : Number(t.iva),
+    iibb: t.iibb === null ? null : Number(t.iibb),
+  }));
+}
 
 export async function obtenerTransacciones(filtros: Filtros) {
   const supabase = await crearClienteServidor();
 
   let consulta = supabase
     .from("transacciones")
-    .select(CAMPOS)
+    .select(CAMPOS_TRANSACCION)
     .is("eliminado_en", null)
     .gte("fecha", filtros.desde)
     .lte("fecha", filtros.hasta)
@@ -46,6 +64,7 @@ export async function obtenerTransacciones(filtros: Filtros) {
     .limit(LIMITE_LISTADO + 1);
 
   if (filtros.tipo) consulta = consulta.eq("tipo", filtros.tipo);
+  if (filtros.estado) consulta = consulta.eq("estado", filtros.estado);
   if (filtros.categoria) consulta = consulta.eq("categoria_id", filtros.categoria);
   if (filtros.evento === "sin") consulta = consulta.is("evento_id", null);
   else if (filtros.evento) consulta = consulta.eq("evento_id", filtros.evento);
@@ -58,30 +77,39 @@ export async function obtenerTransacciones(filtros: Filtros) {
   const { data, error } = await consulta;
   if (error) throw new Error(`No se pudieron leer los movimientos: ${error.message}`);
 
-  const filas = (data ?? []) as unknown as Transaccion[];
+  const filas = normalizarTransacciones(data);
   const truncado = filas.length > LIMITE_LISTADO;
-  const transacciones = filas.slice(0, LIMITE_LISTADO).map((t) => ({ ...t, monto: Number(t.monto) }));
+  const transacciones = filas.slice(0, LIMITE_LISTADO);
 
   return { transacciones, truncado, totales: calcularTotales(transacciones) };
 }
 
-export function calcularTotales(transacciones: Pick<Transaccion, "tipo" | "monto">[]) {
+function totalesDe(transacciones: Pick<Transaccion, "tipo" | "monto">[]): Totales {
   const ingresos = sumar(transacciones.filter((t) => t.tipo === "ingreso").map((t) => t.monto));
   const egresos = sumar(transacciones.filter((t) => t.tipo === "egreso").map((t) => t.monto));
   return { ingresos, egresos, resultado: sumar([ingresos, -egresos]) };
+}
+
+/**
+ * real: solo lo que ya se cobró/pagó (caja real).
+ * total: incluye pendientes y proyectados (escenario completo).
+ */
+export function calcularTotales(transacciones: Pick<Transaccion, "tipo" | "monto" | "estado">[]) {
+  return {
+    real: totalesDe(transacciones.filter((t) => t.estado === "real")),
+    total: totalesDe(transacciones),
+  };
 }
 
 export async function obtenerTransaccion(id: string) {
   const supabase = await crearClienteServidor();
   const { data } = await supabase
     .from("transacciones")
-    .select(CAMPOS)
+    .select(CAMPOS_TRANSACCION)
     .eq("id", id)
     .is("eliminado_en", null)
     .maybeSingle();
-  if (!data) return null;
-  const t = data as unknown as Transaccion;
-  return { ...t, monto: Number(t.monto) };
+  return data ? normalizarTransacciones([data])[0] : null;
 }
 
 export async function obtenerCategorias({ incluirInactivas = false } = {}) {

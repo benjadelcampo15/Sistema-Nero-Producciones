@@ -1,7 +1,7 @@
 import "server-only";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { sumar } from "@/lib/formato";
-import { calcularTotales } from "@/lib/financiero/consultas";
+import { CAMPOS_TRANSACCION, calcularTotales, normalizarTransacciones } from "@/lib/financiero/consultas";
 import type { Transaccion } from "@/lib/financiero/tipos";
 import { ESTADOS_EVENTO, type Balance, type EstadoEvento, type Evento, type EventoConBalance } from "./tipos";
 
@@ -65,16 +65,14 @@ export async function obtenerDetalleEvento(id: string) {
   const supabase = await crearClienteServidor();
   const { data, error } = await supabase
     .from("transacciones")
-    .select(
-      "id, tipo, monto, fecha, descripcion, contraparte, medio_pago, notas, categoria:categorias(id, nombre), evento:eventos(id, nombre)",
-    )
+    .select(CAMPOS_TRANSACCION)
     .eq("evento_id", id)
     .is("eliminado_en", null)
     .order("fecha", { ascending: false })
     .order("creado_en", { ascending: false });
   if (error) throw new Error(`No se pudieron leer los movimientos: ${error.message}`);
 
-  const transacciones = ((data ?? []) as unknown as Transaccion[]).map((t) => ({ ...t, monto: Number(t.monto) }));
+  const transacciones = normalizarTransacciones(data);
   const totales = calcularTotales(transacciones);
 
   return {

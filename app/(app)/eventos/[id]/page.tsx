@@ -19,7 +19,11 @@ export default async function PaginaEvento({ params }: PageProps<"/eventos/[id]"
 
   const editaEvento = puede(usuario, "eventos", "editar");
   const editaMovimientos = editaEvento || puede(usuario, "financiero", "editar");
-  const margen = totales.ingresos > 0 ? totales.resultado / totales.ingresos : null;
+  // Lo principal es el resultado total del evento (incluye pendientes); se muestra cuánto es real.
+  const { total, real } = totales;
+  const margen = total.ingresos > 0 ? total.resultado / total.ingresos : null;
+  const detalleReal = (montoReal: number, montoTotal: number) =>
+    montoReal !== montoTotal ? "Real: " + formatoPesos(montoReal) : undefined;
 
   return (
     <div className="space-y-6">
@@ -51,20 +55,20 @@ export default async function PaginaEvento({ params }: PageProps<"/eventos/[id]"
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Indicador titulo="Ingresos" valor={formatoPesos(totales.ingresos)} color="text-green-700" />
-        <Indicador titulo="Egresos" valor={formatoPesos(totales.egresos)} color="text-red-700" />
+        <Indicador titulo="Ingresos" valor={formatoPesos(total.ingresos)} color="text-green-700" detalle={detalleReal(real.ingresos, total.ingresos)} />
+        <Indicador titulo="Egresos" valor={formatoPesos(total.egresos)} color="text-red-700" detalle={detalleReal(real.egresos, total.egresos)} />
         <Indicador
           titulo="Balance"
-          valor={formatoPesos(totales.resultado)}
-          color={totales.resultado >= 0 ? "text-stone-900" : "text-red-700"}
-          detalle={margen !== null ? `Margen ${Math.round(margen * 100)}%` : undefined}
+          valor={formatoPesos(total.resultado)}
+          color={total.resultado >= 0 ? "text-stone-900" : "text-red-700"}
+          detalle={[margen !== null ? "Margen " + Math.round(margen * 100) + "%" : null, detalleReal(real.resultado, total.resultado)].filter(Boolean).join(" · ") || undefined}
         />
         <div className="tarjeta space-y-2 p-4">
           <p className="text-xs uppercase tracking-wide text-stone-500">Presupuesto</p>
           {evento.presupuesto ? (
             <>
               <p className="font-mono text-xl font-semibold">{formatoPesos(evento.presupuesto)}</p>
-              <BarraPresupuesto uso={totales.egresos / evento.presupuesto} />
+              <BarraPresupuesto uso={total.egresos / evento.presupuesto} />
             </>
           ) : (
             <p className="text-sm text-stone-400">Sin presupuesto cargado</p>
@@ -73,8 +77,8 @@ export default async function PaginaEvento({ params }: PageProps<"/eventos/[id]"
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Desglose titulo="Ingresos por categoría" filas={desglose.ingresos} total={totales.ingresos} color="bg-green-600" />
-        <Desglose titulo="Egresos por categoría" filas={desglose.egresos} total={totales.egresos} color="bg-red-600" />
+        <Desglose titulo="Ingresos por categoría" filas={desglose.ingresos} total={total.ingresos} color="bg-green-600" />
+        <Desglose titulo="Egresos por categoría" filas={desglose.egresos} total={total.egresos} color="bg-red-600" />
       </div>
 
       <section className="space-y-3">

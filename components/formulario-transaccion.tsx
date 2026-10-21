@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 import { guardarTransaccion } from "@/lib/financiero/acciones";
 import {
+  ESTADOS_MOVIMIENTO,
   MEDIOS_PAGO,
+  NOMBRE_ESTADO_MOVIMIENTO,
   NOMBRE_MEDIO_PAGO,
   type Categoria,
   type EventoResumido,
@@ -156,6 +158,55 @@ export function FormularioTransaccion({ transaccion, categorias, eventos, evento
               <option key={m} value={m}>{NOMBRE_MEDIO_PAGO[m]}</option>
             ))}
           </select>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="estado" className="etiqueta">Estado</label>
+          <select id="estado" name="estado" defaultValue={v("estado", transaccion?.estado ?? "real")} className="campo">
+            {ESTADOS_MOVIMIENTO.map((e) => (
+              <option key={e} value={e}>
+                {NOMBRE_ESTADO_MOVIMIENTO[e]}
+                {e === "real" ? " (ya se cobró / pagó)" : e === "pendiente" ? " (comprometido)" : " (estimado)"}
+              </option>
+            ))}
+          </select>
+        </div>
+        <label className="flex items-center gap-2 self-end pb-2 text-sm">
+          <input
+            type="checkbox"
+            name="facturado"
+            defaultChecked={estado.valores ? estado.valores.facturado === "on" : (transaccion?.facturado ?? false)}
+          />
+          Facturado
+        </label>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="iva" className="etiqueta">
+            IVA ($) <span className="font-normal text-stone-400">(opcional)</span>
+          </label>
+          <input
+            id="iva"
+            name="iva"
+            inputMode="decimal"
+            defaultValue={v("iva", transaccion?.iva ? String(transaccion.iva).replace(".", ",") : "")}
+            className="campo text-right font-mono"
+          />
+        </div>
+        <div>
+          <label htmlFor="iibb" className="etiqueta">
+            IIBB ($) <span className="font-normal text-stone-400">(opcional)</span>
+          </label>
+          <input
+            id="iibb"
+            name="iibb"
+            inputMode="decimal"
+            defaultValue={v("iibb", transaccion?.iibb ? String(transaccion.iibb).replace(".", ",") : "")}
+            className="campo text-right font-mono"
+          />
         </div>
       </div>
 

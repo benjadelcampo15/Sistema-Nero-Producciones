@@ -37,7 +37,7 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
           <h1 className="text-2xl font-semibold">Financiero</h1>
           <div className="flex flex-wrap gap-2">
             {editable && (
-              <Link href="/financiero/categorias" className="boton-secundario">CategorÃ­as</Link>
+              <Link href="/financiero/categorias" className="boton-secundario">Categorías</Link>
             )}
             <a href={`/financiero/exportar?${consulta}`} className="boton-secundario">Exportar a Excel</a>
             {editable && (
@@ -53,6 +53,7 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
             desde: filtros.desde,
             hasta: filtros.hasta,
             tipo: filtros.tipo ?? "",
+            estado: filtros.estado ?? "",
             categoria: filtros.categoria ?? "",
             evento: filtros.evento ?? "",
             q: filtros.q ?? "",
@@ -63,19 +64,21 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
         />
 
         <ZonaResultados>
+          {/* Grande: caja real. Abajo: escenario con pendientes y proyectados. */}
           <div className="grid gap-3 sm:grid-cols-3">
-            <Total titulo="Ingresos" monto={totales.ingresos} color="text-green-700" />
-            <Total titulo="Egresos" monto={totales.egresos} color="text-red-700" />
+            <Total titulo="Ingresos" real={totales.real.ingresos} total={totales.total.ingresos} color="text-green-700" />
+            <Total titulo="Egresos" real={totales.real.egresos} total={totales.total.egresos} color="text-red-700" />
             <Total
               titulo="Resultado"
-              monto={totales.resultado}
-              color={totales.resultado >= 0 ? "text-stone-900" : "text-red-700"}
+              real={totales.real.resultado}
+              total={totales.total.resultado}
+              color={totales.real.resultado >= 0 ? "text-stone-900" : "text-red-700"}
             />
           </div>
 
           {truncado && (
             <p className="alerta-error">
-              Hay mÃ¡s de {LIMITE_LISTADO} movimientos en este perÃ­odo: se muestran los mÃ¡s recientes y los totales no estÃ¡n completos. AcotÃ¡ las fechas.
+              Hay más de {LIMITE_LISTADO} movimientos en este período: se muestran los más recientes y los totales no están completos. Acotá las fechas.
             </p>
           )}
 
@@ -87,11 +90,16 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
   );
 }
 
-function Total({ titulo, monto, color }: { titulo: string; monto: number; color: string }) {
+function Total({ titulo, real, total, color }: { titulo: string; real: number; total: number; color: string }) {
   return (
     <div className="tarjeta p-4">
-      <p className="text-xs uppercase tracking-wide text-stone-500">{titulo}</p>
-      <p className={`mt-1 font-mono text-xl font-semibold xl:text-2xl ${color}`}>{formatoPesos(monto)}</p>
+      <p className="text-xs uppercase tracking-wide text-stone-500">{titulo} · real</p>
+      <p className={`mt-1 font-mono text-xl font-semibold xl:text-2xl ${color}`}>{formatoPesos(real)}</p>
+      {total !== real && (
+        <p className="mt-1 text-xs text-stone-500">
+          Con pendientes y proyectados: <span className="font-mono">{formatoPesos(total)}</span>
+        </p>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { NOMBRE_MEDIO_PAGO, type Transaccion } from "@/lib/financiero/tipos";
+import { NOMBRE_ESTADO_MOVIMIENTO, NOMBRE_MEDIO_PAGO, type Transaccion } from "@/lib/financiero/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { BotonEliminar } from "./boton-eliminar-transaccion";
 
@@ -43,7 +43,23 @@ export function TablaMovimientos({
             <tr key={t.id} className="hover:bg-stone-50">
               <td className="whitespace-nowrap px-4 py-3 text-stone-600">{formatoFecha(t.fecha)}</td>
               <td className="px-4 py-3">
-                <p className="font-medium">{t.descripcion}</p>
+                <p className="font-medium">
+                  {t.descripcion}
+                  {t.estado !== "real" && (
+                    <span
+                      className={`ml-2 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                        t.estado === "pendiente" ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"
+                      }`}
+                    >
+                      {NOMBRE_ESTADO_MOVIMIENTO[t.estado]}
+                    </span>
+                  )}
+                  {t.facturado && (
+                    <span className="ml-1 rounded-full bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-stone-600">
+                      Fact.
+                    </span>
+                  )}
+                </p>
                 {t.contraparte && <p className="text-xs text-stone-500">{t.contraparte}</p>}
               </td>
               <td className="px-4 py-3 text-stone-600">{t.categoria.nombre}</td>

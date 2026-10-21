@@ -42,6 +42,17 @@ npm run dev
 
 Abrir http://localhost:3000
 
+## Datos
+
+| Comando | Qué hace |
+|---|---|
+| `npm run importar` | Importa la hoja BASE de `.planilla/planilla.xlsx` (descargada de Google Sheets como .xlsx). Las filas sin fecha se cargan con fecha estimada y lo indican en las notas. |
+| `npm run importar -- borrar` | Borra todo lo importado de la planilla. |
+| `npm run mock` / `npm run mock:borrar` | Carga / borra datos de prueba inventados. |
+| `npm run totp` | Código 2FA actual del usuario de prueba (`PRUEBA_TOTP_SECRET` en `.env.local`). |
+
+`.planilla/` está en `.gitignore`: tiene datos reales y no se sube al repositorio.
+
 ## Ingreso y seguridad
 
 - Sin registro público: el admin crea usuarios desde **Usuarios** y recibe una

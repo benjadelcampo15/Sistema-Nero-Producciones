@@ -10,7 +10,8 @@
     "crear-admin": "node --env-file=.env.local scripts/crear-admin.mts",
     "mock": "node --env-file=.env.local scripts/mock.mts",
     "mock:borrar": "node --env-file=.env.local scripts/mock.mts borrar",
-    "totp": "node --env-file=.env.local scripts/totp.mts"
+    "totp": "node --env-file=.env.local scripts/totp.mts",
+    "importar": "node --env-file=.env.local scripts/importar-planilla.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -29,6 +30,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "xlsx": "^0.18.5"
   }
 }

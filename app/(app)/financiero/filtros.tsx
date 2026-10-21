@@ -9,6 +9,7 @@ export type ValoresFiltros = {
   desde: string;
   hasta: string;
   tipo: string;
+  estado: string;
   categoria: string;
   evento: string;
   q: string;
@@ -113,7 +114,7 @@ export function Filtros({
   };
 
   const periodoActivo = periodos.find((p) => p.desde === valores.desde && p.hasta === valores.hasta);
-  const hayFiltrosExtra = valores.tipo || valores.categoria || valores.evento || valores.q;
+  const hayFiltrosExtra = valores.tipo || valores.estado || valores.categoria || valores.evento || valores.q;
 
   return (
     <div className="tarjeta space-y-3 p-4">
@@ -138,7 +139,7 @@ export function Filtros({
             onClick={() => {
               clearTimeout(temporizador.current);
               setEscribiendo(false);
-              const nuevos = { ...valores, tipo: "", categoria: "", evento: "", q: "" };
+              const nuevos = { ...valores, tipo: "", estado: "", categoria: "", evento: "", q: "" };
               setValores(nuevos);
               aplicar(nuevos);
             }}
@@ -150,7 +151,7 @@ export function Filtros({
         {pendiente && <span className="ml-auto text-xs text-stone-500">Actualizando…</span>}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
         <div>
           <label htmlFor="desde" className="etiqueta">Desde</label>
           <input id="desde" type="date" value={valores.desde} onChange={(e) => cambiar("desde", e.target.value)} className="campo" />
@@ -165,6 +166,15 @@ export function Filtros({
             <option value="">Todos</option>
             <option value="ingreso">Ingresos</option>
             <option value="egreso">Egresos</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="estado" className="etiqueta">Estado</label>
+          <select id="estado" value={valores.estado} onChange={(e) => cambiar("estado", e.target.value)} className="campo">
+            <option value="">Todos</option>
+            <option value="real">Real</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="proyectado">Proyectado</option>
           </select>
         </div>
         <div>
