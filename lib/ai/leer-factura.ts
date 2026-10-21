@@ -25,15 +25,17 @@ export async function leerFactura(archivo: Archivo, categorias: string[]): Promi
 
   const instrucciones = instruccionesFactura(categorias);
   const esquema = jsonSchemaFactura(categorias);
-  const saturados: string[] = [];
+  const fallos: string[] = [];
 
   for (const modelo of modelos) {
     let texto: string;
     try {
       texto = await proveedor({ archivo, instrucciones, esquema, modelo });
     } catch (e) {
-      if (e instanceof ErrorIA && e.temporal) {
-        saturados.push(modelo);
+      // Cualquier error del servicio (saturado, sin cupo, modelo dado de baja…)
+      // se saltea y se prueba el siguiente modelo de la lista.
+      if (e instanceof ErrorIA) {
+        fallos.push(`${modelo}: ${e.temporal ? "saturado" : e.message}`);
         continue;
       }
       throw e;
@@ -52,5 +54,5 @@ export async function leerFactura(archivo: Archivo, categorias: string[]): Promi
     return { datos: validacion.data, proveedor: `${nombre}/${modelo}`, crudo };
   }
 
-  throw new Error(`Todos los modelos de IA están saturados en este momento (${saturados.join(", ")}). Probá de nuevo en unos minutos.`);
+  throw new Error(`Ningún modelo de IA pudo leer la factura. Probá de nuevo en unos minutos. (${fallos.join(" · ")})`);
 }
