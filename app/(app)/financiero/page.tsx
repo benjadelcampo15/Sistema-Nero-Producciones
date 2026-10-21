@@ -7,10 +7,9 @@ import {
   obtenerEventosResumidos,
   obtenerTransacciones,
 } from "@/lib/financiero/consultas";
-import { NOMBRE_MEDIO_PAGO } from "@/lib/financiero/tipos";
-import { formatoFecha, formatoPesos, periodosRapidos } from "@/lib/formato";
+import { formatoPesos, periodosRapidos } from "@/lib/formato";
 import { SinAcceso } from "../sin-acceso";
-import { BotonEliminar } from "./boton-eliminar";
+import { TablaMovimientos } from "@/components/tabla-movimientos";
 import { Filtros, ProveedorFiltros, ZonaResultados } from "./filtros";
 
 export default async function PaginaFinanciero({ searchParams }: PageProps<"/financiero">) {
@@ -38,7 +37,7 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
           <h1 className="text-2xl font-semibold">Financiero</h1>
           <div className="flex flex-wrap gap-2">
             {editable && (
-              <Link href="/financiero/categorias" className="boton-secundario">Categorías</Link>
+              <Link href="/financiero/categorias" className="boton-secundario">CategorÃ­as</Link>
             )}
             <a href={`/financiero/exportar?${consulta}`} className="boton-secundario">Exportar a Excel</a>
             {editable && (
@@ -76,72 +75,11 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
 
           {truncado && (
             <p className="alerta-error">
-              Hay más de {LIMITE_LISTADO} movimientos en este período: se muestran los más recientes y los totales no están completos. Acotá las fechas.
+              Hay mÃ¡s de {LIMITE_LISTADO} movimientos en este perÃ­odo: se muestran los mÃ¡s recientes y los totales no estÃ¡n completos. AcotÃ¡ las fechas.
             </p>
           )}
 
-          <div className="tarjeta overflow-x-auto p-0">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
-                <tr>
-                  <th className="px-4 py-3">Fecha</th>
-                  <th className="px-4 py-3">Descripción</th>
-                  <th className="px-4 py-3">Categoría</th>
-                  <th className="px-4 py-3">Evento</th>
-                  <th className="px-4 py-3">Medio</th>
-                  <th className="px-4 py-3 text-right">Monto</th>
-                  {editable && <th className="px-4 py-3" />}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100">
-                {transacciones.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-stone-500">
-                      No hay movimientos con estos filtros.
-                    </td>
-                  </tr>
-                )}
-                {transacciones.map((t) => (
-                  <tr key={t.id} className="hover:bg-stone-50">
-                    <td className="whitespace-nowrap px-4 py-3 text-stone-600">{formatoFecha(t.fecha)}</td>
-                    <td className="px-4 py-3">
-                      <p className="font-medium">{t.descripcion}</p>
-                      {t.contraparte && <p className="text-xs text-stone-500">{t.contraparte}</p>}
-                    </td>
-                    <td className="px-4 py-3 text-stone-600">{t.categoria.nombre}</td>
-                    <td className="px-4 py-3">
-                      {t.evento ? (
-                        <Link href={`/eventos/${t.evento.id}`} className="text-stone-900 underline decoration-stone-300 hover:decoration-stone-900">
-                          {t.evento.nombre}
-                        </Link>
-                      ) : (
-                        <span className="text-stone-400">—</span>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-stone-600">{NOMBRE_MEDIO_PAGO[t.medio_pago]}</td>
-                    <td
-                      className={`whitespace-nowrap px-4 py-3 text-right font-mono font-medium ${
-                        t.tipo === "ingreso" ? "text-green-700" : "text-red-700"
-                      }`}
-                    >
-                      {t.tipo === "ingreso" ? "+" : "−"} {formatoPesos(t.monto)}
-                    </td>
-                    {editable && (
-                      <td className="whitespace-nowrap px-4 py-3 text-right">
-                        <Link
-                          href={`/financiero/${t.id}/editar?volver_a=${encodeURIComponent(volverA)}`}
-                          className="text-xs text-stone-600 hover:text-stone-900"
-                        >
-                          Editar
-                        </Link>
-                        <BotonEliminar id={t.id} descripcion={t.descripcion} />
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <TablaMovimientos transacciones={transacciones} editable={editable} volverA={volverA} />
           <p className="text-xs text-stone-500">{transacciones.length} movimientos</p>
         </ZonaResultados>
       </div>

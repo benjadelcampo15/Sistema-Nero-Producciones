@@ -45,58 +45,52 @@ type Mov = {
 };
 
 const EVENTOS = [
-  { nombre: "Noche de Rock en Niceto", fecha: "2026-07-12", lugar: "Niceto Club, CABA", estado: "cerrado", presupuesto: 3_000_000, escala: 1 },
-  { nombre: "Festival Electrónica Costanera", fecha: "2026-08-15", lugar: "Costanera Sur, CABA", estado: "cerrado", presupuesto: 12_000_000, escala: 4 },
-  { nombre: "Lanzamiento Cerveza Andes Lager", fecha: "2026-09-05", lugar: "Palermo Hollywood", estado: "cerrado", presupuesto: 2_200_000, escala: 0.8, corporativo: true },
-  { nombre: "Fiesta Nero Primavera", fecha: "2026-09-20", lugar: "Crobar, CABA", estado: "cerrado", presupuesto: 4_500_000, escala: 1.5 },
-  { nombre: "Casamiento Pérez – Gómez", fecha: "2026-10-10", lugar: "Estancia La Candelaria, Lobos", estado: "cerrado", presupuesto: 2_500_000, escala: 0.9, corporativo: true },
-  { nombre: "Halloween Nero", fecha: "2026-10-31", lugar: "Groove, CABA", estado: "en_curso", presupuesto: 6_000_000, escala: 2 },
-  { nombre: "Fin de Año Nero 2026", fecha: "2026-12-31", lugar: "Club Ribera Norte, Vicente López", estado: "planificado", presupuesto: 15_000_000, escala: 5 },
+  { nombre: "Vino al Festival 2026", fecha: "2026-08-22", lugar: "Hipódromo de Palermo, CABA", estado: "cerrado", presupuesto: 14_000_000, escala: 3 },
+  { nombre: "Vino a la Nave", fecha: "2026-10-03", lugar: "La Nave, Barracas", estado: "cerrado", presupuesto: 6_500_000, escala: 1.4 },
+  { nombre: "Isidris Sunset", fecha: "2026-11-14", lugar: "Terraza del Río, San Isidro", estado: "planificado", presupuesto: 5_000_000, escala: 1 },
 ] as const;
+
+const BODEGAS = ["Bodega Catena Zapata", "Familia Zuccardi", "Bodega Norton", "Bodega El Esteco", "Trapiche", "Bodega Salentein"];
 
 function movimientosDeEvento(ev: (typeof EVENTOS)[number]): Mov[] {
   const e = ev.escala;
   const antes = (dias: number) => desplazarDias(ev.fecha, -dias);
-  const futuro = ev.estado === "planificado";
   const movs: Mov[] = [];
   const egreso = (categoria: string, descripcion: string, contraparte: string, min: number, max: number, dias: number, medio = "transferencia") =>
     movs.push({ tipo: "egreso", categoria, descripcion, contraparte, monto: entre(min * e, max * e), fecha: antes(dias), medio_pago: medio, evento: ev.nombre });
   const ingreso = (categoria: string, descripcion: string, contraparte: string, min: number, max: number, dias: number, medio = "mercado_pago") =>
     movs.push({ tipo: "ingreso", categoria, descripcion, contraparte, monto: entre(min * e, max * e), fecha: antes(dias), medio_pago: medio, evento: ev.nombre });
 
-  if ("corporativo" in ev && ev.corporativo) {
-    ingreso("Servicios de producción", "Anticipo 50% producción integral", ev.nombre.includes("Cerveza") ? "Cervecería Andes S.A." : "Familia Pérez", 1_300_000, 1_500_000, 30, "transferencia");
-    if (!futuro) ingreso("Servicios de producción", "Saldo 50% producción integral", ev.nombre.includes("Cerveza") ? "Cervecería Andes S.A." : "Familia Pérez", 1_300_000, 1_500_000, -3, "transferencia");
-    egreso("Sonido e iluminación", "Equipo de sonido y luces", "Audio Pro Rental", 450_000, 600_000, 2);
-    egreso("Catering", "Catering y bebidas", "Sabores del Plata", 500_000, 750_000, 1);
-    egreso("Personal", "Staff de producción (6 personas)", "Varios", 240_000, 320_000, 0, "efectivo");
-    egreso("Alquiler de lugar", "Seña del salón", ev.lugar, 300_000, 400_000, 25);
-    return movs;
+  // Entradas (incluyen copa de degustación) en tandas.
+  for (const [dias, tanda] of [[45, "Early bird"], [30, "Preventa 1"], [18, "Preventa 2"], [7, "Preventa 3"], [1, "Venta general"]] as const) {
+    ingreso("Venta de entradas", `Entradas ${tanda} (con copa)`, "Passline", 550_000, 950_000, dias, "transferencia");
   }
+  ingreso("Venta de entradas", "Venta en puerta", "Caja puerta", 250_000, 450_000, 0, "efectivo");
 
-  // Preventa de entradas en tandas.
-  for (const [dias, tanda] of [[40, "Preventa 1"], [25, "Preventa 2"], [10, "Preventa 3"], [1, "Venta general"]] as const) {
-    ingreso("Venta de entradas", `Entradas ${tanda}`, "Passline", 600_000, 1_100_000, dias, "transferencia");
+  // Bodegas: pagan stand y algunas sponsorean.
+  const bodegas = BODEGAS.slice(0, Math.max(3, Math.round(2 * e)));
+  for (const [i, bodega] of bodegas.entries()) {
+    ingreso("Otros ingresos", "Stand de degustación", bodega, 180_000, 260_000, 40 - i * 3, "transferencia");
   }
-  if (!futuro) {
-    ingreso("Barra", "Recaudación barra", "Caja barra", 700_000, 1_200_000, 0, "efectivo");
-    ingreso("Barra", "Barra – pagos con QR", "Mercado Pago", 400_000, 700_000, 0);
-  }
-  if (e >= 1.5) ingreso("Sponsors", "Sponsoreo principal", elegir(["Fernet Branca", "Red Bull Argentina", "Quilmes"]), 800_000, 1_200_000, 35, "transferencia");
+  ingreso("Sponsors", "Sponsor principal", bodegas[0], 700_000, 1_000_000, 35, "transferencia");
 
-  egreso("Alquiler de lugar", "Alquiler del venue", ev.lugar, 500_000, 700_000, 30);
-  egreso("Artistas y cachets", "Cachet headliner", elegir(["DJ Nicolás Martín", "Banda Los Reyes del Bajo", "DJ Sol Ortega"]), 700_000, 1_000_000, 14);
-  egreso("Artistas y cachets", "Cachet artistas soporte", "Varios artistas", 200_000, 350_000, 7);
-  egreso("Publicidad y difusión", "Campaña Instagram y Meta Ads", "Meta Platforms", 150_000, 250_000, 30, "tarjeta");
-  egreso("Publicidad y difusión", "Flyers y cartelería", "Imprenta Rápida", 40_000, 80_000, 20);
-  if (!futuro) {
-    egreso("Sonido e iluminación", "Sonido, luces y pantallas", "Audio Pro Rental", 600_000, 900_000, 1);
-    egreso("Seguridad", "Seguridad y control de acceso", "Seguridad Total SRL", 250_000, 400_000, 0);
-    egreso("Personal", "Barra y staff de la noche", "Varios", 300_000, 450_000, 0, "efectivo");
-    egreso("Catering", "Catering camarines", "Sabores del Plata", 60_000, 120_000, 0);
-    egreso("Transporte y logística", "Fletes y traslado de equipos", "Fletes Rápido", 80_000, 140_000, 1);
-    egreso("Impuestos y tasas", "SADAIC y AADI-CAPIF", "SADAIC", 120_000, 200_000, -10);
-  }
+  ingreso("Barra", "Venta de copas y botellas", "Caja barra", 600_000, 900_000, 0, "efectivo");
+  ingreso("Barra", "Venta de copas y botellas – QR", "Mercado Pago", 500_000, 800_000, 0);
+  ingreso("Barra", "Food trucks – canon por puesto", "Food trucks", 150_000, 250_000, 0, "efectivo");
+
+  egreso("Alquiler de lugar", "Alquiler del predio", ev.lugar, 700_000, 950_000, 40);
+  egreso("Vinos y bebidas", "Compra de vinos para barra", elegir(BODEGAS), 600_000, 900_000, 10);
+  egreso("Vinos y bebidas", "Agua, hielo y gaseosas", "Distribuidora del Sur", 90_000, 150_000, 2);
+  egreso("Otros gastos", "Alquiler de copas de cristal", "Cristalería Eventos", 180_000, 260_000, 3);
+  egreso("Publicidad y difusión", "Campaña Instagram y Meta Ads", "Meta Platforms", 180_000, 280_000, 30, "tarjeta");
+  egreso("Publicidad y difusión", "Influencers de vino", "Varios", 120_000, 200_000, 20);
+  egreso("Artistas y cachets", "DJ set", elegir(["DJ Sol Ortega", "DJ Nico Martín", "Dúo Malbec Beats"]), 250_000, 400_000, 12);
+  egreso("Sonido e iluminación", "Sonido y luces", "Audio Pro Rental", 400_000, 600_000, 1);
+  egreso("Personal", "Sommeliers y barra", "Varios", 350_000, 500_000, 0, "efectivo");
+  egreso("Seguridad", "Seguridad y control de acceso", "Seguridad Total SRL", 220_000, 320_000, 0);
+  egreso("Catering", "Tablas de quesos y fiambres", "Almacén de Campo", 150_000, 250_000, 0);
+  egreso("Transporte y logística", "Fletes y armado", "Fletes Rápido", 100_000, 160_000, 1);
+  egreso("Impuestos y tasas", "SADAIC y permisos municipales", "SADAIC", 100_000, 180_000, -10);
   return movs;
 }
 
@@ -111,7 +105,7 @@ function gastosGenerales(): Mov[] {
     g("Gastos administrativos", "Suscripciones software (Google, Canva)", "Varios", 52_000 + entre(0, 6_000), "15", "tarjeta");
     g("Personal", "Sueldo administración", "Lucía Fernández", 950_000, "01");
     g("Impuestos y tasas", "Monotributo / IIBB", "ARCA", 210_000 + entre(0, 40_000), "20");
-    if (mes !== "2026-10") g("Otros gastos", "Mantenimiento equipos propios", "Servicio Técnico Audio", entre(60_000, 150_000), "25", "efectivo");
+    if (mes !== "2026-10") g("Otros gastos", "Mantenimiento de equipos y heladeras", "Servicio Técnico Frío", entre(60_000, 150_000), "25", "efectivo");
   }
   movs.push({ tipo: "ingreso", categoria: "Otros ingresos", descripcion: "Alquiler de equipos propios a terceros", contraparte: "Productora Sur", monto: 280_000, fecha: "2026-08-22", medio_pago: "transferencia" });
   movs.push({ tipo: "ingreso", categoria: "Servicios de producción", descripcion: "Asesoría técnica evento corporativo", contraparte: "Banco Ciudad", monto: 650_000, fecha: "2026-10-03", medio_pago: "transferencia" });
