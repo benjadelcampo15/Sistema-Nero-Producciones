@@ -145,7 +145,8 @@ lib/ai/
 ### 5.1 Usuarios y permisos
 
 Solo un usuario con `es_admin = true` entra a **Configuración → Usuarios**, donde puede:
-- Crear un usuario (nombre + email): recibe una invitación por mail, define su contraseña y configura el 2FA al primer ingreso.
+- Crear un usuario (nombre + email): el sistema genera una **contraseña temporal** que el admin ve una sola vez y le pasa por un medio privado. En el primer ingreso el usuario la cambia y configura el 2FA. (No se usan invitaciones por mail: el servicio de mail incluido en Supabase solo envía a miembros del equipo del proyecto; se puede sumar un SMTP propio más adelante.)
+- Restablecer la contraseña (nueva temporal) o el 2FA de un usuario que perdió el celular.
 - Asignar permisos por sección:
 
 | Sección | Niveles |

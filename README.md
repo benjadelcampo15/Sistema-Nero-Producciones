@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Nero Producciones · Administración
 
-## Getting Started
+Sistema de administración y contabilidad. Arquitectura en [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md).
 
-First, run the development server:
+Stack: Next.js 16 + TypeScript + Tailwind · Supabase (Postgres, Auth con 2FA, Storage).
+
+## Puesta en marcha
+
+### 1. Variables de entorno
+
+Copiá `.env.example` como `.env.local` y completá con los datos de Supabase
+(**Project Settings → API Keys**). `.env.local` no se sube a git.
+
+### 2. Base de datos
+
+En Supabase → **SQL Editor**, pegá y ejecutá cada archivo de `supabase/migrations/`
+en orden (por nombre).
+
+### 3. Configuración de Auth en Supabase
+
+En **Authentication**:
+
+- **Sign In / Providers → Email**: desactivar **Allow new users to sign up**
+  (los usuarios los crea solo el admin desde la app).
+- **Sign In / Providers → Email**: largo mínimo de contraseña **12**.
+- **Multi-Factor**: verificar que **TOTP** esté habilitado.
+
+### 4. Primer administrador
+
+```bash
+npm run crear-admin -- tu@email.com "Tu Nombre"
+```
+
+Muestra una contraseña temporal. Al ingresar la primera vez se pide cambiarla
+y configurar la verificación en dos pasos (Google Authenticator o similar).
+
+### 5. Levantar en local
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abrir http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Ingreso y seguridad
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Sin registro público: el admin crea usuarios desde **Usuarios** y recibe una
+  contraseña temporal para pasarle a la persona.
+- Primer ingreso: cambiar contraseña → configurar 2FA. Después: contraseña + código.
+- Permisos por sección (Financiero, Eventos, Facturas): sin acceso / ver / editar.
+- La base exige sesión con 2FA (RLS) para leer cualquier dato; las escrituras
+  pasan solo por el servidor.
+- Toda acción de administración queda en la tabla `auditoria`.
