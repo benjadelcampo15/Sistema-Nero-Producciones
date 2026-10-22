@@ -1,4 +1,5 @@
 import "server-only";
+import { Agent, request } from "node:https";
 import { XMLParser } from "fast-xml-parser";
 
 const lector = new XMLParser({
@@ -19,28 +20,49 @@ export function xml(texto: string | number) {
 export async function enviarSoap(url: string, accion: string, cuerpo: string, espacios = "") {
   const sobre = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"${espacios}><soap:Body>${cuerpo}</soap:Body></soap:Envelope>`;
 
-  let respuesta: Response;
+  let respuesta: { estado: number; texto: string };
   try {
-    respuesta = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: `"${accion}"` },
-      body: sobre,
-      signal: AbortSignal.timeout(60_000),
-    });
+    respuesta = await postear(url, sobre, { "Content-Type": "text/xml; charset=utf-8", SOAPAction: `"${accion}"` });
   } catch {
     throw new ErrorArca("No se pudo conectar con ARCA (o tardó demasiado). Probá de nuevo en unos minutos.");
   }
 
-  const texto = await respuesta.text();
-  const doc = lector.parse(texto);
+  const doc = lector.parse(respuesta.texto);
   const body = doc?.Envelope?.Body;
   if (body?.Fault) {
     throw new ErrorArca(`ARCA: ${body.Fault.faultstring ?? "error desconocido"}`);
   }
-  if (!respuesta.ok || !body) {
-    throw new ErrorArca(`ARCA respondió ${respuesta.status}`);
+  if (respuesta.estado >= 400 || !body) {
+    throw new ErrorArca(`ARCA respondió ${respuesta.estado}`);
   }
   return body as Record<string, unknown>;
+}
+
+/**
+ * Conexión solo para ARCA: su servidor de facturación de producción
+ * (servicios1.afip.gov.ar) usa una clave Diffie-Hellman de 1024 bits que
+ * Node rechaza por defecto ("dh key too small"). Se baja el nivel de
+ * seguridad de OpenSSL únicamente en estas conexiones; el resto de la app no
+ * se ve afectado.
+ */
+const agenteArca = new Agent({ keepAlive: true, ciphers: "DEFAULT@SECLEVEL=1", minVersion: "TLSv1.2" });
+
+function postear(url: string, cuerpo: string, encabezados: Record<string, string>) {
+  return new Promise<{ estado: number; texto: string }>((resolver, rechazar) => {
+    const pedido = request(
+      url,
+      { method: "POST", agent: agenteArca, headers: { ...encabezados, "Content-Length": Buffer.byteLength(cuerpo) }, timeout: 60_000 },
+      (res) => {
+        const partes: Buffer[] = [];
+        res.on("data", (p: Buffer) => partes.push(p));
+        res.on("end", () => resolver({ estado: res.statusCode ?? 0, texto: Buffer.concat(partes).toString("utf8") }));
+        res.on("error", rechazar);
+      },
+    );
+    pedido.on("timeout", () => pedido.destroy(new Error("Tiempo agotado")));
+    pedido.on("error", rechazar);
+    pedido.end(cuerpo);
+  });
 }
 
 export function interpretarXml(texto: string) {
