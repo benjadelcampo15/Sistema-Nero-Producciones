@@ -37,6 +37,12 @@ export default async function PaginaComprobante({ params }: PageProps<"/facturar
         </div>
       </div>
 
+      {emitido && (
+        <a href={`/imprimir/factura/${c.id}`} target="_blank" rel="noreferrer" className="boton">
+          Ver / descargar PDF
+        </a>
+      )}
+
       {emitido ? (
         <div className="tarjeta flex flex-wrap items-center gap-x-8 gap-y-2 border-green-200 bg-green-50">
           <div>

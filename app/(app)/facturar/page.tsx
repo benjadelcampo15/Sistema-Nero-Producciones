@@ -59,7 +59,10 @@ export default async function PaginaFacturar() {
                 <td className="whitespace-nowrap px-4 py-3 text-right font-mono">{formatoPesos(c.total)}</td>
                 <td className="px-4 py-3">
                   {c.estado === "emitido" ? (
-                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">CAE {c.cae}</span>
+                    <>
+                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">CAE {c.cae}</span>
+                      <a href={`/imprimir/factura/${c.id}`} target="_blank" rel="noreferrer" className="ml-2 text-xs font-medium underline">PDF</a>
+                    </>
                   ) : (
                     <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">Rechazada</span>
                   )}

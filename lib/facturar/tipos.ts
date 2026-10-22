@@ -91,6 +91,9 @@ export type Comprobante = {
   numero: number | null;
   fecha: string;
   concepto: number;
+  fecha_servicio_desde: string | null;
+  fecha_servicio_hasta: string | null;
+  fecha_vto_pago: string | null;
   doc_tipo: number;
   doc_nro: string;
   receptor_nombre: string | null;
