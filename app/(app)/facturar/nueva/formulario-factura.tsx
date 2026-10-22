@@ -135,7 +135,9 @@ export function FormularioFactura({
               inputMode="numeric"
               required
               defaultValue={v("punto_venta", String((real ? puntoVenta.produccion : puntoVenta.homologacion) ?? ""))}
-              className="campo"
+              // Las reales salen siempre por el punto de venta de la app.
+              readOnly={real}
+              className={real ? "campo bg-stone-100" : "campo"}
             />
           </div>
           <div>

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { exigirPermiso, puede } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
-import { entornoConfigurado } from "@/lib/arca/config";
+import { configuracionArca, entornoConfigurado } from "@/lib/arca/config";
 import { ErrorArca } from "@/lib/arca/soap";
 import { solicitarCae, ultimoAutorizado } from "@/lib/arca/wsfe";
 import { parsearMonto } from "@/lib/formato";
@@ -105,6 +105,17 @@ export async function emitirFactura(_previo: EstadoEmision, formData: FormData):
   if (!entornoConfigurado(entorno)) {
     return {
       error: entorno === "produccion" ? "La facturación real todavía no está configurada" : "La facturación de prueba no está configurada",
+      valores,
+    };
+  }
+  // Las facturas reales solo salen por el punto de venta de esta app: otros
+  // puntos de venta de la empresa los usan otros sistemas.
+  const puntoVentaReal = configuracionArca("produccion").puntoVentaSugerido;
+  if (entorno === "produccion" && (!puntoVentaReal || d.punto_venta !== puntoVentaReal)) {
+    return {
+      error: puntoVentaReal
+        ? `Las facturas reales se emiten solo por el punto de venta ${puntoVentaReal}`
+        : "Falta configurar el punto de venta de las facturas reales (ARCA_PROD_PUNTO_VENTA)",
       valores,
     };
   }
