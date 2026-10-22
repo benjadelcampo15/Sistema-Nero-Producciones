@@ -41,7 +41,8 @@ export const obtenerUsuario = cache(async (): Promise<UsuarioActual> => {
   ]);
 
   if (!perfil || !perfil.activo) {
-    redirect("/login");
+    // Usuario desactivado con sesión abierta: se le cierra la sesión.
+    redirect("/auth/salir?motivo=inactivo");
   }
   if (perfil.debe_cambiar_contrasena) {
     redirect("/cambiar-contrasena");

@@ -61,6 +61,13 @@ export async function proxy(request: NextRequest) {
     return ruta === "/login" ? response : ir("/login");
   }
 
+  // Sesión completa (2FA verificado) navegando la app: no se consulta el perfil
+  // acá, para no sumar una consulta a la base en cada navegación. La página lo
+  // valida (obtenerUsuario: activo y contraseña) y la base lo exige (RLS).
+  if (claims.aal === "aal2" && !PASOS_INGRESO.includes(ruta)) {
+    return response;
+  }
+
   const { data: perfil } = await supabase
     .from("perfiles")
     .select("activo, debe_cambiar_contrasena")

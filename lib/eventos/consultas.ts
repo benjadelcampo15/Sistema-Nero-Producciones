@@ -59,17 +59,20 @@ function desglosar(transacciones: Transaccion[], tipo: Transaccion["tipo"]): Des
 
 /** Evento con sus movimientos, totales y desglose por categoría. */
 export async function obtenerDetalleEvento(id: string) {
-  const evento = await obtenerEvento(id);
-  if (!evento) return null;
-
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const supabase = await crearClienteServidor();
-  const { data, error } = await supabase
-    .from("transacciones")
-    .select(CAMPOS_TRANSACCION)
-    .eq("evento_id", id)
-    .is("eliminado_en", null)
-    .order("fecha", { ascending: false })
-    .order("creado_en", { ascending: false });
+  // En paralelo: evento y movimientos en una sola ida y vuelta a la base.
+  const [evento, { data, error }] = await Promise.all([
+    obtenerEvento(id),
+    supabase
+      .from("transacciones")
+      .select(CAMPOS_TRANSACCION)
+      .eq("evento_id", id)
+      .is("eliminado_en", null)
+      .order("fecha", { ascending: false })
+      .order("creado_en", { ascending: false }),
+  ]);
+  if (!evento) return null;
   if (error) throw new Error(`No se pudieron leer los movimientos: ${error.message}`);
 
   const transacciones = normalizarTransacciones(data);
