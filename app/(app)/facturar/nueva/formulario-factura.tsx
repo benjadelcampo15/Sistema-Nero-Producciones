@@ -32,7 +32,7 @@ export function FormularioFactura({
   /** Hay certificado de producción cargado: se pueden emitir facturas reales. */
   realDisponible: boolean;
   puntoVenta: { homologacion: number; produccion: number | null };
-  clientes: { id: string; razon_social: string; doc_tipo: number; doc_nro: string; condicion_iva: number }[];
+  clientes: { id: string; razon_social: string; doc_tipo: number; doc_nro: string; condicion_iva: number; email: string | null }[];
 }) {
   const [estado, accion, enviando] = useActionState(emitirFactura, {});
   const v = (campo: string, inicial: string) => estado.valores?.[campo] ?? inicial;
@@ -44,6 +44,8 @@ export function FormularioFactura({
   const [docNro, setDocNro] = useState(v("doc_nro", ""));
   const [nombre, setNombre] = useState(v("receptor_nombre", ""));
   const [condicion, setCondicion] = useState(Number(v("condicion_iva_receptor", "5")));
+  const [email, setEmail] = useState(v("email_cliente", ""));
+  const [enviarMail, setEnviarMail] = useState(estado.valores ? estado.valores.enviar_mail === "on" : false);
 
   const elegirCliente = (id: string) => {
     setClienteId(id);
@@ -53,6 +55,8 @@ export function FormularioFactura({
     setDocNro(c.doc_tipo === 99 ? "" : c.doc_nro);
     setNombre(c.razon_social);
     setCondicion(c.condicion_iva);
+    setEmail(c.email ?? "");
+    setEnviarMail(Boolean(c.email));
     // Emisor Responsable Inscripto: A si el cliente puede recibir A (con CUIT), si no B.
     if (tipo !== 11) {
       const puedeA = c.doc_tipo === 80 && (CONDICIONES_IVA.find((x) => x.id === c.condicion_iva)?.clases as readonly string[] | undefined)?.includes("A");
@@ -271,6 +275,29 @@ export function FormularioFactura({
               <option key={c.id} value={c.id}>{c.nombre}</option>
             ))}
           </select>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div>
+            <label htmlFor="email_cliente" className="etiqueta">
+              Email del cliente <span className="font-normal text-stone-400">(opcional)</span>
+            </label>
+            <input
+              id="email_cliente"
+              name="email_cliente"
+              type="email"
+              maxLength={200}
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (!email && e.target.value) setEnviarMail(true);
+              }}
+              className="campo"
+            />
+          </div>
+          <label className="flex items-center gap-2 pb-2 text-sm">
+            <input type="checkbox" name="enviar_mail" checked={enviarMail} onChange={(e) => setEnviarMail(e.target.checked)} />
+            Enviarle la factura por mail
+          </label>
         </div>
         {!clienteId && docTipo !== 99 && (
           <label className="flex items-center gap-2 text-sm">

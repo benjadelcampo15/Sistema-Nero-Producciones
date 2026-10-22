@@ -106,7 +106,11 @@ export type Comprobante = {
   cae_vto: string | null;
   mensajes: { codigo: string; mensaje: string }[] | null;
   evento: { id: string; nombre: string } | null;
+  cliente: { email: string | null } | null;
   transaccion_id: string | null;
+  token: string | null;
+  mail_enviado_a: string | null;
+  mail_enviado_en: string | null;
   creado_en: string;
 };
 

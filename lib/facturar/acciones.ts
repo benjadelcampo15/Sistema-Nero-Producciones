@@ -1,6 +1,8 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
 import { redirect } from "next/navigation";
+import { refresh } from "next/cache";
 import { z } from "zod";
 import { exigirPermiso, puede } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
@@ -9,6 +11,8 @@ import { ErrorArca } from "@/lib/arca/soap";
 import { solicitarCae, ultimoAutorizado } from "@/lib/arca/wsfe";
 import { parsearMonto } from "@/lib/formato";
 import { cuitValido } from "@/lib/cuit";
+import { mailConfigurado } from "@/lib/mail";
+import { mandarFacturaPorMail } from "./mail";
 import { CONDICIONES_IVA, TIPOS_CBTE, calcularTotales, nombreTipoCbte, type ItemComprobante } from "./tipos";
 
 export type EstadoEmision = { error?: string; detalles?: string[]; valores?: Record<string, string> };
@@ -33,6 +37,8 @@ const esquema = z.object({
   categoria_id: z.union([z.uuid(), z.literal("")]).optional(),
   cliente_id: z.union([z.uuid(), z.literal("")]).optional(),
   guardar_cliente: z.string().optional(),
+  email_cliente: z.union([z.email("Email del cliente inválido").trim(), z.literal("")]).optional().transform((v) => v || null),
+  enviar_mail: z.string().optional(),
 });
 
 function leerItems(v: Record<string, string>, clase: string): ItemComprobante[] | string {
@@ -83,6 +89,7 @@ export async function emitirFactura(_previo: EstadoEmision, formData: FormData):
   const docNro = d.doc_tipo === 99 ? "0" : (d.doc_nro ?? "").replace(/\D/g, "");
   if (d.doc_tipo === 80 && !cuitValido(docNro)) return { error: "CUIT del cliente inválido", valores };
   if (d.doc_tipo === 96 && !/^\d{7,8}$/.test(docNro)) return { error: "DNI inválido", valores };
+  if (d.enviar_mail === "on" && !d.email_cliente) return { error: "Falta el email del cliente para mandarle la factura", valores };
   if (tipo.clase === "A" && d.doc_tipo !== 80) return { error: "La Factura A requiere el CUIT del cliente", valores };
 
   // Servicios: ARCA exige el período y el vencimiento del pago.
@@ -149,7 +156,7 @@ export async function emitirFactura(_previo: EstadoEmision, formData: FormData):
     else {
       const { data: nuevo } = await supabase
         .from("clientes")
-        .insert({ razon_social: d.receptor_nombre, doc_tipo: d.doc_tipo, doc_nro: docNro, condicion_iva: d.condicion_iva_receptor })
+        .insert({ razon_social: d.receptor_nombre, doc_tipo: d.doc_tipo, doc_nro: docNro, condicion_iva: d.condicion_iva_receptor, email: d.email_cliente })
         .select("id")
         .single();
       clienteId = nuevo?.id ?? null;
@@ -181,6 +188,7 @@ export async function emitirFactura(_previo: EstadoEmision, formData: FormData):
       mensajes: mensajes.length ? mensajes : null,
       evento_id: d.evento_id || null,
       cliente_id: clienteId,
+      token: randomBytes(24).toString("base64url"),
     })
     .select("id")
     .single();
@@ -225,5 +233,38 @@ export async function emitirFactura(_previo: EstadoEmision, formData: FormData):
     if (trx) await supabase.from("comprobantes_emitidos").update({ transaccion_id: trx.id }).eq("id", comprobante.id);
   }
 
-  redirect(`/facturar/${comprobante.id}`);
+  // Mail al cliente con el link a la factura. Si falla, la factura igual quedó emitida.
+  let resultadoMail = "";
+  if (d.enviar_mail === "on" && d.email_cliente) {
+    if (clienteId) {
+      // Si el cliente guardado no tenía email, queda guardado para la próxima.
+      await supabase.from("clientes").update({ email: d.email_cliente }).eq("id", clienteId).is("email", null);
+    }
+    try {
+      if (!mailConfigurado()) throw new Error("sin configurar");
+      await mandarFacturaPorMail(comprobante.id, d.email_cliente);
+      resultadoMail = "?mail=enviado";
+    } catch {
+      resultadoMail = "?mail=error";
+    }
+  }
+
+  redirect(`/facturar/${comprobante.id}${resultadoMail}`);
+}
+
+export type EstadoEnvio = { error?: string; ok?: string };
+
+/** Manda (o reenvía) una factura emitida por mail. */
+export async function enviarFacturaPorMail(id: string, _previo: EstadoEnvio, formData: FormData): Promise<EstadoEnvio> {
+  await exigirPermiso("facturar", "editar");
+  if (!mailConfigurado()) return { error: "El envío por mail no está configurado" };
+  const para = String(formData.get("para") ?? "").trim();
+  if (!z.email().safeParse(para).success) return { error: "Email inválido" };
+  try {
+    await mandarFacturaPorMail(id, para);
+  } catch (e) {
+    return { error: `No se pudo enviar el mail: ${e instanceof Error ? e.message : "error"}` };
+  }
+  refresh();
+  return { ok: `Enviada a ${para}` };
 }

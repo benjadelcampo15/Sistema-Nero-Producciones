@@ -8,14 +8,17 @@ import { CONDICIONES_IVA, nombreTipoCbte, numeroComprobante, type Comprobante } 
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { ComprobanteVista } from "@/components/comprobante-vista";
 import { SinAcceso } from "../../sin-acceso";
+import { EnviarMail } from "./enviar-mail";
 
-export default async function PaginaComprobante({ params }: PageProps<"/facturar/[id]">) {
+export default async function PaginaComprobante({ params, searchParams }: PageProps<"/facturar/[id]">) {
   const usuario = await obtenerUsuario();
   if (!puede(usuario, "facturar", "ver")) return <SinAcceso />;
 
   const { id } = await params;
   const c = await obtenerComprobante(id);
   if (!c) notFound();
+  const { mail } = await searchParams;
+  const puedeEditar = puede(usuario, "facturar", "editar");
 
   return (
     <div className="space-y-6">
@@ -40,13 +43,20 @@ export default async function PaginaComprobante({ params }: PageProps<"/facturar
         </div>
       </div>
 
-      {c.estado === "emitido" ? <Emitido c={c} /> : <Rechazado c={c} />}
+      {mail === "enviado" && c.mail_enviado_a && (
+        <p className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">Factura enviada por mail a {c.mail_enviado_a}.</p>
+      )}
+      {mail === "error" && (
+        <p className="alerta-error">La factura se emitió bien, pero no se pudo mandar el mail. Probá de nuevo con “Enviar por mail”.</p>
+      )}
+
+      {c.estado === "emitido" ? <Emitido c={c} puedeEditar={puedeEditar} /> : <Rechazado c={c} />}
     </div>
   );
 }
 
 /** Factura emitida: se muestra el comprobante tal cual queda en el PDF. */
-async function Emitido({ c }: { c: Comprobante }) {
+async function Emitido({ c, puedeEditar }: { c: Comprobante; puedeEditar: boolean }) {
   const emisor = datosEmisor(c.entorno);
   const svg = await qrSvg(urlQrArca(c, emisor.cuit));
 
@@ -59,6 +69,17 @@ async function Emitido({ c }: { c: Comprobante }) {
       </div>
 
       <aside className="space-y-3 text-sm">
+        <div className="tarjeta space-y-2 p-4">
+          <p className="text-xs uppercase tracking-wide text-stone-500">Mail al cliente</p>
+          {c.mail_enviado_a && c.mail_enviado_en ? (
+            <p>
+              Enviada a <span className="font-medium">{c.mail_enviado_a}</span> el {formatoFecha(c.mail_enviado_en.slice(0, 10))}.
+            </p>
+          ) : (
+            <p className="text-stone-500">Todavía no se envió.</p>
+          )}
+          {puedeEditar && <EnviarMail id={c.id} emailSugerido={c.mail_enviado_a ?? c.cliente?.email ?? ""} yaEnviada={Boolean(c.mail_enviado_a)} />}
+        </div>
         {c.evento && (
           <div className="tarjeta p-4">
             <p className="text-xs uppercase tracking-wide text-stone-500">Evento</p>

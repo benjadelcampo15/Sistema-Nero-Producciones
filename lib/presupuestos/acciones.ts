@@ -1,11 +1,11 @@
 "use server";
 
 import { randomBytes } from "node:crypto";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { refresh } from "next/cache";
 import { z } from "zod";
 import { exigirPermiso } from "@/lib/auth/sesion";
+import { urlBase } from "@/lib/url";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { enviarMail, escaparHtml, mailConfigurado } from "@/lib/mail";
 import { formatoFecha, formatoPesos, parsearMonto } from "@/lib/formato";
@@ -15,14 +15,6 @@ export type EstadoPresupuestoForm = { error?: string; ok?: string; valores?: Rec
 
 const nuevoToken = () => randomBytes(24).toString("base64url");
 
-/** Origen de la app (para armar el link público). */
-async function urlBase() {
-  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
-  const protocolo = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  return `${protocolo}://${host}`;
-}
 
 const textoOpcional = (max: number) =>
   z
