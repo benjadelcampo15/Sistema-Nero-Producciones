@@ -8,6 +8,7 @@ import { configuracionArca, entornoConfigurado } from "@/lib/arca/config";
 import { ErrorArca } from "@/lib/arca/soap";
 import { solicitarCae, ultimoAutorizado } from "@/lib/arca/wsfe";
 import { parsearMonto } from "@/lib/formato";
+import { cuitValido } from "@/lib/cuit";
 import { CONDICIONES_IVA, TIPOS_CBTE, calcularTotales, nombreTipoCbte, type ItemComprobante } from "./tipos";
 
 export type EstadoEmision = { error?: string; detalles?: string[]; valores?: Record<string, string> };
@@ -30,6 +31,8 @@ const esquema = z.object({
   evento_id: z.union([z.uuid(), z.literal("")]).optional(),
   registrar_ingreso: z.string().optional(),
   categoria_id: z.union([z.uuid(), z.literal("")]).optional(),
+  cliente_id: z.union([z.uuid(), z.literal("")]).optional(),
+  guardar_cliente: z.string().optional(),
 });
 
 function leerItems(v: Record<string, string>, clase: string): ItemComprobante[] | string {
@@ -59,15 +62,6 @@ function descripcionDeItems(items: ItemComprobante[]) {
   return `${primeros}${resto}`.slice(0, 200);
 }
 
-/** Valida el CUIT con su dígito verificador. */
-function cuitValido(cuit: string) {
-  if (!/^\d{11}$/.test(cuit)) return false;
-  const pesos = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
-  const suma = pesos.reduce((t, p, i) => t + p * Number(cuit[i]), 0);
-  const resto = 11 - (suma % 11);
-  const verificador = resto === 11 ? 0 : resto === 10 ? 9 : resto;
-  return verificador === Number(cuit[10]);
-}
 
 export async function emitirFactura(_previo: EstadoEmision, formData: FormData): Promise<EstadoEmision> {
   const usuario = await exigirPermiso("facturar", "editar");
@@ -146,6 +140,21 @@ export async function emitirFactura(_previo: EstadoEmision, formData: FormData):
 
   const supabase = await crearClienteServidor();
   const mensajes = [...respuesta.errores, ...respuesta.observaciones];
+
+  // Cliente: el elegido de la lista, o se guarda el nuevo si se pidió (solo si ARCA aprobó).
+  let clienteId: string | null = d.cliente_id || null;
+  if (!clienteId && respuesta.aprobado && d.guardar_cliente === "on" && d.doc_tipo !== 99 && d.receptor_nombre) {
+    const { data: existente } = await supabase.from("clientes").select("id").eq("doc_tipo", d.doc_tipo).eq("doc_nro", docNro).maybeSingle();
+    if (existente) clienteId = existente.id;
+    else {
+      const { data: nuevo } = await supabase
+        .from("clientes")
+        .insert({ razon_social: d.receptor_nombre, doc_tipo: d.doc_tipo, doc_nro: docNro, condicion_iva: d.condicion_iva_receptor })
+        .select("id")
+        .single();
+      clienteId = nuevo?.id ?? null;
+    }
+  }
   const { data: comprobante, error } = await supabase
     .from("comprobantes_emitidos")
     .insert({
@@ -171,6 +180,7 @@ export async function emitirFactura(_previo: EstadoEmision, formData: FormData):
       cae_vto: respuesta.caeVto,
       mensajes: mensajes.length ? mensajes : null,
       evento_id: d.evento_id || null,
+      cliente_id: clienteId,
     })
     .select("id")
     .single();

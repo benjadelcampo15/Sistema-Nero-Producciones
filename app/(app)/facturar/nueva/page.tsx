@@ -1,6 +1,7 @@
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
 import { configuracionArca, entornoConfigurado } from "@/lib/arca/config";
 import { obtenerCategorias, obtenerEventosResumidos } from "@/lib/financiero/consultas";
+import { listarClientes } from "@/lib/clientes/consultas";
 import { SinAcceso } from "../../sin-acceso";
 import { FormularioFactura } from "./formulario-factura";
 
@@ -9,9 +10,10 @@ export default async function PaginaNuevaFactura() {
   if (!puede(usuario, "facturar", "editar")) return <SinAcceso />;
 
   const registraIngreso = puede(usuario, "financiero", "editar");
-  const [eventos, categorias] = await Promise.all([
+  const [eventos, categorias, clientes] = await Promise.all([
     obtenerEventosResumidos(),
     registraIngreso ? obtenerCategorias() : [],
+    listarClientes(),
   ]);
 
   const realDisponible = entornoConfigurado("produccion");
@@ -29,6 +31,7 @@ export default async function PaginaNuevaFactura() {
         puedeRegistrarIngreso={registraIngreso}
         realDisponible={realDisponible}
         puntoVenta={puntoVenta}
+        clientes={clientes}
       />
     </div>
   );

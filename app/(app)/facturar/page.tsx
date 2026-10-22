@@ -4,6 +4,7 @@ import { listarComprobantes } from "@/lib/facturar/consultas";
 import { nombreTipoCbte, numeroComprobante } from "@/lib/facturar/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { SinAcceso } from "../sin-acceso";
+import { NavegacionFacturar } from "./navegacion";
 
 export default async function PaginaFacturar() {
   const usuario = await obtenerUsuario();
@@ -21,6 +22,8 @@ export default async function PaginaFacturar() {
           <Link href="/facturar/nueva" className="boton">+ Nueva factura</Link>
         )}
       </div>
+
+      <NavegacionFacturar actual="/facturar" />
 
       <div className="tarjeta overflow-x-auto p-0">
         <table className="w-full min-w-[720px] text-sm">

@@ -24,6 +24,7 @@ export function FormularioFactura({
   puedeRegistrarIngreso,
   realDisponible,
   puntoVenta,
+  clientes,
 }: {
   eventos: EventoResumido[];
   categorias: Categoria[];
@@ -31,6 +32,7 @@ export function FormularioFactura({
   /** Hay certificado de producción cargado: se pueden emitir facturas reales. */
   realDisponible: boolean;
   puntoVenta: { homologacion: number; produccion: number | null };
+  clientes: { id: string; razon_social: string; doc_tipo: number; doc_nro: string; condicion_iva: number }[];
 }) {
   const [estado, accion, enviando] = useActionState(emitirFactura, {});
   const v = (campo: string, inicial: string) => estado.valores?.[campo] ?? inicial;
@@ -38,6 +40,25 @@ export function FormularioFactura({
   const [tipo, setTipo] = useState(Number(v("tipo_cbte", "6")));
   const [concepto, setConcepto] = useState(Number(v("concepto", "2")));
   const [docTipo, setDocTipo] = useState(Number(v("doc_tipo", "99")));
+  const [clienteId, setClienteId] = useState(v("cliente_id", ""));
+  const [docNro, setDocNro] = useState(v("doc_nro", ""));
+  const [nombre, setNombre] = useState(v("receptor_nombre", ""));
+  const [condicion, setCondicion] = useState(Number(v("condicion_iva_receptor", "5")));
+
+  const elegirCliente = (id: string) => {
+    setClienteId(id);
+    const c = clientes.find((x) => x.id === id);
+    if (!c) return;
+    setDocTipo(c.doc_tipo);
+    setDocNro(c.doc_tipo === 99 ? "" : c.doc_nro);
+    setNombre(c.razon_social);
+    setCondicion(c.condicion_iva);
+    // Emisor Responsable Inscripto: A si el cliente puede recibir A (con CUIT), si no B.
+    if (tipo !== 11) {
+      const puedeA = c.doc_tipo === 80 && (CONDICIONES_IVA.find((x) => x.id === c.condicion_iva)?.clases as readonly string[] | undefined)?.includes("A");
+      setTipo(puedeA ? 1 : 6);
+    }
+  };
   const [items, setItems] = useState<Item[]>([itemVacio()]);
   const [entorno, setEntorno] = useState<"homologacion" | "produccion">(
     v("entorno", "homologacion") === "produccion" && realDisponible ? "produccion" : "homologacion",
@@ -46,6 +67,8 @@ export function FormularioFactura({
 
   const clase = (TIPOS_CBTE.find((t) => t.id === tipo)?.clase ?? "B") as ClaseCbte;
   const condiciones = CONDICIONES_IVA.filter((c) => (c.clases as readonly string[]).includes(clase));
+  // Si la condición elegida no corresponde a esta letra, se muestra la primera válida.
+  const condicionMostrada = condiciones.some((c) => c.id === condicion) ? condicion : condiciones[0].id;
   const totales = calcularTotales(
     items
       .map((it) => ({
@@ -173,10 +196,32 @@ export function FormularioFactura({
 
       <fieldset className="tarjeta space-y-4">
         <legend className="px-1 font-semibold">Cliente</legend>
+        <input type="hidden" name="cliente_id" value={clienteId} />
+        <div>
+          <label htmlFor="cliente" className="etiqueta">Cliente guardado</label>
+          <select id="cliente" value={clienteId} onChange={(e) => elegirCliente(e.target.value)} className="campo">
+            <option value="">— Cliente nuevo u ocasional —</option>
+            {clientes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.razon_social}
+                {c.doc_tipo !== 99 ? ` · ${c.doc_nro}` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <label htmlFor="doc_tipo" className="etiqueta">Documento</label>
-            <select id="doc_tipo" name="doc_tipo" value={docTipo} onChange={(e) => setDocTipo(Number(e.target.value))} className="campo">
+            <select
+              id="doc_tipo"
+              name="doc_tipo"
+              value={docTipo}
+              onChange={(e) => {
+                setDocTipo(Number(e.target.value));
+                setClienteId("");
+              }}
+              className="campo"
+            >
               {TIPOS_DOC.filter((d) => clase !== "A" || d.id === 80).map((d) => (
                 <option key={d.id} value={d.id}>{d.nombre}</option>
               ))}
@@ -185,14 +230,32 @@ export function FormularioFactura({
           {docTipo !== 99 && (
             <div>
               <label htmlFor="doc_nro" className="etiqueta">{docTipo === 80 ? "CUIT" : "DNI"}</label>
-              <input id="doc_nro" name="doc_nro" inputMode="numeric" required defaultValue={v("doc_nro", "")} className="campo font-mono" />
+              <input
+                id="doc_nro"
+                name="doc_nro"
+                inputMode="numeric"
+                required
+                value={docNro}
+                onChange={(e) => {
+                  setDocNro(e.target.value);
+                  setClienteId("");
+                }}
+                className="campo font-mono"
+              />
             </div>
           )}
           <div className={docTipo === 99 ? "sm:col-span-2" : ""}>
             <label htmlFor="receptor_nombre" className="etiqueta">
               Nombre / razón social <span className="font-normal text-stone-400">{docTipo === 99 ? "(opcional)" : ""}</span>
             </label>
-            <input id="receptor_nombre" name="receptor_nombre" maxLength={200} defaultValue={v("receptor_nombre", "")} className="campo" />
+            <input
+              id="receptor_nombre"
+              name="receptor_nombre"
+              maxLength={200}
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              className="campo"
+            />
           </div>
         </div>
         <div>
@@ -200,8 +263,8 @@ export function FormularioFactura({
           <select
             id="condicion_iva_receptor"
             name="condicion_iva_receptor"
-            key={clase}
-            defaultValue={v("condicion_iva_receptor", String(condiciones[0].id))}
+            value={condicionMostrada}
+            onChange={(e) => setCondicion(Number(e.target.value))}
             className="campo"
           >
             {condiciones.map((c) => (
@@ -209,6 +272,12 @@ export function FormularioFactura({
             ))}
           </select>
         </div>
+        {!clienteId && docTipo !== 99 && (
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="guardar_cliente" defaultChecked />
+            Guardar como cliente para la próxima
+          </label>
+        )}
       </fieldset>
 
       <fieldset className="tarjeta space-y-3">
