@@ -1,7 +1,7 @@
 import "server-only";
 import forge from "node-forge";
 import { crearClienteAdmin } from "@/lib/supabase/admin";
-import { configuracionArca } from "./config";
+import { configuracionArca, type Entorno } from "./config";
 import { ErrorArca, enviarSoap, interpretarXml } from "./soap";
 
 export type Acceso = { token: string; sign: string };
@@ -13,8 +13,7 @@ const MARGEN_MS = 10 * 60 * 1000;
  * Acceso (token + sign) al servicio de ARCA, válido ~12 h. Se guarda en la base:
  * ARCA no entrega uno nuevo mientras el anterior siga vigente.
  */
-export async function obtenerAcceso(servicio: string): Promise<Acceso> {
-  const { entorno } = configuracionArca();
+export async function obtenerAcceso(servicio: string, entorno: Entorno): Promise<Acceso> {
   const admin = crearClienteAdmin();
 
   const { data: guardado } = await admin
@@ -27,7 +26,7 @@ export async function obtenerAcceso(servicio: string): Promise<Acceso> {
     return { token: guardado.token, sign: guardado.sign };
   }
 
-  const nuevo = await pedirAcceso(servicio);
+  const nuevo = await pedirAcceso(servicio, entorno);
   const { error } = await admin
     .from("arca_accesos")
     .upsert({ servicio, entorno, token: nuevo.token, sign: nuevo.sign, expira: nuevo.expira });
@@ -60,8 +59,8 @@ function firmarPedido(servicio: string, certificadoPem: string, clavePem: string
   return forge.util.encode64(forge.asn1.toDer(cms.toAsn1()).getBytes());
 }
 
-async function pedirAcceso(servicio: string) {
-  const config = configuracionArca();
+async function pedirAcceso(servicio: string, entorno: Entorno) {
+  const config = configuracionArca(entorno);
   const cms = firmarPedido(servicio, config.certificado(), config.clave());
 
   const body = await enviarSoap(

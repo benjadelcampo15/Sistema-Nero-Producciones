@@ -1,5 +1,5 @@
 import "server-only";
-import { configuracionArca } from "./config";
+import { configuracionArca, type Entorno } from "./config";
 import { ErrorArca, enviarSoap, lista, xml } from "./soap";
 import { obtenerAcceso } from "./wsaa";
 
@@ -12,9 +12,9 @@ const aMensajes = (valor: unknown): MensajeArca[] =>
   lista(valor as Mensaje | Mensaje[]).map((m) => ({ codigo: String(m.Code), mensaje: String(m.Msg) }));
 
 /** Llama un método del WSFEv1 con la autenticación incluida. */
-async function llamar(metodo: string, parametros = "") {
-  const { cuit, urls } = configuracionArca();
-  const { token, sign } = await obtenerAcceso("wsfe");
+async function llamar(entorno: Entorno, metodo: string, parametros = "") {
+  const { cuit, urls } = configuracionArca(entorno);
+  const { token, sign } = await obtenerAcceso("wsfe", entorno);
   const body = await enviarSoap(
     urls.wsfe,
     `${ESPACIO}${metodo}`,
@@ -34,20 +34,20 @@ function exigirSinErrores(resultado: Record<string, unknown>) {
 }
 
 /** Prueba de conexión sin autenticación. */
-export async function estadoServidores() {
-  const { urls } = configuracionArca();
+export async function estadoServidores(entorno: Entorno) {
+  const { urls } = configuracionArca(entorno);
   const body = await enviarSoap(urls.wsfe, `${ESPACIO}FEDummy`, "<ar:FEDummy/>", ` xmlns:ar="${ESPACIO}"`);
   return (body.FEDummyResponse as { FEDummyResult: Record<string, string> }).FEDummyResult;
 }
 
-export async function ultimoAutorizado(puntoVenta: number, tipoCbte: number) {
-  const r = await llamar("FECompUltimoAutorizado", `<ar:PtoVta>${puntoVenta}</ar:PtoVta><ar:CbteTipo>${tipoCbte}</ar:CbteTipo>`);
+export async function ultimoAutorizado(entorno: Entorno, puntoVenta: number, tipoCbte: number) {
+  const r = await llamar(entorno, "FECompUltimoAutorizado", `<ar:PtoVta>${puntoVenta}</ar:PtoVta><ar:CbteTipo>${tipoCbte}</ar:CbteTipo>`);
   exigirSinErrores(r);
   return Number(r.CbteNro ?? 0);
 }
 
-export async function condicionesIvaReceptor(claseCmp?: "A" | "B" | "C") {
-  const r = await llamar("FEParamGetCondicionIvaReceptor", claseCmp ? `<ar:ClaseCmp>${claseCmp}</ar:ClaseCmp>` : "");
+export async function condicionesIvaReceptor(entorno: Entorno, claseCmp?: "A" | "B" | "C") {
+  const r = await llamar(entorno, "FEParamGetCondicionIvaReceptor", claseCmp ? `<ar:ClaseCmp>${claseCmp}</ar:ClaseCmp>` : "");
   exigirSinErrores(r);
   type Cond = { Id: string; Desc: string; Cmp_Clase: string };
   return lista((r.ResultGet as { CondicionIvaReceptor?: Cond | Cond[] } | undefined)?.CondicionIvaReceptor).map((c) => ({
@@ -57,8 +57,8 @@ export async function condicionesIvaReceptor(claseCmp?: "A" | "B" | "C") {
   }));
 }
 
-export async function puntosDeVenta() {
-  const r = await llamar("FEParamGetPtosVenta");
+export async function puntosDeVenta(entorno: Entorno) {
+  const r = await llamar(entorno, "FEParamGetPtosVenta");
   type Pto = { Nro: string; EmisionTipo: string; Bloqueado: string; FchBaja: string };
   // En homologación suele no haber puntos de venta dados de alta: ARCA lo informa como error 602.
   const errores = aMensajes((r.Errors as { Err?: unknown } | undefined)?.Err);
@@ -104,7 +104,7 @@ const deFechaArca = (f: string) => (/^\d{8}$/.test(f) ? `${f.slice(0, 4)}-${f.sl
 const importe = (n: number) => n.toFixed(2);
 
 /** Pide el CAE de un comprobante. El orden de los campos es el del WSDL (obligatorio). */
-export async function solicitarCae(p: PedidoCae): Promise<RespuestaCae> {
+export async function solicitarCae(entorno: Entorno, p: PedidoCae): Promise<RespuestaCae> {
   const servicios = p.concepto !== 1;
   const iva = p.alicuotas.length
     ? `<ar:Iva>${p.alicuotas
@@ -136,6 +136,7 @@ export async function solicitarCae(p: PedidoCae): Promise<RespuestaCae> {
     iva;
 
   const r = await llamar(
+    entorno,
     "FECAESolicitar",
     `<ar:FeCAEReq><ar:FeCabReq><ar:CantReg>1</ar:CantReg><ar:PtoVta>${p.puntoVenta}</ar:PtoVta><ar:CbteTipo>${p.tipoCbte}</ar:CbteTipo></ar:FeCabReq><ar:FeDetReq><ar:FECAEDetRequest>${detalle}</ar:FECAEDetRequest></ar:FeDetReq></ar:FeCAEReq>`,
   );

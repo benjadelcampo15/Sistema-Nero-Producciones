@@ -10,16 +10,12 @@ export default async function PaginaFacturar() {
   if (!puede(usuario, "facturar", "ver")) return <SinAcceso />;
 
   const comprobantes = await listarComprobantes();
-  const entorno = process.env.ARCA_ENTORNO ?? "homologacion";
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-semibold">Facturar</h1>
-          {entorno === "homologacion" && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">MODO PRUEBAS</span>
-          )}
         </div>
         {puede(usuario, "facturar", "editar") && (
           <Link href="/facturar/nueva" className="boton">+ Nueva factura</Link>
@@ -50,7 +46,11 @@ export default async function PaginaFacturar() {
                   <Link href={`/facturar/${c.id}`} className="font-medium underline decoration-stone-300 hover:decoration-stone-900">
                     {nombreTipoCbte(c.tipo_cbte)} {c.numero ? numeroComprobante(c) : ""}
                   </Link>
-                  {c.entorno === "homologacion" && <span className="ml-2 text-xs text-amber-700">prueba</span>}
+                  {c.entorno === "homologacion" ? (
+                    <span className="ml-2 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-800">Prueba</span>
+                  ) : (
+                    <span className="ml-2 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-red-800">Real</span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   {c.receptor_nombre ?? (c.doc_tipo === 99 ? "Consumidor final" : c.doc_nro)}

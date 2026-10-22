@@ -22,12 +22,15 @@ export function FormularioFactura({
   eventos,
   categorias,
   puedeRegistrarIngreso,
-  entorno,
+  realDisponible,
+  puntoVenta,
 }: {
   eventos: EventoResumido[];
   categorias: Categoria[];
   puedeRegistrarIngreso: boolean;
-  entorno: string;
+  /** Hay certificado de producción cargado: se pueden emitir facturas reales. */
+  realDisponible: boolean;
+  puntoVenta: { homologacion: number; produccion: number | null };
 }) {
   const [estado, accion, enviando] = useActionState(emitirFactura, {});
   const v = (campo: string, inicial: string) => estado.valores?.[campo] ?? inicial;
@@ -36,6 +39,10 @@ export function FormularioFactura({
   const [concepto, setConcepto] = useState(Number(v("concepto", "2")));
   const [docTipo, setDocTipo] = useState(Number(v("doc_tipo", "99")));
   const [items, setItems] = useState<Item[]>([itemVacio()]);
+  const [entorno, setEntorno] = useState<"homologacion" | "produccion">(
+    v("entorno", "homologacion") === "produccion" && realDisponible ? "produccion" : "homologacion",
+  );
+  const real = entorno === "produccion";
 
   const clase = (TIPOS_CBTE.find((t) => t.id === tipo)?.clase ?? "B") as ClaseCbte;
   const condiciones = CONDICIONES_IVA.filter((c) => (c.clases as readonly string[]).includes(clase));
@@ -54,10 +61,44 @@ export function FormularioFactura({
     setItems((prev) => prev.map((it, j) => (j === i ? { ...it, ...cambio } : it)));
 
   return (
-    <form action={accion} className="max-w-4xl space-y-5">
-      {entorno === "homologacion" && (
+    <form
+      action={accion}
+      onSubmit={(e) => {
+        if (real && !window.confirm("Vas a emitir una factura REAL ante ARCA, con validez fiscal. No se puede borrar: para anularla hay que hacer una nota de crédito. ¿Emitir?")) {
+          e.preventDefault();
+        }
+      }}
+      className="max-w-4xl space-y-5"
+    >
+      <input type="hidden" name="entorno" value={entorno} />
+      <div className="grid gap-2 sm:grid-cols-2">
+        <button
+          type="button"
+          onClick={() => setEntorno("homologacion")}
+          className={`rounded-md border px-4 py-3 text-left text-sm ${!real ? "border-amber-500 bg-amber-50 ring-2 ring-amber-200" : "border-stone-300 bg-white"}`}
+        >
+          <span className="block font-semibold">Prueba</span>
+          <span className="text-stone-600">Se autoriza en el entorno de pruebas de ARCA. Sin validez fiscal.</span>
+        </button>
+        <button
+          type="button"
+          disabled={!realDisponible}
+          onClick={() => setEntorno("produccion")}
+          className={`rounded-md border px-4 py-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50 ${real ? "border-red-600 bg-red-50 ring-2 ring-red-200" : "border-stone-300 bg-white"}`}
+        >
+          <span className="block font-semibold">Real</span>
+          <span className="text-stone-600">
+            {realDisponible ? "Factura válida ante ARCA, con validez fiscal." : "Falta cargar el certificado de producción de ARCA."}
+          </span>
+        </button>
+      </div>
+      {real ? (
+        <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900">
+          <span className="font-semibold">Factura REAL:</span> se informa a ARCA y tiene validez fiscal. No se puede borrar; para anularla hay que emitir una nota de crédito.
+        </p>
+      ) : (
         <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          <span className="font-semibold">Modo pruebas (homologación):</span> las facturas se autorizan en ARCA pero no tienen validez fiscal.
+          <span className="font-semibold">Prueba:</span> se autoriza en ARCA pero no tiene validez fiscal.
         </p>
       )}
 
@@ -87,7 +128,15 @@ export function FormularioFactura({
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <label htmlFor="punto_venta" className="etiqueta">Punto de venta</label>
-            <input id="punto_venta" name="punto_venta" inputMode="numeric" required defaultValue={v("punto_venta", "1")} className="campo" />
+            <input
+              id="punto_venta"
+              name="punto_venta"
+              key={entorno}
+              inputMode="numeric"
+              required
+              defaultValue={v("punto_venta", String((real ? puntoVenta.produccion : puntoVenta.homologacion) ?? ""))}
+              className="campo"
+            />
           </div>
           <div>
             <label htmlFor="fecha" className="etiqueta">Fecha</label>
@@ -255,7 +304,7 @@ export function FormularioFactura({
         {puedeRegistrarIngreso && (
           <label className="flex items-center gap-2 text-sm">
             {/* En pruebas viene destildado para no mezclar facturas de prueba con los datos reales. */}
-            <input type="checkbox" name="registrar_ingreso" defaultChecked={entorno !== "homologacion"} />
+            <input type="checkbox" name="registrar_ingreso" key={entorno} defaultChecked={real} />
             Registrar el ingreso en Financiero (pendiente de cobro)
           </label>
         )}
@@ -276,7 +325,9 @@ export function FormularioFactura({
 
       <div className="flex items-center gap-3">
         <button type="submit" disabled={enviando || totales.total <= 0} className="boton">
-          {enviando ? "Pidiendo CAE a ARCA…" : `Emitir ${TIPOS_CBTE.find((t) => t.id === tipo)?.nombre} por ${formatoPesos(totales.total)}`}
+          {enviando
+            ? "Pidiendo CAE a ARCA…"
+            : `Emitir ${TIPOS_CBTE.find((t) => t.id === tipo)?.nombre}${real ? " REAL" : " de prueba"} por ${formatoPesos(totales.total)}`}
         </button>
         <Link href="/facturar" className="text-sm text-stone-600 hover:text-stone-900">Cancelar</Link>
       </div>

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { exigirPermiso, puede } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
-import { configuracionArca } from "@/lib/arca/config";
+import { entornoConfigurado } from "@/lib/arca/config";
 import { ErrorArca } from "@/lib/arca/soap";
 import { solicitarCae, ultimoAutorizado } from "@/lib/arca/wsfe";
 import { parsearMonto } from "@/lib/formato";
@@ -15,6 +15,7 @@ export type EstadoEmision = { error?: string; detalles?: string[]; valores?: Rec
 const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida");
 
 const esquema = z.object({
+  entorno: z.enum(["homologacion", "produccion"], "Elegí si es una factura de prueba o real"),
   tipo_cbte: z.coerce.number().refine((n) => TIPOS_CBTE.some((t) => t.id === n), "Tipo de comprobante inválido"),
   punto_venta: z.coerce.number().int().min(1, "Punto de venta inválido").max(99998),
   concepto: z.coerce.number().int().min(1).max(3),
@@ -100,12 +101,18 @@ export async function emitirFactura(_previo: EstadoEmision, formData: FormData):
   if (typeof items === "string") return { error: items, valores };
   const totales = calcularTotales(items, tipo.clase);
 
-  const { entorno } = configuracionArca();
+  const entorno = d.entorno;
+  if (!entornoConfigurado(entorno)) {
+    return {
+      error: entorno === "produccion" ? "La facturación real todavía no está configurada" : "La facturación de prueba no está configurada",
+      valores,
+    };
+  }
   let numero: number;
   let respuesta: Awaited<ReturnType<typeof solicitarCae>>;
   try {
-    numero = (await ultimoAutorizado(d.punto_venta, d.tipo_cbte)) + 1;
-    respuesta = await solicitarCae({
+    numero = (await ultimoAutorizado(entorno, d.punto_venta, d.tipo_cbte)) + 1;
+    respuesta = await solicitarCae(entorno, {
       puntoVenta: d.punto_venta,
       tipoCbte: d.tipo_cbte,
       numero,
