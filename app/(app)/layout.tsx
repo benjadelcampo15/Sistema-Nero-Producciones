@@ -27,14 +27,20 @@ async function Menu() {
   const items: ItemMenu[] = SECCIONES.filter((s) => usuario.permisos[s.id] !== "ninguno").map((s) => ({
     href: s.href,
     nombre: s.nombre,
+    grupo: s.grupo,
   }));
   if (usuario.esAdmin) {
-    items.push({ href: "/configuracion/usuarios", nombre: "Usuarios" });
+    items.push({ href: "/configuracion/usuarios", nombre: "Usuarios", grupo: "Configuración" });
   }
+
+  // Agrupados en el orden del menú; un grupo sin secciones visibles no aparece.
+  const grupos = ["Administración", "Eventos", "Configuración"]
+    .map((nombre) => ({ nombre, items: items.filter((i) => i.grupo === nombre) }))
+    .filter((g) => g.items.length > 0);
 
   return (
     <div className="flex flex-1 flex-col">
-      <EnlacesMenu items={items} />
+      <EnlacesMenu grupos={grupos} />
       <div className="border-t border-stone-800 px-5 py-4">
         <p className="truncate text-sm font-medium text-white">{usuario.nombre}</p>
         <p className="truncate text-xs text-stone-500">{usuario.email}</p>

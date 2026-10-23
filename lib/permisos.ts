@@ -1,10 +1,10 @@
 export const SECCIONES = [
-  { id: "financiero", nombre: "Financiero", href: "/financiero" },
-  { id: "eventos", nombre: "Eventos", href: "/eventos" },
-  { id: "facturas", nombre: "Facturas", href: "/facturas" },
-  { id: "stock", nombre: "Stock", href: "/stock" },
-  { id: "facturar", nombre: "Facturar", href: "/facturar" },
-  { id: "presupuestos", nombre: "Presupuestos", href: "/presupuestos" },
+  { id: "financiero", nombre: "Financiero", href: "/financiero", grupo: "Administración" },
+  { id: "facturas", nombre: "Facturas", href: "/facturas", grupo: "Administración" },
+  { id: "facturar", nombre: "Facturar", href: "/facturar", grupo: "Administración" },
+  { id: "stock", nombre: "Stock", href: "/stock", grupo: "Administración" },
+  { id: "eventos", nombre: "Eventos", href: "/eventos", grupo: "Eventos" },
+  { id: "presupuestos", nombre: "Presupuestos", href: "/presupuestos", grupo: "Eventos" },
 ] as const;
 
 export type Seccion = (typeof SECCIONES)[number]["id"];
