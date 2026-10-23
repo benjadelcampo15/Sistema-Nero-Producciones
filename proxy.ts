@@ -4,8 +4,8 @@ import { NextResponse, type NextRequest } from "next/server";
 /** Pantallas del ingreso: el usuario va a una sola según su estado. */
 const PASOS_INGRESO = ["/login", "/cambiar-contrasena", "/mfa/configurar", "/mfa/verificar"];
 
-/** Páginas públicas por link con token (presupuestos para clientes, etc.): no piden sesión. */
-const PUBLICAS = /^\/p\//;
+/** Sin sesión: páginas públicas por link con token (/p/) y crons (/api/cron/, se validan con CRON_SECRET). */
+const PUBLICAS = /^\/(p|api\/cron)\//;
 
 export async function proxy(request: NextRequest) {
   if (PUBLICAS.test(request.nextUrl.pathname)) {
