@@ -8,6 +8,7 @@ import {
   obtenerTransacciones,
 } from "@/lib/financiero/consultas";
 import { formatoPesos, hoy, periodosRapidos } from "@/lib/formato";
+import { NOMBRE_ESTADO_MOVIMIENTO } from "@/lib/financiero/tipos";
 import { SinAcceso } from "../sin-acceso";
 import { TablaMovimientos } from "@/components/tabla-movimientos";
 import { Filtros, ProveedorFiltros, ZonaResultados } from "./filtros";
@@ -34,6 +35,12 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
   const proximos = transacciones.filter((t) => t.fecha > fechaHoy).reverse();
 
   const volverA = `/financiero?${consulta}`;
+
+  // Con un estado filtrado, los números son los de ese estado; sin filtro, la caja real
+  // grande y abajo el escenario con pendientes y proyectados.
+  const principal = filtros.estado ? totales.total : totales.real;
+  const etiqueta = filtros.estado ? NOMBRE_ESTADO_MOVIMIENTO[filtros.estado].toLowerCase() : "real";
+  const escenario = filtros.estado ? null : totales.total;
 
   return (
     <ProveedorFiltros>
@@ -69,15 +76,15 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
         />
 
         <ZonaResultados>
-          {/* Grande: caja real. Abajo: escenario con pendientes y proyectados. */}
           <div className="grid gap-3 sm:grid-cols-3">
-            <Total titulo="Ingresos" real={totales.real.ingresos} total={totales.total.ingresos} color="text-green-700" />
-            <Total titulo="Egresos" real={totales.real.egresos} total={totales.total.egresos} color="text-red-700" />
+            <Total titulo="Ingresos" etiqueta={etiqueta} valor={principal.ingresos} escenario={escenario?.ingresos} color="text-green-700" />
+            <Total titulo="Egresos" etiqueta={etiqueta} valor={principal.egresos} escenario={escenario?.egresos} color="text-red-700" />
             <Total
               titulo="Resultado"
-              real={totales.real.resultado}
-              total={totales.total.resultado}
-              color={totales.real.resultado >= 0 ? "text-stone-900" : "text-red-700"}
+              etiqueta={etiqueta}
+              valor={principal.resultado}
+              escenario={escenario?.resultado}
+              color={principal.resultado >= 0 ? "text-stone-900" : "text-red-700"}
             />
           </div>
 
@@ -104,14 +111,26 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
   );
 }
 
-function Total({ titulo, real, total, color }: { titulo: string; real: number; total: number; color: string }) {
+function Total({
+  titulo,
+  etiqueta,
+  valor,
+  escenario,
+  color,
+}: {
+  titulo: string;
+  etiqueta: string;
+  valor: number;
+  escenario?: number;
+  color: string;
+}) {
   return (
     <div className="tarjeta p-4">
-      <p className="text-xs uppercase tracking-wide text-stone-500">{titulo} · real</p>
-      <p className={`mt-1 font-mono text-xl font-semibold xl:text-2xl ${color}`}>{formatoPesos(real)}</p>
-      {total !== real && (
+      <p className="text-xs uppercase tracking-wide text-stone-500">{titulo} · {etiqueta}</p>
+      <p className={`mt-1 font-mono text-xl font-semibold xl:text-2xl ${color}`}>{formatoPesos(valor)}</p>
+      {escenario !== undefined && escenario !== valor && (
         <p className="mt-1 text-xs text-stone-500">
-          Con pendientes y proyectados: <span className="font-mono">{formatoPesos(total)}</span>
+          Con pendientes y proyectados: <span className="font-mono">{formatoPesos(escenario)}</span>
         </p>
       )}
     </div>
