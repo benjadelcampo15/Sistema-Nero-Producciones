@@ -2,6 +2,7 @@ import Link from "next/link";
 import { NOMBRE_ESTADO_MOVIMIENTO, NOMBRE_MEDIO_PAGO, type Transaccion } from "@/lib/financiero/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { BotonEliminar } from "./boton-eliminar-transaccion";
+import { SelectorEstado } from "./selector-estado";
 
 export function TablaMovimientos({
   transacciones,
@@ -45,7 +46,11 @@ export function TablaMovimientos({
               <td className="px-4 py-3">
                 <p className="font-medium">
                   {t.descripcion}
-                  {t.estado !== "real" && (
+                  {editable ? (
+                    <span className="ml-2 inline-block align-middle">
+                      <SelectorEstado key={t.estado} id={t.id} estado={t.estado} />
+                    </span>
+                  ) : t.estado !== "real" && (
                     <span
                       className={`ml-2 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
                         t.estado === "pendiente" ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"

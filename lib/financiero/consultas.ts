@@ -9,6 +9,7 @@ import {
   type EventoResumido,
   type Totales,
   type Transaccion,
+  type ChequeDeMovimiento,
 } from "./tipos";
 
 export const LIMITE_LISTADO = 2000;
@@ -148,4 +149,11 @@ export async function obtenerEventosResumidos() {
     .order("fecha", { ascending: false })
     .limit(200);
   return (data ?? []) as EventoResumido[];
+}
+
+/** El cheque cargado desde un movimiento (si tiene). Sin permiso en Cheques, no se ve. */
+export async function obtenerChequeDeMovimiento(transaccionId: string) {
+  const supabase = await crearClienteServidor();
+  const { data } = await supabase.from("cheques").select("numero, banco, fecha_pago, electronico, estado").eq("transaccion_id", transaccionId).maybeSingle();
+  return data as ChequeDeMovimiento | null;
 }

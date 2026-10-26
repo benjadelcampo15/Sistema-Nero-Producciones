@@ -6,7 +6,7 @@ import { z } from "zod";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { parsearMonto } from "@/lib/formato";
-import { ESTADOS_MOVIMIENTO, MEDIOS_PAGO, TIPOS } from "./tipos";
+import { ESTADOS_MOVIMIENTO, MEDIOS_CHEQUE, MEDIOS_PAGO, TIPOS, type EstadoMovimiento } from "./tipos";
 
 export type EstadoFormulario = {
   error?: string;
@@ -83,6 +83,13 @@ export async function guardarTransaccion(
     return { error: "IVA o IIBB inválido", valores };
   }
 
+  // Cheque: con un medio de pago con cheque se carga (o actualiza) en la sección Cheques.
+  const cheque = MEDIOS_CHEQUE.includes(datos.data.medio_pago) && formData.get("cargar_cheque") === "on" ? leerCheque(formData) : null;
+  if (typeof cheque === "string") return { error: cheque, valores };
+  if (cheque && !puede(usuario, "cheques", "editar")) {
+    return { error: "Para cargar el cheque necesitás permiso de edición en Cheques", valores };
+  }
+
   const fila = { ...datos.data, monto, iva, iibb };
   const supabase = await crearClienteServidor();
   // Con .select() se detecta cuando RLS no deja escribir (no da error, afecta 0 filas).
@@ -99,7 +106,49 @@ export async function guardarTransaccion(
     };
   }
 
+  if (cheque) {
+    const { error: errorCheque } = await supabase.from("cheques").upsert(
+      {
+        transaccion_id: escritas[0].id,
+        tipo: fila.tipo === "egreso" ? "emitido" : "recibido",
+        monto,
+        contraparte: fila.contraparte || fila.descripcion,
+        evento_id: fila.evento_id,
+        ...cheque,
+      },
+      { onConflict: "transaccion_id" },
+    );
+    if (errorCheque) {
+      // El movimiento ya quedó guardado: se vuelve a su edición para reintentar el cheque.
+      redirect(`/financiero/${escritas[0].id}/editar?volver_a=${encodeURIComponent(destinoSeguro(formData.get("volver_a")))}&cheque=error`);
+    }
+  }
+
   redirect(destinoSeguro(formData.get("volver_a")));
+}
+
+/** Datos del cheque del formulario del movimiento, o el error para mostrar. */
+function leerCheque(formData: FormData) {
+  const texto = (campo: string, max: number) => String(formData.get(campo) ?? "").trim().slice(0, max) || null;
+  const fechaPago = String(formData.get("cheque_fecha_pago") ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaPago)) return "Falta la fecha de pago del cheque";
+  return {
+    numero: texto("cheque_numero", 40),
+    banco: texto("cheque_banco", 100),
+    fecha_pago: fechaPago,
+    electronico: formData.get("cheque_electronico") === "on",
+  };
+}
+
+/** Cambia solo el estado (real, pendiente, proyectado) desde la lista de movimientos. */
+export async function cambiarEstadoMovimiento(id: string, estado: EstadoMovimiento): Promise<{ error?: string }> {
+  await obtenerUsuario();
+  if (!ESTADOS_MOVIMIENTO.includes(estado)) return { error: "Estado inválido" };
+  const supabase = await crearClienteServidor();
+  const { data } = await supabase.from("transacciones").update({ estado }).eq("id", id).is("eliminado_en", null).select("id");
+  if (!data?.length) return { error: "No se pudo cambiar el estado" };
+  refresh();
+  return {};
 }
 
 export async function eliminarTransaccion(id: string): Promise<EstadoFormulario> {

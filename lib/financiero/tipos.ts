@@ -14,6 +14,12 @@ export const MEDIOS_PAGO = [
 ] as const;
 export type MedioPago = (typeof MEDIOS_PAGO)[number];
 
+/** Medios de pago con cheque: al elegirlos se carga el cheque en la sección Cheques. */
+export const MEDIOS_CHEQUE: readonly MedioPago[] = ["cheque_a_emitir", "cheque_emitido", "cheque_a_cobrar", "cheque"];
+
+/** Datos del cheque vinculado a un movimiento (para editarlo desde el movimiento). */
+export type ChequeDeMovimiento = { numero: string | null; banco: string | null; fecha_pago: string; electronico: boolean; estado: string };
+
 export const NOMBRE_MEDIO_PAGO: Record<MedioPago, string> = {
   transferencia: "Transferencia",
   efectivo: "Efectivo",

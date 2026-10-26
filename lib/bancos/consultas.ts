@@ -51,7 +51,7 @@ const LIMITE = 5000;
 export async function movimientosEntre(desde: string, hasta: string, { proyectados = true, cheques = true } = {}) {
   const supabase = await crearClienteServidor();
   const estados = proyectados ? ["real", "pendiente", "proyectado"] : ["real", "pendiente"];
-  const [trx, chq] = await Promise.all([
+  const [trx, chq, vinculados] = await Promise.all([
     supabase
       .from("transacciones")
       .select("id, tipo, monto, fecha, descripcion, contraparte, estado, categoria:categorias(nombre)")
@@ -70,10 +70,17 @@ export async function movimientosEntre(desde: string, hasta: string, { proyectad
           .lte("fecha_pago", hasta)
           .limit(LIMITE)
       : Promise.resolve({ data: [], error: null }),
+    // Movimientos con un cheque pendiente vinculado: cuenta el cheque (en su fecha de pago), no el movimiento.
+    cheques
+      ? supabase.from("cheques").select("transaccion_id, tipo, estado").not("transaccion_id", "is", null).in("estado", ["pendiente", "depositado"]).limit(LIMITE)
+      : Promise.resolve({ data: [], error: null }),
   ]);
+  const conChequePendiente = new Set(
+    (vinculados.data ?? []).filter((c) => c.tipo === "recibido" || c.estado === "pendiente").map((c) => c.transaccion_id as string),
+  );
   if (trx.error) throw new Error(`No se pudieron leer los movimientos: ${trx.error.message}`);
 
-  const movimientos: MovimientoCaja[] = (trx.data ?? []).map((t) => {
+  const movimientos: MovimientoCaja[] = (trx.data ?? []).filter((t) => !conChequePendiente.has(t.id)).map((t) => {
     const categoria = (t.categoria as unknown as { nombre: string } | null)?.nombre ?? null;
     return {
       id: t.id,

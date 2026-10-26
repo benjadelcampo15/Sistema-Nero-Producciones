@@ -5,10 +5,13 @@ import { useActionState, useState } from "react";
 import { guardarTransaccion } from "@/lib/financiero/acciones";
 import {
   ESTADOS_MOVIMIENTO,
+  MEDIOS_CHEQUE,
   MEDIOS_PAGO,
   NOMBRE_ESTADO_MOVIMIENTO,
   NOMBRE_MEDIO_PAGO,
   type Categoria,
+  type ChequeDeMovimiento,
+  type MedioPago,
   type EventoResumido,
   type TipoMovimiento,
   type Transaccion,
@@ -17,6 +20,10 @@ import { formatoFecha, hoy } from "@/lib/formato";
 
 type Props = {
   transaccion?: Transaccion;
+  /** Cheque ya cargado desde este movimiento (para editarlo). */
+  cheque?: ChequeDeMovimiento | null;
+  /** El movimiento se guardó pero el cheque no. */
+  errorCheque?: boolean;
   categorias: Categoria[];
   eventos: EventoResumido[];
   /** Si viene, el movimiento queda fijado a ese evento (alta desde la pantalla del evento). */
@@ -24,7 +31,7 @@ type Props = {
   volverA: string;
 };
 
-export function FormularioTransaccion({ transaccion, categorias, eventos, eventoFijo, volverA }: Props) {
+export function FormularioTransaccion({ transaccion, cheque, errorCheque, categorias, eventos, eventoFijo, volverA }: Props) {
   const [estado, accion, enviando] = useActionState(
     guardarTransaccion.bind(null, transaccion?.id ?? null),
     {},
@@ -33,6 +40,8 @@ export function FormularioTransaccion({ transaccion, categorias, eventos, evento
   // Tras un error se muestran los valores que el usuario había cargado.
   const v = (campo: string, inicial: string) => estado.valores?.[campo] ?? inicial;
   const delTipo = categorias.filter((c) => c.tipo === tipo);
+  const [medio, setMedio] = useState<MedioPago>(v("medio_pago", transaccion?.medio_pago ?? "transferencia") as MedioPago);
+  const conCheque = MEDIOS_CHEQUE.includes(medio);
 
   // Si la categoría actual fue desactivada, igual se muestra para no perderla al editar.
   if (transaccion && transaccion.tipo === tipo && !delTipo.some((c) => c.id === transaccion.categoria.id)) {
@@ -43,6 +52,9 @@ export function FormularioTransaccion({ transaccion, categorias, eventos, evento
     <form action={accion} className="tarjeta max-w-2xl space-y-5">
       <input type="hidden" name="volver_a" value={volverA} />
       {estado.error && <p className="alerta-error">{estado.error}</p>}
+      {errorCheque && !estado.error && (
+        <p className="alerta-error">El movimiento se guardó, pero no se pudo cargar el cheque. Revisá los datos del cheque y guardá de nuevo.</p>
+      )}
 
       <fieldset>
         <legend className="etiqueta">Tipo</legend>
@@ -163,13 +175,55 @@ export function FormularioTransaccion({ transaccion, categorias, eventos, evento
         </div>
         <div>
           <label htmlFor="medio_pago" className="etiqueta">Medio de pago</label>
-          <select id="medio_pago" name="medio_pago" defaultValue={v("medio_pago", transaccion?.medio_pago ?? "transferencia")} className="campo">
+          <select id="medio_pago" name="medio_pago" value={medio} onChange={(e) => setMedio(e.target.value as MedioPago)} className="campo">
             {MEDIOS_PAGO.map((m) => (
               <option key={m} value={m}>{NOMBRE_MEDIO_PAGO[m]}</option>
             ))}
           </select>
         </div>
       </div>
+
+      {conCheque && (
+        <fieldset className="space-y-3 rounded-md border border-stone-300 bg-stone-50 p-4">
+          <legend className="px-1 text-sm font-semibold">
+            Cheque {tipo === "egreso" ? "emitido" : "recibido"}
+            {cheque && <span className="ml-2 font-normal text-stone-500">ya cargado en Cheques · {cheque.estado}</span>}
+          </legend>
+          <input type="hidden" name="cargar_cheque" value="on" />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label htmlFor="cheque_numero" className="etiqueta">Número</label>
+              <input id="cheque_numero" name="cheque_numero" maxLength={40} defaultValue={v("cheque_numero", cheque?.numero ?? "")} className="campo font-mono" />
+            </div>
+            <div>
+              <label htmlFor="cheque_banco" className="etiqueta">Banco</label>
+              <input id="cheque_banco" name="cheque_banco" maxLength={100} defaultValue={v("cheque_banco", cheque?.banco ?? "")} className="campo" />
+            </div>
+            <div>
+              <label htmlFor="cheque_fecha_pago" className="etiqueta">Fecha de pago del cheque</label>
+              <input
+                id="cheque_fecha_pago"
+                name="cheque_fecha_pago"
+                type="date"
+                required
+                defaultValue={v("cheque_fecha_pago", cheque?.fecha_pago ?? transaccion?.fecha ?? "")}
+                className="campo"
+              />
+            </div>
+            <label className="flex items-center gap-2 self-end pb-2 text-sm">
+              <input
+                type="checkbox"
+                name="cheque_electronico"
+                defaultChecked={estado.valores ? estado.valores.cheque_electronico === "on" : (cheque?.electronico ?? false)}
+              />
+              Es eCheq
+            </label>
+          </div>
+          <p className="text-xs text-stone-500">
+            Se guarda en la sección Cheques (monto y {tipo === "egreso" ? "a quién" : "de quién"} salen de este movimiento). En el cashflow cuenta una sola vez, en la fecha de pago del cheque.
+          </p>
+        </fieldset>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
