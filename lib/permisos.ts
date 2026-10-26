@@ -1,5 +1,6 @@
 export const SECCIONES = [
   { id: "financiero", nombre: "Financiero", href: "/financiero", grupo: "Administración" },
+  { id: "objetivos", nombre: "Objetivos", href: "/objetivos", grupo: "Administración" },
   { id: "facturas", nombre: "Facturas", href: "/facturas", grupo: "Administración" },
   { id: "facturar", nombre: "Facturar", href: "/facturar", grupo: "Administración" },
   { id: "cheques", nombre: "Cheques", href: "/cheques", grupo: "Administración" },
@@ -39,5 +40,5 @@ export function alcanza(nivel: NivelPermiso, requerido: NivelPermiso) {
 }
 
 export function sinPermisos(): Permisos {
-  return { financiero: "ninguno", eventos: "ninguno", facturas: "ninguno", stock: "ninguno", facturar: "ninguno", presupuestos: "ninguno", cheques: "ninguno", livings: "ninguno", operativa: "ninguno" };
+  return { financiero: "ninguno", eventos: "ninguno", facturas: "ninguno", stock: "ninguno", facturar: "ninguno", presupuestos: "ninguno", cheques: "ninguno", livings: "ninguno", operativa: "ninguno", objetivos: "ninguno" };
 }
