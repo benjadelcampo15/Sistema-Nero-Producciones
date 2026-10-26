@@ -7,9 +7,9 @@ export async function obtenerPlano(): Promise<DocumentoPlano> {
   const supabase = await crearClienteServidor();
   const { data } = await supabase
     .from("planos_livings")
-    .select("tamano_living, proporcion, elementos, zonas, referencia, mozos, livings")
+    .select("tamano_living, proporcion, proporcion_salon, elementos, zonas, referencia, mozos, livings")
     .eq("unico", true)
     .maybeSingle();
   if (!data) return PLANO_VACIO;
-  return esquemaDocumento.parse({ ...data, tamano_living: Number(data.tamano_living), proporcion: Number(data.proporcion) });
+  return esquemaDocumento.parse({ ...data, tamano_living: Number(data.tamano_living), proporcion: Number(data.proporcion), proporcion_salon: Number(data.proporcion_salon) });
 }

@@ -3,7 +3,18 @@ import { z } from "zod";
 /** Posiciones en proporción de la imagen del plano: 0 a 1 en cada eje. */
 const coordenada = z.number().min(0).max(1);
 
-export const esquemaZona = z.object({ id: z.string().max(40), x: coordenada, y: coordenada, w: coordenada, h: coordenada });
+/** Lugares del evento: el jardín (pasto) y el salón (piso gris). */
+export const ESPACIOS = [
+  { id: "jardin", nombre: "Jardín" },
+  { id: "salon", nombre: "Salón" },
+] as const;
+export type Espacio = (typeof ESPACIOS)[number]["id"];
+// Opcional: lo guardado antes del salón es todo del jardín.
+const espacio = z.enum(["jardin", "salon"]).optional();
+/** El espacio de una zona, elemento o living (sin espacio = jardín). */
+export const espacioDe = (x: { espacio?: Espacio }): Espacio => x.espacio ?? "jardin";
+
+export const esquemaZona = z.object({ id: z.string().max(40), espacio, x: coordenada, y: coordenada, w: coordenada, h: coordenada });
 export const TIPOS_ELEMENTO = [
   { id: "escenario", nombre: "Escenario", color: "#3f3f46", texto: "#ffffff" },
   { id: "barra", nombre: "Barra", color: "#7c4a2d", texto: "#ffffff" },
@@ -20,6 +31,7 @@ export type TipoElemento = (typeof TIPOS_ELEMENTO)[number]["id"];
 export const esquemaElemento = z.object({
   id: z.string().max(40),
   tipo: z.enum(TIPOS_ELEMENTO.map((t) => t.id) as [TipoElemento, ...TipoElemento[]]),
+  espacio,
   x: coordenada,
   y: coordenada,
   w: coordenada,
@@ -32,6 +44,7 @@ export const esquemaLiving = z.object({
   personas: z.number().int().min(0).max(1000),
   consumicion: z.number().min(0).max(1e12),
   notas: z.string().max(500).nullable(),
+  espacio,
   x: coordenada.nullable(),
   y: coordenada.nullable(),
   // Medidas del rectángulo (las calcula la distribución).
@@ -44,6 +57,7 @@ export const esquemaLiving = z.object({
 export const esquemaDocumento = z.object({
   tamano_living: z.number().min(0.005).max(0.3),
   proporcion: z.number().min(0.2).max(3),
+  proporcion_salon: z.number().min(0.2).max(3).optional(),
   elementos: z.array(esquemaElemento).max(200),
   zonas: z.array(esquemaZona).max(100),
   referencia: z.object({ x: coordenada, y: coordenada }).nullable(),
@@ -57,7 +71,7 @@ export type Mozo = z.infer<typeof esquemaMozo>;
 export type Living = z.infer<typeof esquemaLiving>;
 export type DocumentoPlano = z.infer<typeof esquemaDocumento>;
 
-/** Formas del jardín (alto / ancho). */
+/** Formas del jardín o del salón (alto / ancho). */
 export const FORMAS = [
   { nombre: "Apaisado", proporcion: 0.667 },
   { nombre: "Muy apaisado", proporcion: 0.5 },
@@ -68,6 +82,7 @@ export const FORMAS = [
 export const PLANO_VACIO: DocumentoPlano = {
   tamano_living: 0.07,
   proporcion: 0.667,
+  proporcion_salon: 0.667,
   elementos: [],
   zonas: [],
   referencia: null,
@@ -262,4 +277,91 @@ export function resumenPorMozo(livings: Living[], mozos: Mozo[]) {
       };
     })
     .filter((r) => r.mozo.id !== "" || r.livings.length > 0);
+}
+
+/** Datos de cada espacio para acomodar: sus zonas, su forma y su escenario. */
+export type DatosEspacio = { id: Espacio; zonas: Zona[]; relacion: number; referencia: { x: number; y: number } | null };
+
+/** Forma (alto / ancho) y escenario de cada espacio del plano. */
+export function datosEspacios(doc: DocumentoPlano): DatosEspacio[] {
+  return ESPACIOS.map(({ id }) => {
+    const escenario = doc.elementos.find((e) => e.tipo === "escenario" && espacioDe(e) === id);
+    const zonas = doc.zonas.filter((z) => espacioDe(z) === id);
+    return {
+      id,
+      // Un espacio sin zonas marcadas se usa entero.
+      zonas: zonas.length ? zonas : [{ id: `todo-${id}`, espacio: id, x: 0.02, y: 0.02, w: 0.96, h: 0.96 }],
+      relacion: id === "salon" ? (doc.proporcion_salon ?? 0.667) : doc.proporcion,
+      referencia: escenario ? { x: escenario.x + escenario.w / 2, y: escenario.y + escenario.h / 2 } : null,
+    };
+  });
+}
+
+/**
+ * Reparte los livings entre el jardín y el salón según el lugar disponible en
+ * cada uno (los de mayor consumición, al jardín primero) y los acomoda en cada
+ * espacio. Los que traen espacio fijo (columna Lugar del Excel) van a ese.
+ */
+export function distribuirEspacios(livings: Living[], espacios: DatosEspacio[], respetarEspacio: boolean) {
+  const superficie = (e: DatosEspacio) => e.zonas.reduce((s, z) => s + z.w * z.h * e.relacion, 0);
+  const total = espacios.reduce((s, e) => s + superficie(e), 0);
+  const grupos = new Map<Espacio, Living[]>(espacios.map((e) => [e.id, []]));
+
+  const fijos = respetarEspacio ? livings.filter((l) => l.espacio) : [];
+  for (const l of fijos) grupos.get(espacioDe(l))!.push(l);
+  const libres = livings.filter((l) => !fijos.includes(l)).sort((a, b) => b.consumicion - a.consumicion || b.personas - a.personas);
+  const personas = livings.reduce((s, l) => s + peso(l), 0);
+  // Cupo de cada espacio en personas, descontando los que ya tienen lugar fijo.
+  const cupos = espacios.map((e) => (superficie(e) / total) * personas - grupos.get(e.id)!.reduce((s, l) => s + peso(l), 0));
+  let i = 0;
+  for (const l of libres) {
+    while (i < espacios.length - 1 && cupos[i] - peso(l) / 2 < 0) i++;
+    grupos.get(espacios[i].id)!.push(l);
+    cupos[i] -= peso(l);
+  }
+
+  const resultado = new Map<string, Living>();
+  for (const e of espacios) {
+    const r = distribuir(grupos.get(e.id)!, e.zonas, e.relacion, e.referencia);
+    for (const l of r.livings) resultado.set(l.id, { ...l, espacio: e.id });
+  }
+  const acomodados = livings.map((l) => resultado.get(l.id) ?? l);
+  return { livings: acomodados, sinLugar: acomodados.filter((l) => l.x === null).length };
+}
+
+/**
+ * Reparte los mozos entre los espacios según las personas de cada uno (al menos
+ * uno por espacio con livings, si alcanzan) y asigna por sectores dentro de cada
+ * espacio, así ningún mozo queda con mesas en el jardín y en el salón.
+ */
+export function asignarMozosEspacios(livings: Living[], mozos: Mozo[], espacios: DatosEspacio[]) {
+  const conLivings = espacios
+    .map((e) => ({ e, suyos: livings.filter((l) => espacioDe(l) === e.id && l.x !== null) }))
+    .filter((x) => x.suyos.length > 0);
+  if (!mozos.length || !conLivings.length) return asignarMozos(livings, mozos, 1, null);
+
+  const personas = conLivings.map((x) => x.suyos.reduce((s, l) => s + peso(l), 0));
+  const total = personas.reduce((s, p) => s + p, 0);
+  let cantidades: number[];
+  if (mozos.length >= conLivings.length) {
+    // Uno para cada espacio y el resto según las personas (mayor resto).
+    const extra = mozos.length - conLivings.length;
+    const ideal = personas.map((p) => (p / total) * extra);
+    cantidades = ideal.map((x) => 1 + Math.floor(x));
+    let faltan = mozos.length - cantidades.reduce((s, n) => s + n, 0);
+    const porResto = ideal.map((x, i) => ({ i, resto: x - Math.floor(x) })).sort((a, b) => b.resto - a.resto);
+    for (const { i } of porResto) if (faltan-- > 0) cantidades[i]++;
+  } else {
+    // Menos mozos que espacios: se turnan.
+    cantidades = conLivings.map(() => 0);
+  }
+
+  const asignacion = new Map<string, string | null>();
+  let desde = 0;
+  conLivings.forEach(({ e, suyos }, i) => {
+    const propios = cantidades[i] ? mozos.slice(desde, desde + cantidades[i]) : [mozos[i % mozos.length]];
+    desde += cantidades[i];
+    for (const l of asignarMozos(suyos, propios, e.relacion, e.referencia)) asignacion.set(l.id, l.mozo_id);
+  });
+  return livings.map((l) => (asignacion.has(l.id) ? { ...l, mozo_id: asignacion.get(l.id)! } : { ...l, mozo_id: l.x === null ? l.mozo_id : null }));
 }

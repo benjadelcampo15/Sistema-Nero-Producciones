@@ -7,6 +7,7 @@ const COLUMNAS = {
   personas: /persona|cantidad|cant\b|pax|invitad|lugares/i,
   consumicion: /consum|monto|importe|m[ií]nimo|precio|\$/i,
   notas: /nota|obs|comentario/i,
+  lugar: /lugar|espacio|ubicaci|sector/i,
 };
 
 function numero(valor: unknown): number | null {
@@ -17,8 +18,8 @@ function numero(valor: unknown): number | null {
 
 /**
  * Lee los livings de la primera hoja de un Excel (o CSV). Busca la fila de
- * títulos (Nombre, Personas, Consumición, Notas); si no la encuentra, toma las
- * columnas en ese orden.
+ * títulos (Nombre, Personas, Consumición, Notas y opcionalmente Lugar); si no
+ * la encuentra, toma las columnas en ese orden.
  */
 export async function leerLivingsDeExcel(archivo: File): Promise<{ livings: Living[]; avisos: string[] }> {
   const libro = read(await archivo.arrayBuffer());
@@ -33,7 +34,7 @@ export async function leerLivingsDeExcel(archivo: File): Promise<{ livings: Livi
     const i = titulos.findIndex((t) => COLUMNAS[clave].test(t));
     return iTitulos >= 0 ? i : porDefecto;
   };
-  const c = { nombre: columna("nombre", 0), personas: columna("personas", 1), consumicion: columna("consumicion", 2), notas: columna("notas", 3) };
+  const c = { nombre: columna("nombre", 0), personas: columna("personas", 1), consumicion: columna("consumicion", 2), notas: columna("notas", 3), lugar: columna("lugar", -1) };
 
   const livings: Living[] = [];
   const avisos: string[] = [];
@@ -50,6 +51,8 @@ export async function leerLivingsDeExcel(archivo: File): Promise<{ livings: Livi
       personas: Math.max(0, Math.round(personas ?? 0)),
       consumicion: Math.max(0, consumicion ?? 0),
       notas: c.notas >= 0 ? texto(fila[c.notas]).slice(0, 500) || null : null,
+      // Columna Lugar opcional: "Salón" o "Jardín"; vacía = lo decide la app.
+      espacio: c.lugar >= 0 ? (/sal/i.test(texto(fila[c.lugar])) ? "salon" : /jard/i.test(texto(fila[c.lugar])) ? "jardin" : undefined) : undefined,
       x: null,
       y: null,
       mozo_id: null,
@@ -62,18 +65,19 @@ export async function leerLivingsDeExcel(archivo: File): Promise<{ livings: Livi
 /** Excel de ejemplo con las columnas que se leen. */
 export function descargarModelo() {
   const hoja = utils.aoa_to_sheet([
-    ["Nombre", "Personas", "Consumición", "Notas"],
+    // Lugar vacío: lo decide la app según el espacio disponible.
+    ["Nombre", "Personas", "Consumición", "Notas", "Lugar"],
     ["Living Quilmes", 12, 1200000, "Sponsor"],
     ["Living Trapiche", 10, 950000, "Sponsor"],
     ["Living Pérez", 8, 600000, "Cumpleaños"],
     ["Living Gómez", 6, 450000, ""],
     ["Living Saigro", 10, 800000, ""],
-    ["Living Martínez", 4, 300000, ""],
+    ["Living Martínez", 4, 300000, "", "Salón"],
     ["Living Dante Robino", 8, 700000, "Sponsor"],
     ["Living López", 6, 400000, ""],
     ["Living Fernández", 5, 350000, "Despedida"],
   ]);
-  hoja["!cols"] = [{ wch: 28 }, { wch: 10 }, { wch: 14 }, { wch: 30 }];
+  hoja["!cols"] = [{ wch: 28 }, { wch: 10 }, { wch: 14 }, { wch: 30 }, { wch: 10 }];
   const libro = utils.book_new();
   utils.book_append_sheet(libro, hoja, "Livings");
   writeFile(libro, "modelo-livings.xlsx");
