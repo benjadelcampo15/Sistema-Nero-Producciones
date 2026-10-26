@@ -79,6 +79,7 @@ export default async function PaginaCashflow({ searchParams }: PageProps<"/cashf
         <div className="tarjeta">
           <p className="text-xs uppercase tracking-wide text-stone-500">Saldo bancario · {formatoFecha(desde)}</p>
           <p className={`mt-1 font-mono text-xl font-semibold ${inicio.saldo < 0 ? "text-red-700" : ""}`}>{formatoPesos(inicio.saldo)}</p>
+          <ConDescubierto saldo={inicio.saldo} descubierto={inicio.descubierto} />
           <p className="text-xs text-stone-500">
             {cargas.length ? `Total de ${(cuentas.length - t.sinCargar)} cuenta${(cuentas.length - t.sinCargar) === 1 ? "" : "s"}${t.sinCargar ? ` (${t.sinCargar} sin cargar)` : ""}` : "Sin saldos cargados"}
           </p>
@@ -86,11 +87,13 @@ export default async function PaginaCashflow({ searchParams }: PageProps<"/cashf
         <div className="tarjeta">
           <p className="text-xs uppercase tracking-wide text-stone-500">Saldo final · {formatoFecha(hasta)}</p>
           <p className={`mt-1 font-mono text-xl font-semibold ${saldo < 0 ? "text-red-700" : ""}`}>{formatoPesos(saldo)}</p>
+          <ConDescubierto saldo={saldo} descubierto={inicio.descubierto} />
           <p className="text-xs text-stone-500">{movimientos.length} movimientos</p>
         </div>
         <div className={`tarjeta ${minimo < -inicio.descubierto ? "border-red-300 bg-red-50" : ""}`}>
           <p className="text-xs uppercase tracking-wide text-stone-500">Saldo más bajo del período</p>
           <p className={`mt-1 font-mono text-xl font-semibold ${minimo < 0 ? "text-red-700" : ""}`}>{formatoPesos(minimo)}</p>
+          <ConDescubierto saldo={minimo} descubierto={inicio.descubierto} />
           <p className="text-xs text-stone-500">
             Descubierto acordado: {formatoPesos(inicio.descubierto)}
             {minimo < -inicio.descubierto && <span className="block font-semibold text-red-700">Se pasa del descubierto</span>}
@@ -114,9 +117,12 @@ export default async function PaginaCashflow({ searchParams }: PageProps<"/cashf
                 <span className="text-green-700">Ingresos {formatoPesos(ingresos)}</span>
                 <span className="text-red-700">Egresos {formatoPesos(egresos)}</span>
                 <span className={`font-semibold ${cierre < 0 ? "text-red-700" : ""}`}>Saldo al cierre {formatoPesos(cierre)}</span>
+                <span className={`font-semibold ${cierre + inicio.descubierto < 0 ? "text-red-700" : "text-stone-600"}`}>
+                  Con descubierto {formatoPesos(cierre + inicio.descubierto)}
+                </span>
               </p>
             </div>
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[900px] text-sm">
               <thead className="text-left text-xs uppercase tracking-wide text-stone-500">
                 <tr>
                   <th className="px-4 py-2">Fecha</th>
@@ -124,6 +130,7 @@ export default async function PaginaCashflow({ searchParams }: PageProps<"/cashf
                   <th className="px-4 py-2 text-right">Ingreso</th>
                   <th className="px-4 py-2 text-right">Egreso</th>
                   <th className="px-4 py-2 text-right">Saldo</th>
+                  <th className="px-4 py-2 text-right">Saldo con descubierto</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -148,6 +155,9 @@ export default async function PaginaCashflow({ searchParams }: PageProps<"/cashf
                     >
                       {formatoPesos(f.saldo)}
                     </td>
+                    <td className={`whitespace-nowrap px-4 py-2 text-right font-mono ${f.saldo + inicio.descubierto < 0 ? "bg-red-100 font-medium text-red-800" : "text-stone-600"}`}>
+                      {formatoPesos(f.saldo + inicio.descubierto)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -156,5 +166,14 @@ export default async function PaginaCashflow({ searchParams }: PageProps<"/cashf
         );
       })}
     </div>
+  );
+}
+
+/** Línea chica debajo de un saldo: el mismo saldo sumando el descubierto acordado. */
+function ConDescubierto({ saldo, descubierto }: { saldo: number; descubierto: number }) {
+  return (
+    <p className={`font-mono text-sm ${saldo + descubierto < 0 ? "font-semibold text-red-700" : "text-stone-600"}`}>
+      Con descubierto: {formatoPesos(saldo + descubierto)}
+    </p>
   );
 }
