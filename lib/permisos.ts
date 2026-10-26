@@ -9,6 +9,15 @@ export const SECCIONES = [
   { id: "livings", nombre: "Livings VIP", href: "/livings", grupo: "Eventos" },
 ] as const;
 
+/**
+ * Pantallas que usan el permiso de otra sección (no tienen permiso propio): se
+ * muestran en el menú después de esa sección.
+ */
+export const PANTALLAS_EXTRA = [
+  { permiso: "financiero", nombre: "Cashflow", href: "/cashflow", grupo: "Administración" },
+  { permiso: "financiero", nombre: "Saldos bancarios", href: "/saldos", grupo: "Administración" },
+] as const;
+
 export type Seccion = (typeof SECCIONES)[number]["id"];
 
 /** Ordenados de menor a mayor: 'editar' incluye 'ver'. */

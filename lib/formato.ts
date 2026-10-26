@@ -72,3 +72,9 @@ export function parsearMonto(texto: string): number | null {
 export function sumar(montos: number[]) {
   return montos.reduce((total, m) => total + Math.round(m * 100), 0) / 100;
 }
+
+/** Desde el primer día del mes actual hasta el último día de `meses` meses después (Argentina). */
+export function proximosMeses(meses: number) {
+  const [anio, mes] = hoy().split("-").map(Number);
+  return rangoMeses(anio, mes, mes + meses - 1);
+}

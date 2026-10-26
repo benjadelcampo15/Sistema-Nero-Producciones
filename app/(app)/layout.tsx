@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { obtenerUsuario } from "@/lib/auth/sesion";
 import { salir } from "@/lib/auth/acciones";
-import { SECCIONES } from "@/lib/permisos";
+import { PANTALLAS_EXTRA, SECCIONES } from "@/lib/permisos";
 import { EnlacesMenu, type ItemMenu } from "./enlaces-menu";
 
 export default function LayoutApp({ children }: LayoutProps<"/">) {
@@ -24,11 +24,10 @@ export default function LayoutApp({ children }: LayoutProps<"/">) {
 async function Menu() {
   const usuario = await obtenerUsuario();
 
-  const items: ItemMenu[] = SECCIONES.filter((s) => usuario.permisos[s.id] !== "ninguno").map((s) => ({
-    href: s.href,
-    nombre: s.nombre,
-    grupo: s.grupo,
-  }));
+  const items: ItemMenu[] = SECCIONES.filter((s) => usuario.permisos[s.id] !== "ninguno").flatMap((s) => [
+    { href: s.href, nombre: s.nombre, grupo: s.grupo },
+    ...PANTALLAS_EXTRA.filter((p) => p.permiso === s.id).map((p) => ({ href: p.href, nombre: p.nombre, grupo: p.grupo })),
+  ]);
   if (usuario.esAdmin) {
     items.push({ href: "/configuracion/usuarios", nombre: "Usuarios", grupo: "Configuración" });
   }
