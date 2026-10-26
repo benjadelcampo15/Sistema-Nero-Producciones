@@ -370,6 +370,8 @@ function Lienzo({
   const caja = useRef<HTMLDivElement>(null);
   const [anchoPx, setAnchoPx] = useState(600);
   const arrastre = useRef<string | null>(null);
+  // Mientras se arrastra, el living puede salir del rectángulo (para pasar al otro espacio).
+  const [arrastrando, setArrastrando] = useState(false);
   // Estirar: el living que se agranda y su esquina de arriba a la izquierda (fija).
   const estirando = useRef<{ id: string; x: number; y: number } | null>(null);
   const deAca = (x: { espacio?: Espacio }) => espacioDe(x) === espacio;
@@ -387,6 +389,11 @@ function Lienzo({
     return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) };
   };
   const punto = (e: EventoPuntero) => relativo(e, caja.current!);
+  /** Posición sin limitar al rectángulo (puede quedar afuera mientras se arrastra). */
+  const puntoLibre = (e: EventoPuntero): Punto => {
+    const r = caja.current!.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+  };
 
   const alApretarFondo = (e: EventoPuntero<HTMLDivElement>) => {
     if (!editable) return;
@@ -408,7 +415,8 @@ function Lienzo({
       alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === id ? { ...l, w, h, x: x + w / 2, y: y + h / 2 } : l)) }));
     } else if (arrastre.current) {
       const id = arrastre.current;
-      alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === id ? { ...l, ...p } : l)) }));
+      const libre = puntoLibre(e);
+      alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === id ? { ...l, ...libre } : l)) }));
     }
   };
 
@@ -425,8 +433,13 @@ function Lienzo({
         // Las medidas se guardan en proporción de cada espacio: se mantiene el alto real.
         const factor = relacion / relacionDe(otro);
         alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === id ? { ...l, ...p, espacio: otro, h: l.h ? Math.min(1, l.h * factor) : l.h } : l)) }));
+      } else {
+        // Soltado acá (o fuera de los dos espacios): queda dentro del rectángulo.
+        const p = punto(e);
+        alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === id ? { ...l, ...p } : l)) }));
       }
     }
+    setArrastrando(false);
     arrastre.current = null;
     estirando.current = null;
   };
@@ -438,7 +451,7 @@ function Lienzo({
     <div
       ref={caja}
       data-espacio={espacio}
-      className={`relative w-full touch-none select-none overflow-hidden rounded-md border ${espacio === "jardin" ? "border-green-900/30" : "border-stone-400"}`}
+      className={`relative w-full touch-none select-none rounded-md border ${arrastrando ? "z-30 overflow-visible" : "overflow-hidden"} ${espacio === "jardin" ? "border-green-900/30" : "border-stone-400"}`}
       style={{ aspectRatio: `1 / ${relacion}`, ...FONDO[espacio], printColorAdjust: "exact" }}
       onPointerDown={alApretarFondo}
       onPointerMove={alMover}
@@ -467,6 +480,7 @@ function Lienzo({
                 if (editable) {
                   caja.current?.setPointerCapture(e.pointerId);
                   arrastre.current = l.id;
+                  setArrastrando(true);
                 }
               }}
               className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center overflow-hidden rounded-md border-2 border-white text-center leading-tight text-white shadow ${
