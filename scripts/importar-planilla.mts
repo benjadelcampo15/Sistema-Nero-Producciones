@@ -240,7 +240,8 @@ async function importar() {
       categoria_id: categoriaId,
       // Lo que no es evento (Ctas Ctes, Vidal, Sueldos…) queda como cuenta/proveedor.
       contraparte: !evento && valorEvento ? tituloCaso(valorEvento) : null,
-      medio_pago: MEDIOS[clave(f["METODO DE PAGO"])] ?? "otro",
+      // ESTADO "EMITIDO" en la planilla = se pagó con cheque emitido (todavía sin debitar).
+      medio_pago: clave(f["ESTADO"]) === "EMITIDO" ? "cheque_emitido" : (MEDIOS[clave(f["METODO DE PAGO"])] ?? "otro"),
       estado: ESTADOS[clave(f["ESTADO"])] ?? "real",
       facturado: f["FACTURADO"] === true || clave(f["FACTURADO"]) === "TRUE",
       iva: monto(f["IVA"]) || null,
