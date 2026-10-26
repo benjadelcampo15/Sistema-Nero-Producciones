@@ -6,6 +6,7 @@ import { exigirPermiso } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { parsearMonto } from "@/lib/formato";
 import { ESTADOS_EVENTO } from "./tipos";
+import { esquemaPlanilla } from "./planilla";
 
 export type EstadoFormularioEvento = { error?: string; valores?: Record<string, string> };
 
@@ -60,4 +61,15 @@ export async function guardarEvento(
   }
 
   redirect(`/eventos/${data[0].id}`);
+}
+
+/** Guarda la planilla entera del evento. */
+export async function guardarPlanillaEvento(eventoId: string, datos: unknown): Promise<{ error?: string }> {
+  await exigirPermiso("eventos", "editar");
+  if (!/^[0-9a-f-]{36}$/i.test(eventoId)) return { error: "Evento inválido" };
+  const validos = esquemaPlanilla.safeParse(datos);
+  if (!validos.success) return { error: "Datos inválidos: revisá los montos" };
+  const supabase = await crearClienteServidor();
+  const { error } = await supabase.from("planillas_evento").upsert({ evento_id: eventoId, datos: validos.data }, { onConflict: "evento_id" });
+  return error ? { error: "No se pudo guardar la planilla" } : {};
 }

@@ -4,6 +4,7 @@ import { sumar } from "@/lib/formato";
 import { CAMPOS_TRANSACCION, calcularTotales, normalizarTransacciones } from "@/lib/financiero/consultas";
 import type { Transaccion } from "@/lib/financiero/tipos";
 import { ESTADOS_EVENTO, type Balance, type EstadoEvento, type Evento, type EventoConBalance } from "./tipos";
+import { PLANILLA_VACIA, esquemaPlanilla, type Planilla } from "./planilla";
 
 const CAMPOS_EVENTO = "id, nombre, fecha, lugar, estado, presupuesto, notas";
 
@@ -84,4 +85,12 @@ export async function obtenerDetalleEvento(id: string) {
     totales,
     desglose: { ingresos: desglosar(transacciones, "ingreso"), egresos: desglosar(transacciones, "egreso") },
   };
+}
+
+/** La planilla del evento (resumen, ingresos, gastos por sector y entradas). */
+export async function obtenerPlanillaEvento(eventoId: string): Promise<Planilla> {
+  const supabase = await crearClienteServidor();
+  const { data } = await supabase.from("planillas_evento").select("datos").eq("evento_id", eventoId).maybeSingle();
+  const datos = esquemaPlanilla.safeParse(data?.datos ?? {});
+  return datos.success ? datos.data : PLANILLA_VACIA;
 }

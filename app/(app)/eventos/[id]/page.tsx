@@ -1,19 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
-import { obtenerDetalleEvento, type DesgloseCategoria } from "@/lib/eventos/consultas";
+import { obtenerDetalleEvento, obtenerPlanillaEvento, type DesgloseCategoria } from "@/lib/eventos/consultas";
 import { COLOR_ESTADO_EVENTO, NOMBRE_ESTADO_EVENTO } from "@/lib/eventos/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { BarraPresupuesto } from "@/components/barra-presupuesto";
 import { TablaMovimientos } from "@/components/tabla-movimientos";
 import { SinAcceso } from "../../sin-acceso";
+import { PlanillaEvento } from "./planilla-evento";
 
-export default async function PaginaEvento({ params }: PageProps<"/eventos/[id]">) {
+export default async function PaginaEvento({ params, searchParams }: PageProps<"/eventos/[id]">) {
   const usuario = await obtenerUsuario();
   if (!puede(usuario, "eventos", "ver")) return <SinAcceso />;
 
   const { id } = await params;
-  const detalle = await obtenerDetalleEvento(id);
+  const { vista } = await searchParams;
+  const enPlanilla = vista !== "movimientos";
+  const [detalle, planilla] = await Promise.all([obtenerDetalleEvento(id), enPlanilla ? obtenerPlanillaEvento(id) : null]);
   if (!detalle) notFound();
   const { evento, transacciones, totales, desglose } = detalle;
 
@@ -54,6 +57,27 @@ export default async function PaginaEvento({ params }: PageProps<"/eventos/[id]"
         {evento.notas && <p className="mt-2 max-w-3xl whitespace-pre-line text-sm text-stone-600">{evento.notas}</p>}
       </div>
 
+      <nav className="flex gap-1 border-b border-stone-200 print:hidden">
+        {[
+          { clave: "planilla", nombre: "Planilla", href: `/eventos/${evento.id}` },
+          { clave: "movimientos", nombre: `Movimientos (${transacciones.length})`, href: `/eventos/${evento.id}?vista=movimientos` },
+        ].map((t) => (
+          <Link
+            key={t.clave}
+            href={t.href}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+              (t.clave === "planilla") === enPlanilla ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500 hover:text-stone-900"
+            }`}
+          >
+            {t.nombre}
+          </Link>
+        ))}
+      </nav>
+
+      {planilla ? (
+        <PlanillaEvento key={evento.id} eventoId={evento.id} inicial={planilla} editable={editaEvento} />
+      ) : (
+      <>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Indicador titulo="Ingresos" valor={formatoPesos(total.ingresos)} color="text-green-700" detalle={detalleReal(real.ingresos, total.ingresos)} />
         <Indicador titulo="Egresos" valor={formatoPesos(total.egresos)} color="text-red-700" detalle={detalleReal(real.egresos, total.egresos)} />
@@ -90,6 +114,8 @@ export default async function PaginaEvento({ params }: PageProps<"/eventos/[id]"
           mostrarEvento={false}
         />
       </section>
+      </>
+      )}
     </div>
   );
 }
