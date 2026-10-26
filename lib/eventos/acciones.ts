@@ -6,7 +6,8 @@ import { exigirPermiso } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { parsearMonto } from "@/lib/formato";
 import { ESTADOS_EVENTO } from "./tipos";
-import { esquemaPlanilla } from "./planilla";
+import { PLANILLA_VACIA, esquemaPlanilla, type Planilla } from "./planilla";
+import { planillaDesdeMovimientos } from "./desde-movimientos";
 
 export type EstadoFormularioEvento = { error?: string; valores?: Record<string, string> };
 
@@ -72,4 +73,30 @@ export async function guardarPlanillaEvento(eventoId: string, datos: unknown): P
   const supabase = await crearClienteServidor();
   const { error } = await supabase.from("planillas_evento").upsert({ evento_id: eventoId, datos: validos.data }, { onConflict: "evento_id" });
   return error ? { error: "No se pudo guardar la planilla" } : {};
+}
+
+/**
+ * Arma la planilla con los movimientos del evento en Financiero (ingresos y
+ * gastos por sector). Conserva la alícuota, las entradas y las notas de `base`.
+ * No guarda: la pantalla la muestra y se guarda con "Guardar planilla".
+ */
+export async function armarPlanillaDesdeMovimientos(eventoId: string, base: unknown): Promise<{ planilla?: Planilla; error?: string }> {
+  await exigirPermiso("eventos", "editar");
+  if (!/^[0-9a-f-]{36}$/i.test(eventoId)) return { error: "Evento inválido" };
+  const actual = esquemaPlanilla.safeParse(base);
+  const supabase = await crearClienteServidor();
+  const { data, error } = await supabase
+    .from("transacciones")
+    .select("tipo, monto, iva, descripcion, contraparte, estado, facturado, categoria:categorias(nombre)")
+    .eq("evento_id", eventoId)
+    .is("eliminado_en", null)
+    .order("fecha", { nullsFirst: false });
+  if (error) return { error: "No se pudieron leer los movimientos" };
+  const movimientos = (data ?? []).map((t) => ({
+    ...t,
+    monto: Number(t.monto),
+    iva: t.iva === null ? null : Number(t.iva),
+    categoria: t.categoria as unknown as { nombre: string },
+  }));
+  return { planilla: planillaDesdeMovimientos(movimientos, actual.success ? actual.data : PLANILLA_VACIA) };
 }

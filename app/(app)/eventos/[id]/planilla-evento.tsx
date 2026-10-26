@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { guardarPlanillaEvento } from "@/lib/eventos/acciones";
+import { armarPlanillaDesdeMovimientos, guardarPlanillaEvento } from "@/lib/eventos/acciones";
 import {
   TIPOS_FACTURA,
   calcularPlanilla,
@@ -24,6 +24,7 @@ const COLOR_SECTOR: Record<string, { fuerte: string; suave: string }> = {
   "Contenido y activaciones": { fuerte: "#be185d", suave: "#fdf2f8" },
   "Recursos humanos": { fuerte: "#047857", suave: "#ecfdf5" },
   "Mercadería": { fuerte: "#c2410c", suave: "#fff7ed" },
+  "Gastronomía": { fuerte: "#0f766e", suave: "#f0fdfa" },
   "Seguros y aranceles": { fuerte: "#4338ca", suave: "#eef2ff" },
 };
 const colorSector = (nombre: string) => COLOR_SECTOR[nombre] ?? { fuerte: "#57534e", suave: "#f5f5f4" };
@@ -63,6 +64,18 @@ export function PlanillaEvento({ eventoId, inicial, editable }: { eventoId: stri
         setMensaje({ tipo: "ok", texto: "Planilla guardada" });
       }
     });
+
+  const armarDesdeMovimientos = () => {
+    if ((p.ingresos.length || p.gastos.length) && !window.confirm("Se reemplazan los ingresos y gastos de la planilla por los movimientos del evento en Financiero (las entradas y notas quedan). ¿Seguir?")) return;
+    iniciar(async () => {
+      const r = await armarPlanillaDesdeMovimientos(eventoId, p);
+      if (r.error || !r.planilla) setMensaje({ tipo: "error", texto: r.error ?? "No se pudo armar" });
+      else {
+        cambiar(() => r.planilla!);
+        setMensaje({ tipo: "ok", texto: "Armada desde los movimientos. Revisala y guardá." });
+      }
+    });
+  };
 
   // ─── Ingresos ───
   const editarIngreso = (i: number, cambio: Partial<Ingreso>) =>
@@ -105,7 +118,8 @@ export function PlanillaEvento({ eventoId, inicial, editable }: { eventoId: stri
             Ver solo lo que falta pagar
           </label>
           {mensaje && <p className={`text-sm ${mensaje.tipo === "error" ? "text-red-700" : "text-green-700"}`}>{mensaje.texto}</p>}
-          <button type="button" onClick={() => window.print()} className="boton-secundario ml-auto">Imprimir</button>
+          <button type="button" onClick={armarDesdeMovimientos} disabled={guardando} className="boton-secundario ml-auto">Armar desde movimientos</button>
+          <button type="button" onClick={() => window.print()} className="boton-secundario">Imprimir</button>
           <button type="button" onClick={guardar} disabled={guardando || !sinGuardar} className="boton">
             {guardando ? "Guardando…" : sinGuardar ? "Guardar planilla" : "Guardada"}
           </button>
@@ -142,9 +156,9 @@ export function PlanillaEvento({ eventoId, inicial, editable }: { eventoId: stri
       {/* Ingresos */}
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">Ingresos</h2>
-        <div className="tarjeta overflow-x-auto p-0">
+        <div className="tarjeta overflow-x-auto p-0 lg:overflow-visible">
           <table className="w-full min-w-[900px] text-sm">
-            <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
+            <thead className={`sticky ${editable ? "top-[3.25rem]" : "top-0"} z-10 border-b shadow-sm border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500 print:static`}>
               <tr>
                 <th className="px-2 py-2">Detalle</th>
                 <th className="px-2 py-2 text-right">Neto</th>
@@ -195,9 +209,9 @@ export function PlanillaEvento({ eventoId, inicial, editable }: { eventoId: stri
       {/* Gastos por sector */}
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">Gastos por sector</h2>
-        <div className="tarjeta overflow-x-auto p-0">
-          <table className="w-full min-w-[1250px] text-sm">
-            <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
+        <div className="tarjeta overflow-x-auto p-0 lg:overflow-visible">
+          <table className="w-full min-w-[1100px] text-sm">
+            <thead className={`sticky ${editable ? "top-[3.25rem]" : "top-0"} z-10 border-b shadow-sm border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500 print:static`}>
               <tr>
                 <th className="px-2 py-2">Detalle</th>
                 <th className="px-2 py-2 text-right">Neto</th>
@@ -267,7 +281,7 @@ export function PlanillaEvento({ eventoId, inicial, editable }: { eventoId: stri
                 </tbody>
               );
             })}
-            <tfoot className="bg-stone-900 font-semibold text-white">
+            <tfoot className="sticky bottom-0 z-10 bg-stone-900 font-semibold text-white print:static">
               <tr>
                 <td className="px-2 py-2 uppercase">Total gastos</td>
                 <td className="px-2 py-2 text-right font-mono">{formatoPesos(c.gastos.neto)}</td>

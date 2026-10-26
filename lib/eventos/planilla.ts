@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /** Sectores de gastos de la planilla de eventos, en su orden. */
-export const SECTORES = ["Artística", "Técnica", "Infraestructura", "Contenido y activaciones", "Recursos humanos", "Mercadería", "Seguros y aranceles"];
+export const SECTORES = ["Artística", "Técnica", "Infraestructura", "Contenido y activaciones", "Recursos humanos", "Mercadería", "Gastronomía", "Seguros y aranceles"];
 
 /** Tipos de factura de un gasto; el % es el IVA crédito sugerido sobre el neto. */
 export const TIPOS_FACTURA = [
