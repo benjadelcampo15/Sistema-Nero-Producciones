@@ -78,6 +78,28 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
       }
     });
 
+  /**
+   * Acomoda los livings en las zonas (sin zonas, en todo el jardín). Si no
+   * entran todos, achica los livings hasta que entren.
+   */
+  const acomodar = (livings: Living[]) => {
+    const zonas = doc.zonas.length ? doc.zonas : [{ id: "todo", x: 0.01, y: 0.01, w: 0.98, h: 0.98 }];
+    let tamano = doc.tamano_living;
+    let r = distribuir(livings, zonas, tamano, relacion, referencia, doc.elementos);
+    while (r.sinLugar > 0 && tamano > 0.016) {
+      tamano = Math.max(0.015, tamano * 0.9);
+      r = distribuir(livings, zonas, tamano, relacion, referencia, doc.elementos);
+    }
+    const resultado = doc.mozos.length ? asignarMozos(r.livings, doc.mozos, relacion, referencia) : r.livings;
+    cambiar((d) => ({ ...d, tamano_living: tamano, livings: resultado }));
+    const avisos = [
+      !doc.zonas.length && "No hay zonas marcadas: se usó todo el jardín.",
+      tamano < doc.tamano_living && !r.sinLugar && "Se achicaron los livings para que entren todos (agrandá las zonas si los querés más grandes).",
+      r.sinLugar > 0 && `${r.sinLugar} no entraron ni achicándolos: agrandá las zonas.`,
+    ].filter((a): a is string => Boolean(a));
+    return { sinLugar: r.sinLugar, avisos };
+  };
+
   const importarExcel = async (archivo: File) => {
     if (doc.livings.length && !window.confirm(`Ya hay ${doc.livings.length} livings cargados. ¿Reemplazarlos por los del Excel?`)) return;
     try {
@@ -86,20 +108,13 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
         setMensaje({ tipo: "error", texto: "No se cargó ningún living", detalles: avisos });
         return;
       }
-      let resultado = livings;
-      let sinLugar = 0;
-      if (doc.zonas.length) {
-        const r = distribuir(livings, doc.zonas, doc.tamano_living, relacion, referencia, doc.elementos);
-        resultado = asignarMozos(r.livings, doc.mozos, relacion, referencia);
-        sinLugar = r.sinLugar;
-      }
-      cambiar((d) => ({ ...d, livings: resultado }));
+      const r = acomodar(livings);
       setSeleccionado(null);
       setModo("mover");
       setMensaje({
-        tipo: avisos.length || sinLugar ? "error" : "ok",
-        texto: `${livings.length} livings cargados${doc.zonas.length ? " y acomodados" : ". Marcá las zonas de livings y tocá “Distribuir”."}${sinLugar ? ` ${sinLugar} no entraron en las zonas: agrandá las zonas o achicá los livings.` : ""}`,
-        detalles: avisos,
+        tipo: avisos.length || r.sinLugar ? "error" : "ok",
+        texto: `${livings.length} livings cargados del Excel y acomodados en el plano.`,
+        detalles: [...r.avisos, ...avisos],
       });
     } catch {
       setMensaje({ tipo: "error", texto: "No se pudo leer el archivo. Subí un Excel (.xlsx, .xls) o CSV." });
@@ -107,18 +122,12 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
   };
 
   const redistribuir = () => {
-    if (!doc.zonas.length) {
-      setMensaje({ tipo: "error", texto: "Primero marcá las zonas donde pueden ir livings" });
-      setModo("zonas");
-      return;
-    }
-    const r = distribuir(doc.livings, doc.zonas, doc.tamano_living, relacion, referencia, doc.elementos);
-    cambiar((d) => ({ ...d, livings: d.mozos.length ? asignarMozos(r.livings, d.mozos, relacion, referencia) : r.livings }));
-    setMensaje(
-      r.sinLugar
-        ? { tipo: "error", texto: `${r.sinLugar} livings no entraron en las zonas: agrandá las zonas o achicá los livings.` }
-        : { tipo: "ok", texto: referencia ? "Livings distribuidos: los de mayor consumición, cerca del escenario" : "Livings distribuidos (dibujá el escenario para que los de mayor consumición queden adelante)" },
-    );
+    const r = acomodar(doc.livings);
+    setMensaje({
+      tipo: r.sinLugar ? "error" : "ok",
+      texto: referencia ? "Livings distribuidos: los de mayor consumición, cerca del escenario." : "Livings distribuidos (dibujá el escenario para que los de mayor consumición queden adelante).",
+      detalles: r.avisos,
+    });
   };
 
   const repartirMozos = () => {
@@ -217,6 +226,12 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
                 </div>
               )}
             </div>
+          )}
+          {doc.livings.length > 0 && (
+            <p className={`text-sm ${sinUbicar.length ? "font-medium text-amber-800" : "text-stone-600"}`}>
+              {doc.livings.length - sinUbicar.length} de {doc.livings.length} livings en el plano
+              {sinUbicar.length > 0 && ` · ${sinUbicar.length} sin ubicar: tocá “Distribuir livings” o ubicalos a mano desde la lista de la derecha`}
+            </p>
           )}
           <Lienzo
             doc={doc}
