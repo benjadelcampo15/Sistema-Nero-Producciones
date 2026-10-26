@@ -430,7 +430,9 @@ function Lienzo({
   };
 
   const posicion = (r: Rect) => ({ left: `${r.x * 100}%`, top: `${r.y * 100}%`, width: `${r.w * 100}%`, height: `${r.h * 100}%` });
-  const porDefecto = medidasPorDefecto(doc.livings, doc.proporcion);
+  // Livings sin medidas propias (de antes de las columnas): tamaño fijo, que no
+  // depende de los demás, así estirar uno no cambia al resto.
+  const porDefecto = medidasPorDefecto([], doc.proporcion);
   /** Tirador de la esquina de abajo a la derecha para estirar. */
   const tirador = (que: "living" | "zona" | "elemento", id: string, x: number, y: number) => (
     <span
