@@ -156,9 +156,9 @@ export function PlanillaEvento({ eventoId, inicial, editable }: { eventoId: stri
       {/* Ingresos */}
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">Ingresos</h2>
-        <div className="tarjeta overflow-x-auto p-0 lg:overflow-visible">
+        <div className="tarjeta max-h-[45vh] overflow-auto overscroll-contain p-0 print:max-h-none print:overflow-visible">
           <table className="w-full min-w-[900px] text-sm">
-            <thead className={`sticky ${editable ? "top-[3.25rem]" : "top-0"} z-10 border-b shadow-sm border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500 print:static`}>
+            <thead className={`sticky top-0 z-10 border-b shadow-sm border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500 print:static`}>
               <tr>
                 <th className="px-2 py-2">Detalle</th>
                 <th className="px-2 py-2 text-right">Neto</th>
@@ -186,7 +186,7 @@ export function PlanillaEvento({ eventoId, inicial, editable }: { eventoId: stri
                 </tr>
               ))}
             </tbody>
-            <tfoot className="border-t-2 border-stone-200 bg-stone-50 font-semibold">
+            <tfoot className="sticky bottom-0 z-10 border-t-2 border-stone-200 bg-stone-50 font-semibold shadow-[0_-1px_0_#e7e5e4] print:static">
               <tr>
                 <td className="px-2 py-2">
                   {editable ? (
@@ -209,9 +209,9 @@ export function PlanillaEvento({ eventoId, inicial, editable }: { eventoId: stri
       {/* Gastos por sector */}
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">Gastos por sector</h2>
-        <div className="tarjeta overflow-x-auto p-0 lg:overflow-visible">
+        <div className="tarjeta max-h-[70vh] overflow-auto overscroll-contain p-0 print:max-h-none print:overflow-visible">
           <table className="w-full min-w-[1100px] text-sm">
-            <thead className={`sticky ${editable ? "top-[3.25rem]" : "top-0"} z-10 border-b shadow-sm border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500 print:static`}>
+            <thead className={`sticky top-0 z-10 border-b shadow-sm border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500 print:static`}>
               <tr>
                 <th className="px-2 py-2">Detalle</th>
                 <th className="px-2 py-2 text-right">Neto</th>
