@@ -8,8 +8,11 @@ import {
   TIPOS_ELEMENTO,
   asignarMozos,
   colorMozo,
+  consumicionCorta,
+  diametroLiving,
   distribuir,
   nuevoId,
+  promedioPersonas,
   resumenPorMozo,
   type DocumentoPlano,
   type Elemento,
@@ -420,7 +423,7 @@ function Lienzo({
   };
 
   const posicion = (r: Rect) => ({ left: `${r.x * 100}%`, top: `${r.y * 100}%`, width: `${r.w * 100}%`, height: `${r.h * 100}%` });
-  const diametro = doc.tamano_living * anchoPx;
+  const promedio = promedioPersonas(doc.livings);
   const borrar = (accion: () => void) => (
     <button
       type="button"
@@ -485,6 +488,8 @@ function Lienzo({
         .filter((l) => l.x !== null && l.y !== null)
         .map((l) => {
           const elegido = l.id === seleccionado;
+          // Más personas, living más grande.
+          const diametro = diametroLiving(l.personas, doc.tamano_living, promedio) * anchoPx;
           return (
             <div
               key={l.id}
@@ -512,8 +517,9 @@ function Lienzo({
                 printColorAdjust: "exact",
               }}
             >
-              {diametro >= 44 && <span className="w-full truncate px-1 text-[10px] font-semibold">{l.nombre}</span>}
-              <span className={diametro >= 24 ? "text-[11px] font-bold" : "text-[8px] font-bold"}>{l.personas}</span>
+              {diametro >= 64 && <span className="w-full truncate px-1 text-[10px] font-semibold">{l.nombre}</span>}
+              <span className={diametro >= 36 ? "text-[11px] font-bold" : "text-[8px] font-bold"}>{l.personas}p</span>
+              {diametro >= 26 && <span className={diametro >= 44 ? "text-[10px]" : "text-[8px]"}>{consumicionCorta(l.consumicion)}</span>}
             </div>
           );
         })}

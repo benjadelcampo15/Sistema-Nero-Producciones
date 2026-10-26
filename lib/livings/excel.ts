@@ -63,8 +63,15 @@ export async function leerLivingsDeExcel(archivo: File): Promise<{ livings: Livi
 export function descargarModelo() {
   const hoja = utils.aoa_to_sheet([
     ["Nombre", "Personas", "Consumición", "Notas"],
-    ["Living Pérez", 8, 400000, "Cumpleaños"],
-    ["Living Quilmes", 12, 900000, "Sponsor"],
+    ["Living Quilmes", 12, 1200000, "Sponsor"],
+    ["Living Trapiche", 10, 950000, "Sponsor"],
+    ["Living Pérez", 8, 600000, "Cumpleaños"],
+    ["Living Gómez", 6, 450000, ""],
+    ["Living Saigro", 10, 800000, ""],
+    ["Living Martínez", 4, 300000, ""],
+    ["Living Dante Robino", 8, 700000, "Sponsor"],
+    ["Living López", 6, 400000, ""],
+    ["Living Fernández", 5, 350000, "Despedida"],
   ]);
   hoja["!cols"] = [{ wch: 28 }, { wch: 10 }, { wch: 14 }, { wch: 30 }];
   const libro = utils.book_new();
