@@ -1,48 +1,53 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition, type PointerEvent as EventoPuntero } from "react";
-import { guardarPlano, subirImagenPlano } from "@/lib/livings/acciones";
+import { guardarPlano } from "@/lib/livings/acciones";
 import { descargarModelo, leerLivingsDeExcel } from "@/lib/livings/excel";
 import {
+  FORMAS,
+  TIPOS_ELEMENTO,
   asignarMozos,
   colorMozo,
   distribuir,
   nuevoId,
   resumenPorMozo,
   type DocumentoPlano,
+  type Elemento,
   type Living,
-  type Plano,
-  type Zona,
+  type TipoElemento,
 } from "@/lib/livings/tipos";
 import { formatoPesos } from "@/lib/formato";
 
-type Modo = "mover" | "zonas" | "referencia";
+type Modo = "mover" | "dibujar" | "zonas";
 type Punto = { x: number; y: number };
+type Rect = { x: number; y: number; w: number; h: number };
 
 const AYUDA: Record<Modo, string> = {
   mover: "Arrastrá los livings para moverlos. Tocá uno para ver o editar sus datos.",
-  zonas: "Arrastrá sobre el plano para marcar dónde pueden ir livings. La × borra una zona.",
-  referencia: "Tocá el plano donde está el escenario o la zona VIP: los livings de mayor consumición van más cerca.",
+  dibujar: "Elegí qué dibujar y arrastrá sobre el pasto. La × lo borra. Los livings de mayor consumición van más cerca del escenario.",
+  zonas: "Arrastrá sobre el pasto para marcar dónde pueden ir livings. La × borra una zona.",
 };
 
-export function EditorPlano({ inicial, editable }: { inicial: Plano; editable: boolean }) {
-  const [doc, setDoc] = useState<DocumentoPlano>({
-    tamano_living: inicial.tamano_living,
-    zonas: inicial.zonas,
-    referencia: inicial.referencia,
-    mozos: inicial.mozos,
-    livings: inicial.livings,
-  });
-  const [imagen, setImagen] = useState({ url: inicial.imagen_url, ancho: inicial.imagen_ancho, alto: inicial.imagen_alto });
-  const [modo, setModo] = useState<Modo>(inicial.zonas.length ? "mover" : "zonas");
+const NOMBRE_MODO: Record<Modo, string> = { mover: "Mover livings", dibujar: "Dibujar jardín", zonas: "Zonas de livings" };
+
+/** El punto VIP es el centro del escenario dibujado. */
+function centroEscenario(elementos: Elemento[]): Punto | null {
+  const e = elementos.find((x) => x.tipo === "escenario");
+  return e ? { x: e.x + e.w / 2, y: e.y + e.h / 2 } : null;
+}
+
+export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; editable: boolean }) {
+  const [doc, setDoc] = useState<DocumentoPlano>(inicial);
+  const [modo, setModo] = useState<Modo>(!inicial.elementos.length ? "dibujar" : !inicial.zonas.length ? "zonas" : "mover");
+  const [tipoDibujo, setTipoDibujo] = useState<TipoElemento>("escenario");
   const [seleccionado, setSeleccionado] = useState<string | null>(null);
   const [sinGuardar, setSinGuardar] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string; detalles?: string[] } | null>(null);
   const [mozosTexto, setMozosTexto] = useState(inicial.mozos.map((m) => m.nombre).join("\n"));
   const [guardando, iniciarGuardado] = useTransition();
-  const [subiendo, iniciarSubida] = useTransition();
 
-  const relacion = imagen.ancho && imagen.alto ? imagen.alto / imagen.ancho : 0.66;
+  const relacion = doc.proporcion;
+  const referencia = centroEscenario(doc.elementos);
   const cambiar = (cambio: (d: DocumentoPlano) => DocumentoPlano) => {
     setDoc((d) => cambio(d));
     setSinGuardar(true);
@@ -57,37 +62,18 @@ export function EditorPlano({ inicial, editable }: { inicial: Plano; editable: b
 
   const guardar = () =>
     iniciarGuardado(async () => {
-      // Un nombre borrado no impide guardar.
-      const r = await guardarPlano({ ...doc, livings: doc.livings.map((l) => ({ ...l, nombre: l.nombre.trim() || "Living" })) });
+      const r = await guardarPlano({
+        ...doc,
+        referencia,
+        // Un nombre borrado no impide guardar.
+        livings: doc.livings.map((l) => ({ ...l, nombre: l.nombre.trim() || "Living" })),
+      });
       if (r.error) setMensaje({ tipo: "error", texto: r.error });
       else {
         setSinGuardar(false);
         setMensaje({ tipo: "ok", texto: "Plano guardado" });
       }
     });
-
-  const subirImagen = (archivo: File) => {
-    const url = URL.createObjectURL(archivo);
-    const img = new Image();
-    img.onload = () => {
-      const datos = new FormData();
-      datos.set("imagen", archivo);
-      datos.set("ancho", String(img.naturalWidth));
-      datos.set("alto", String(img.naturalHeight));
-      URL.revokeObjectURL(url);
-      iniciarSubida(async () => {
-        const r = await subirImagenPlano(datos);
-        if (r.error || !r.url) setMensaje({ tipo: "error", texto: r.error ?? "No se pudo subir la imagen" });
-        else {
-          setImagen({ url: r.url, ancho: img.naturalWidth, alto: img.naturalHeight });
-          setMensaje({ tipo: "ok", texto: "Plano del jardín cargado. Ahora marcá las zonas donde pueden ir livings." });
-          setModo("zonas");
-        }
-      });
-    };
-    img.onerror = () => setMensaje({ tipo: "error", texto: "No se pudo leer la imagen" });
-    img.src = url;
-  };
 
   const importarExcel = async (archivo: File) => {
     if (doc.livings.length && !window.confirm(`Ya hay ${doc.livings.length} livings cargados. ¿Reemplazarlos por los del Excel?`)) return;
@@ -100,8 +86,8 @@ export function EditorPlano({ inicial, editable }: { inicial: Plano; editable: b
       let resultado = livings;
       let sinLugar = 0;
       if (doc.zonas.length) {
-        const r = distribuir(livings, doc.zonas, doc.tamano_living, relacion, doc.referencia);
-        resultado = asignarMozos(r.livings, doc.mozos, relacion, doc.referencia);
+        const r = distribuir(livings, doc.zonas, doc.tamano_living, relacion, referencia, doc.elementos);
+        resultado = asignarMozos(r.livings, doc.mozos, relacion, referencia);
         sinLugar = r.sinLugar;
       }
       cambiar((d) => ({ ...d, livings: resultado }));
@@ -109,7 +95,7 @@ export function EditorPlano({ inicial, editable }: { inicial: Plano; editable: b
       setModo("mover");
       setMensaje({
         tipo: avisos.length || sinLugar ? "error" : "ok",
-        texto: `${livings.length} livings cargados${doc.zonas.length ? " y acomodados" : ". Marcá zonas y tocá “Distribuir”."}${sinLugar ? ` ${sinLugar} no entraron en las zonas: agrandá las zonas o achicá los livings.` : ""}`,
+        texto: `${livings.length} livings cargados${doc.zonas.length ? " y acomodados" : ". Marcá las zonas de livings y tocá “Distribuir”."}${sinLugar ? ` ${sinLugar} no entraron en las zonas: agrandá las zonas o achicá los livings.` : ""}`,
         detalles: avisos,
       });
     } catch {
@@ -123,12 +109,12 @@ export function EditorPlano({ inicial, editable }: { inicial: Plano; editable: b
       setModo("zonas");
       return;
     }
-    const r = distribuir(doc.livings, doc.zonas, doc.tamano_living, relacion, doc.referencia);
-    cambiar((d) => ({ ...d, livings: d.mozos.length ? asignarMozos(r.livings, d.mozos, relacion, d.referencia) : r.livings }));
+    const r = distribuir(doc.livings, doc.zonas, doc.tamano_living, relacion, referencia, doc.elementos);
+    cambiar((d) => ({ ...d, livings: d.mozos.length ? asignarMozos(r.livings, d.mozos, relacion, referencia) : r.livings }));
     setMensaje(
       r.sinLugar
         ? { tipo: "error", texto: `${r.sinLugar} livings no entraron en las zonas: agrandá las zonas o achicá los livings.` }
-        : { tipo: "ok", texto: "Livings distribuidos" },
+        : { tipo: "ok", texto: referencia ? "Livings distribuidos: los de mayor consumición, cerca del escenario" : "Livings distribuidos (dibujá el escenario para que los de mayor consumición queden adelante)" },
     );
   };
 
@@ -137,7 +123,7 @@ export function EditorPlano({ inicial, editable }: { inicial: Plano; editable: b
       setMensaje({ tipo: "error", texto: "Cargá los mozos (uno por línea)" });
       return;
     }
-    cambiar((d) => ({ ...d, livings: asignarMozos(d.livings, d.mozos, relacion, d.referencia) }));
+    cambiar((d) => ({ ...d, livings: asignarMozos(d.livings, d.mozos, relacion, referencia) }));
     setMensaje({ tipo: "ok", texto: "Mozos asignados. Podés cambiar el mozo de cada living tocándolo." });
   };
 
@@ -160,6 +146,11 @@ export function EditorPlano({ inicial, editable }: { inicial: Plano; editable: b
     setModo("mover");
   };
 
+  const alDibujar = (r: Rect) => {
+    if (modo === "zonas") cambiar((d) => ({ ...d, zonas: [...d.zonas, { id: nuevoId(), ...r }] }));
+    if (modo === "dibujar") cambiar((d) => ({ ...d, elementos: [...d.elementos, { id: nuevoId(), tipo: tipoDibujo, ...r }] }));
+  };
+
   const living = doc.livings.find((l) => l.id === seleccionado) ?? null;
   const sinUbicar = doc.livings.filter((l) => l.x === null);
   const resumen = resumenPorMozo(doc.livings, doc.mozos);
@@ -171,15 +162,14 @@ export function EditorPlano({ inicial, editable }: { inicial: Plano; editable: b
       {editable && (
         <div className="flex flex-wrap items-center gap-2 print:hidden">
           <div className="flex overflow-hidden rounded-md border border-stone-300 text-sm">
-            {(["mover", "zonas", "referencia"] as const).map((m) => (
+            {(["dibujar", "zonas", "mover"] as const).map((m) => (
               <button
                 key={m}
                 type="button"
-                disabled={!imagen.url}
                 onClick={() => setModo(m)}
-                className={`px-3 py-1.5 disabled:opacity-50 ${modo === m ? "bg-stone-900 text-white" : "bg-white hover:bg-stone-100"}`}
+                className={`px-3 py-1.5 ${modo === m ? "bg-stone-900 text-white" : "bg-white hover:bg-stone-100"}`}
               >
-                {m === "mover" ? "Mover livings" : m === "zonas" ? "Marcar zonas" : "Escenario / VIP"}
+                {NOMBRE_MODO[m]}
               </button>
             ))}
           </div>
@@ -205,26 +195,34 @@ export function EditorPlano({ inicial, editable }: { inicial: Plano; editable: b
 
       <div className="grid gap-4 xl:grid-cols-[1fr_20rem]">
         <div className="space-y-2">
-          {imagen.url ? (
-            <>
-              {editable && <p className="text-xs text-stone-500 print:hidden">{AYUDA[modo]}</p>}
-              <Lienzo
-                imagenUrl={imagen.url}
-                relacion={relacion}
-                doc={doc}
-                modo={editable ? modo : null}
-                seleccionado={seleccionado}
-                alSeleccionar={setSeleccionado}
-                alCambiar={cambiar}
-              />
-            </>
-          ) : (
-            <div className="tarjeta flex min-h-64 flex-col items-center justify-center gap-3 text-center text-sm text-stone-600">
-              <p className="font-medium">Subí el plano o una foto del jardín</p>
-              <p className="max-w-sm text-stone-500">Sobre la imagen se marcan las zonas donde pueden ir los livings y la app los acomoda.</p>
-              {editable && <SubirArchivo etiqueta={subiendo ? "Subiendo…" : "Elegir imagen"} acepta="image/jpeg,image/png,image/webp" alElegir={subirImagen} principal />}
+          {editable && (
+            <div className="flex flex-wrap items-center gap-2 print:hidden">
+              <p className="text-xs text-stone-500">{AYUDA[modo]}</p>
+              {modo === "dibujar" && (
+                <div className="flex flex-wrap gap-1">
+                  {TIPOS_ELEMENTO.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setTipoDibujo(t.id)}
+                      className={`rounded-full border px-2.5 py-0.5 text-xs ${tipoDibujo === t.id ? "border-stone-900 ring-2 ring-stone-900" : "border-stone-300"}`}
+                      style={{ background: t.color, color: t.texto }}
+                    >
+                      {t.nombre}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
+          <Lienzo
+            doc={doc}
+            modo={editable ? modo : null}
+            seleccionado={seleccionado}
+            alSeleccionar={setSeleccionado}
+            alCambiar={cambiar}
+            alDibujar={alDibujar}
+          />
         </div>
 
         <aside className="space-y-4 text-sm print:hidden">
@@ -287,9 +285,20 @@ export function EditorPlano({ inicial, editable }: { inicial: Plano; editable: b
             </section>
           )}
 
-          {editable && imagen.url && (
+          {editable && (
             <section className="tarjeta space-y-2 p-4">
-              <h2 className="font-semibold">Plano</h2>
+              <h2 className="font-semibold">Jardín</h2>
+              <label className="etiqueta" htmlFor="forma">Forma</label>
+              <select
+                id="forma"
+                value={doc.proporcion}
+                onChange={(e) => cambiar((d) => ({ ...d, proporcion: Number(e.target.value) }))}
+                className="campo"
+              >
+                {FORMAS.map((f) => (
+                  <option key={f.proporcion} value={f.proporcion}>{f.nombre}</option>
+                ))}
+              </select>
               <label className="etiqueta" htmlFor="tamano">Tamaño de los livings</label>
               <input
                 id="tamano"
@@ -301,8 +310,9 @@ export function EditorPlano({ inicial, editable }: { inicial: Plano; editable: b
                 onChange={(e) => cambiar((d) => ({ ...d, tamano_living: Number(e.target.value) }))}
                 className="w-full"
               />
-              <p className="text-xs text-stone-500">{doc.zonas.length} zona{doc.zonas.length === 1 ? "" : "s"} marcada{doc.zonas.length === 1 ? "" : "s"}{doc.referencia ? " · escenario marcado" : ""}</p>
-              <SubirArchivo etiqueta={subiendo ? "Subiendo…" : "Cambiar imagen del jardín"} acepta="image/jpeg,image/png,image/webp" alElegir={subirImagen} />
+              <p className="text-xs text-stone-500">
+                {doc.zonas.length} zona{doc.zonas.length === 1 ? "" : "s"} de livings · {referencia ? "escenario dibujado" : "falta dibujar el escenario"}
+              </p>
             </section>
           )}
         </aside>
@@ -315,7 +325,7 @@ export function EditorPlano({ inicial, editable }: { inicial: Plano; editable: b
             {resumen.map((r) => (
               <div key={r.mozo.id || "sin"} className="tarjeta break-inside-avoid p-4 text-sm">
                 <p className="flex items-center gap-2 font-semibold">
-                  <span className="inline-block h-3 w-3 rounded-full" style={{ background: colorMozo(doc.mozos, r.mozo.id || null) }} />
+                  <span className="inline-block h-3 w-3 rounded-full" style={{ background: colorMozo(doc.mozos, r.mozo.id || null), printColorAdjust: "exact" }} />
                   {r.mozo.nombre}
                 </p>
                 <p className="text-xs text-stone-500">
@@ -338,28 +348,27 @@ export function EditorPlano({ inicial, editable }: { inicial: Plano; editable: b
   );
 }
 
-/** Imagen del jardín con las zonas, el escenario y los livings encima. */
+/** Jardín dibujado (pasto, escenario, barras…) con las zonas y los livings encima. */
 function Lienzo({
-  imagenUrl,
-  relacion,
   doc,
   modo,
   seleccionado,
   alSeleccionar,
   alCambiar,
+  alDibujar,
 }: {
-  imagenUrl: string;
-  relacion: number;
   doc: DocumentoPlano;
   modo: Modo | null;
   seleccionado: string | null;
   alSeleccionar: (id: string | null) => void;
   alCambiar: (cambio: (d: DocumentoPlano) => DocumentoPlano) => void;
+  alDibujar: (r: Rect) => void;
 }) {
   const caja = useRef<HTMLDivElement>(null);
   const [anchoPx, setAnchoPx] = useState(800);
   const [borrador, setBorrador] = useState<{ inicio: Punto; fin: Punto } | null>(null);
-  const arrastre = useRef<{ id: string; movido: boolean } | null>(null);
+  const arrastre = useRef<string | null>(null);
+  const dibujando = modo === "zonas" || modo === "dibujar";
 
   useEffect(() => {
     const el = caja.current;
@@ -377,101 +386,104 @@ function Lienzo({
   const alApretarFondo = (e: EventoPuntero<HTMLDivElement>) => {
     if (!modo) return;
     const p = punto(e);
-    if (modo === "zonas") {
+    if (dibujando) {
       e.currentTarget.setPointerCapture(e.pointerId);
       setBorrador({ inicio: p, fin: p });
-    } else if (modo === "referencia") {
-      alCambiar((d) => ({ ...d, referencia: p }));
-    } else {
-      // Mover: si hay un living elegido sin ubicar, se pone donde se tocó.
-      const elegido = doc.livings.find((l) => l.id === seleccionado);
-      if (elegido && elegido.x === null) alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === elegido.id ? { ...l, ...p } : l)) }));
-      else alSeleccionar(null);
+      return;
     }
+    // Mover: si hay un living elegido sin ubicar, se pone donde se tocó.
+    const elegido = doc.livings.find((l) => l.id === seleccionado);
+    if (elegido && elegido.x === null) alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === elegido.id ? { ...l, ...p } : l)) }));
+    else alSeleccionar(null);
   };
 
   const alMover = (e: EventoPuntero<HTMLDivElement>) => {
     if (borrador) setBorrador({ ...borrador, fin: punto(e) });
     if (arrastre.current) {
       const p = punto(e);
-      const id = arrastre.current.id;
-      arrastre.current.movido = true;
+      const id = arrastre.current;
       alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === id ? { ...l, ...p } : l)) }));
     }
   };
 
-  const alSoltar = () => {
-    if (borrador) {
-      const zona: Zona = {
-        id: nuevoId(),
-        x: Math.min(borrador.inicio.x, borrador.fin.x),
-        y: Math.min(borrador.inicio.y, borrador.fin.y),
-        w: Math.abs(borrador.fin.x - borrador.inicio.x),
-        h: Math.abs(borrador.fin.y - borrador.inicio.y),
-      };
-      if (zona.w > 0.01 && zona.h > 0.01) alCambiar((d) => ({ ...d, zonas: [...d.zonas, zona] }));
-      setBorrador(null);
-    }
-    arrastre.current = null;
-  };
-
-  const diametro = doc.tamano_living * anchoPx;
-  const rect = borrador && {
+  const rectBorrador = borrador && {
     x: Math.min(borrador.inicio.x, borrador.fin.x),
     y: Math.min(borrador.inicio.y, borrador.fin.y),
     w: Math.abs(borrador.fin.x - borrador.inicio.x),
     h: Math.abs(borrador.fin.y - borrador.inicio.y),
   };
 
+  const alSoltar = () => {
+    if (rectBorrador && rectBorrador.w > 0.01 && rectBorrador.h > 0.01) alDibujar(rectBorrador);
+    setBorrador(null);
+    arrastre.current = null;
+  };
+
+  const posicion = (r: Rect) => ({ left: `${r.x * 100}%`, top: `${r.y * 100}%`, width: `${r.w * 100}%`, height: `${r.h * 100}%` });
+  const diametro = doc.tamano_living * anchoPx;
+  const borrar = (accion: () => void) => (
+    <button
+      type="button"
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={accion}
+      className="absolute right-0 top-0 h-6 w-6 bg-stone-900/80 text-sm leading-6 text-white"
+      aria-label="Borrar"
+    >
+      ×
+    </button>
+  );
+
   return (
     <div
       ref={caja}
-      className={`relative w-full touch-none select-none overflow-hidden rounded-md border border-stone-300 bg-stone-100 ${modo === "zonas" || modo === "referencia" ? "cursor-crosshair" : ""}`}
-      style={{ aspectRatio: `1 / ${relacion}` }}
+      className={`relative w-full touch-none select-none overflow-hidden rounded-md border border-green-900/30 ${dibujando ? "cursor-crosshair" : ""}`}
+      style={{
+        aspectRatio: `1 / ${doc.proporcion}`,
+        // Pasto cortado en franjas.
+        background: "repeating-linear-gradient(90deg, #4a8c47 0 4%, #539a4f 4% 8%)",
+        printColorAdjust: "exact",
+      }}
       onPointerDown={alApretarFondo}
       onPointerMove={alMover}
       onPointerUp={alSoltar}
       onPointerCancel={alSoltar}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element -- link firmado temporal de Supabase */}
-      <img src={imagenUrl} alt="Plano del jardín" draggable={false} className="pointer-events-none absolute inset-0 h-full w-full object-contain" />
+      {doc.elementos.map((el) => {
+        const tipo = TIPOS_ELEMENTO.find((t) => t.id === el.tipo)!;
+        return (
+          <div
+            key={el.id}
+            className="absolute flex items-center justify-center overflow-hidden rounded-sm text-center text-[11px] font-semibold uppercase tracking-wide shadow-sm"
+            style={{ ...posicion(el), background: tipo.color, color: tipo.texto, printColorAdjust: "exact" }}
+          >
+            {el.w * anchoPx > 40 && el.h * anchoPx * doc.proporcion > 14 && <span className="px-1">{tipo.id === "escenario" ? "★ " : ""}{tipo.nombre}</span>}
+            {modo === "dibujar" && borrar(() => alCambiar((d) => ({ ...d, elementos: d.elementos.filter((x) => x.id !== el.id) })))}
+          </div>
+        );
+      })}
 
       {doc.zonas.map((z) => (
         <div
           key={z.id}
-          className={`absolute border-2 border-dashed ${modo === "zonas" ? "border-sky-500 bg-sky-400/20" : "border-sky-500/40 bg-sky-400/5"} print:hidden`}
-          style={{ left: `${z.x * 100}%`, top: `${z.y * 100}%`, width: `${z.w * 100}%`, height: `${z.h * 100}%` }}
+          className={`absolute border-2 border-dashed ${modo === "zonas" ? "border-white bg-white/20" : "border-white/40"} print:hidden`}
+          style={posicion(z)}
         >
-          {modo === "zonas" && (
-            <button
-              type="button"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => alCambiar((d) => ({ ...d, zonas: d.zonas.filter((x) => x.id !== z.id) }))}
-              className="absolute right-0 top-0 h-6 w-6 bg-sky-600 text-sm leading-6 text-white"
-              aria-label="Borrar zona"
-            >
-              ×
-            </button>
-          )}
+          {modo === "zonas" && borrar(() => alCambiar((d) => ({ ...d, zonas: d.zonas.filter((x) => x.id !== z.id) })))}
         </div>
       ))}
-      {rect && (
-        <div className="absolute border-2 border-sky-600 bg-sky-400/30" style={{ left: `${rect.x * 100}%`, top: `${rect.y * 100}%`, width: `${rect.w * 100}%`, height: `${rect.h * 100}%` }} />
-      )}
-
-      {doc.referencia && (
+      {rectBorrador && (
         <div
-          className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded bg-stone-900 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white"
-          style={{ left: `${doc.referencia.x * 100}%`, top: `${doc.referencia.y * 100}%` }}
-        >
-          ★ Escenario
-        </div>
+          className="absolute border-2 border-white"
+          style={{
+            ...posicion(rectBorrador),
+            background: modo === "dibujar" ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.2)",
+          }}
+        />
       )}
 
       {doc.livings
         .filter((l) => l.x !== null && l.y !== null)
         .map((l) => {
-          const color = colorMozo(doc.mozos, l.mozo_id);
           const elegido = l.id === seleccionado;
           return (
             <div
@@ -480,18 +492,25 @@ function Lienzo({
               tabIndex={0}
               title={`${l.nombre} · ${l.personas} personas · ${formatoPesos(l.consumicion)}`}
               onPointerDown={(e) => {
-                if (modo !== "mover" && modo !== null) return;
+                if (dibujando) return;
                 e.stopPropagation();
                 alSeleccionar(l.id);
                 if (modo === "mover") {
                   caja.current?.setPointerCapture(e.pointerId);
-                  arrastre.current = { id: l.id, movido: false };
+                  arrastre.current = l.id;
                 }
               }}
-              className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center overflow-hidden rounded-full border-2 text-center leading-tight text-white shadow ${
+              className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center overflow-hidden rounded-full border-2 border-white text-center leading-tight text-white shadow ${
                 modo === "mover" ? "cursor-grab active:cursor-grabbing" : ""
-              } ${elegido ? "z-10 ring-4 ring-amber-400" : ""}`}
-              style={{ left: `${l.x! * 100}%`, top: `${l.y! * 100}%`, width: diametro, height: diametro, background: color, borderColor: "white" }}
+              } ${elegido ? "z-10 ring-4 ring-amber-400" : ""} ${dibujando ? "pointer-events-none opacity-60" : ""}`}
+              style={{
+                left: `${l.x! * 100}%`,
+                top: `${l.y! * 100}%`,
+                width: diametro,
+                height: diametro,
+                background: colorMozo(doc.mozos, l.mozo_id),
+                printColorAdjust: "exact",
+              }}
             >
               {diametro >= 44 && <span className="w-full truncate px-1 text-[10px] font-semibold">{l.nombre}</span>}
               <span className={diametro >= 24 ? "text-[11px] font-bold" : "text-[8px] font-bold"}>{l.personas}</span>

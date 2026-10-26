@@ -4,6 +4,27 @@ import { z } from "zod";
 const coordenada = z.number().min(0).max(1);
 
 export const esquemaZona = z.object({ id: z.string().max(40), x: coordenada, y: coordenada, w: coordenada, h: coordenada });
+export const TIPOS_ELEMENTO = [
+  { id: "escenario", nombre: "Escenario", color: "#3f3f46", texto: "#ffffff" },
+  { id: "barra", nombre: "Barra", color: "#7c4a2d", texto: "#ffffff" },
+  { id: "camino", nombre: "Camino", color: "#d6c4a0", texto: "#57534e" },
+  { id: "pista", nombre: "Pista", color: "#a8a29e", texto: "#1c1917" },
+  { id: "banos", nombre: "Baños", color: "#93c5fd", texto: "#1e3a8a" },
+  { id: "entrada", nombre: "Entrada", color: "#fde68a", texto: "#78350f" },
+  { id: "cabina", nombre: "Cabina DJ", color: "#1c1917", texto: "#ffffff" },
+  { id: "arboles", nombre: "Árboles", color: "#166534", texto: "#dcfce7" },
+  { id: "otro", nombre: "Otro", color: "#e7e5e4", texto: "#44403c" },
+] as const;
+export type TipoElemento = (typeof TIPOS_ELEMENTO)[number]["id"];
+
+export const esquemaElemento = z.object({
+  id: z.string().max(40),
+  tipo: z.enum(TIPOS_ELEMENTO.map((t) => t.id) as [TipoElemento, ...TipoElemento[]]),
+  x: coordenada,
+  y: coordenada,
+  w: coordenada,
+  h: coordenada,
+});
 export const esquemaMozo = z.object({ id: z.string().max(40), nombre: z.string().trim().min(1).max(80) });
 export const esquemaLiving = z.object({
   id: z.string().max(40),
@@ -19,6 +40,8 @@ export const esquemaLiving = z.object({
 /** Lo que se guarda del plano (la imagen va aparte). */
 export const esquemaDocumento = z.object({
   tamano_living: z.number().min(0.005).max(0.3),
+  proporcion: z.number().min(0.2).max(3),
+  elementos: z.array(esquemaElemento).max(200),
   zonas: z.array(esquemaZona).max(100),
   referencia: z.object({ x: coordenada, y: coordenada }).nullable(),
   mozos: z.array(esquemaMozo).max(200),
@@ -26,14 +49,27 @@ export const esquemaDocumento = z.object({
 });
 
 export type Zona = z.infer<typeof esquemaZona>;
+export type Elemento = z.infer<typeof esquemaElemento>;
 export type Mozo = z.infer<typeof esquemaMozo>;
 export type Living = z.infer<typeof esquemaLiving>;
 export type DocumentoPlano = z.infer<typeof esquemaDocumento>;
 
-export type Plano = DocumentoPlano & {
-  imagen_url: string | null;
-  imagen_ancho: number | null;
-  imagen_alto: number | null;
+/** Formas del jardín (alto / ancho). */
+export const FORMAS = [
+  { nombre: "Apaisado", proporcion: 0.667 },
+  { nombre: "Muy apaisado", proporcion: 0.5 },
+  { nombre: "Cuadrado", proporcion: 1 },
+  { nombre: "Vertical", proporcion: 1.5 },
+];
+
+export const PLANO_VACIO: DocumentoPlano = {
+  tamano_living: 0.04,
+  proporcion: 0.667,
+  elementos: [],
+  zonas: [],
+  referencia: null,
+  mozos: [],
+  livings: [],
 };
 
 export const nuevoId = () => Math.random().toString(36).slice(2, 10);
@@ -53,10 +89,22 @@ export function colorMozo(mozos: Mozo[], id: string | null) {
  * Acomoda los livings en las zonas marcadas. Arma una grilla de lugares dentro
  * de cada zona (separados por el tamaño del living) y les da los lugares más
  * cercanos al punto de referencia a los de mayor consumición. Sin referencia,
- * se llenan las zonas en el orden en que se marcaron.
+ * se llenan las zonas en el orden en que se marcaron. Los lugares que pisan algo
+ * dibujado (camino, barra, escenario…) se saltean.
  * `relacion` = alto / ancho de la imagen (para que la separación sea pareja).
  */
-export function distribuir(livings: Living[], zonas: Zona[], tamano: number, relacion: number, referencia: { x: number; y: number } | null) {
+export function distribuir(
+  livings: Living[],
+  zonas: Zona[],
+  tamano: number,
+  relacion: number,
+  referencia: { x: number; y: number } | null,
+  obstaculos: { x: number; y: number; w: number; h: number }[] = [],
+) {
+  const radioX = tamano / 2;
+  const radioY = radioX / relacion;
+  const pisa = (x: number, y: number) =>
+    obstaculos.some((o) => x + radioX > o.x && x - radioX < o.x + o.w && y + radioY > o.y && y - radioY < o.y + o.h);
   const paso = tamano * 1.4;
   const pasoY = paso / relacion;
   const lugares: { x: number; y: number; orden: number }[] = [];
@@ -68,7 +116,9 @@ export function distribuir(livings: Living[], zonas: Zona[], tamano: number, rel
     const y0 = z.y + (z.h - (filas - 1) * pasoY) / 2;
     for (let f = 0; f < filas; f++) {
       for (let c = 0; c < columnas; c++) {
-        lugares.push({ x: x0 + c * paso, y: y0 + f * pasoY, orden: iz * 1e6 + f * 1e3 + c });
+        const x = x0 + c * paso;
+        const y = y0 + f * pasoY;
+        if (!pisa(x, y)) lugares.push({ x, y, orden: iz * 1e6 + f * 1e3 + c });
       }
     }
   });
