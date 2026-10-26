@@ -15,7 +15,7 @@ const require = createRequire(import.meta.url);
 const XLSX = require("xlsx") as typeof import("xlsx");
 
 const MARCA = "IMPORTADO PLANILLA";
-const MARCA_FECHA_ESTIMADA = `${MARCA} · fecha estimada (sin fecha en la planilla)`;
+const MARCA_SIN_FECHA = `${MARCA} · sin fecha en la planilla`;
 const ARCHIVO = process.argv.find((a) => a.endsWith(".xlsx")) ?? ".planilla/planilla.xlsx";
 const MODO = process.argv[2] ?? "importar";
 
@@ -194,9 +194,8 @@ async function importar() {
   const omitidas: string[] = [];
   const dudosas: string[] = [];
 
-  type Mov = Record<string, unknown> & { _evento: string | null; fecha: string; tipo: string; _estimada: boolean };
+  type Mov = Record<string, unknown> & { _evento: string | null; fecha: string | null; tipo: string; _estimada: boolean };
   const movimientos: Mov[] = [];
-  let ultimaFecha: string | null = null;
 
   for (const [i, f] of filas.entries()) {
     const nroFila = i + 2;
@@ -215,11 +214,9 @@ async function importar() {
       omitidas.push(`fila ${nroFila}: fecha "${String(f["FECHA"])}"`);
       continue;
     }
-    if (leida && !sinFecha) ultimaFecha = leida;
-    // Sin fecha en ningún lado: fila anterior por ahora; si es de un evento, se corrige abajo.
+    // Sin fecha en BASE ni en CASHFLOW COMPLETO: se carga sin fecha (no entra al cashflow).
     const estimada = !leida;
-    // Una fecha estimada nunca es futura (la fila anterior puede ser un cheque a fecha).
-    const fecha = leida ?? [ultimaFecha ?? "2026-04-01", hoy].sort()[0];
+    const fecha = leida;
     if (dudosa && !sinFecha) dudosas.push(`fila ${nroFila}: "${String(f["FECHA"])}" → ${fecha} (${String(f["DETALLE"]).trim()})`);
 
     const nombreCategoria =
@@ -248,26 +245,19 @@ async function importar() {
       facturado: f["FACTURADO"] === true || clave(f["FACTURADO"]) === "TRUE",
       iva: monto(f["IVA"]) || null,
       iibb: monto(f["IIBB"]) || null,
-      notas: estimada ? MARCA_FECHA_ESTIMADA : MARCA,
+      notas: estimada ? MARCA_SIN_FECHA : MARCA,
       _estimada: estimada,
     });
-  }
-
-  // Fecha estimada de movimientos de eventos: la última fecha real del evento.
-  for (const m of movimientos.filter((m) => m._estimada && m._evento)) {
-    const fechas = movimientos.filter((o) => o._evento === m._evento && !o._estimada).map((o) => o.fecha).sort();
-    if (fechas.length) m.fecha = [fechas.at(-1)!, hoy].sort()[0];
   }
 
   // Eventos: fecha = la del último ingreso (o último movimiento) del evento.
   const nombres = [...new Set(movimientos.map((m) => m._evento).filter((n): n is string => !!n))];
   const filasEventos = nombres.map((nombre) => {
     const todos = movimientos.filter((m) => m._evento === nombre);
-    // Solo fechas que vienen de la planilla; las estimadas no sirven para fechar el evento.
-    const conFecha = todos.filter((m) => !m._estimada);
-    const suyos = conFecha.length ? conFecha : todos;
-    const ingresos = suyos.filter((m) => m.tipo === "ingreso");
-    const fecha = (ingresos.length ? ingresos : suyos).map((m) => m.fecha).sort().at(-1)!;
+    const conFecha = todos.filter((m): m is Mov & { fecha: string } => m.fecha !== null);
+    const ingresos = conFecha.filter((m) => m.tipo === "ingreso");
+    // Sin ningún movimiento con fecha, el evento queda con la de hoy (se corrige en la app).
+    const fecha = (ingresos.length ? ingresos : conFecha).map((m) => m.fecha).sort().at(-1) ?? hoy;
     return { nombre, fecha, estado: fecha <= hoy ? "cerrado" : "planificado", notas: MARCA };
   });
 
@@ -299,7 +289,7 @@ async function importar() {
   }
 
   const estimadas = movimientos.filter((m) => m._estimada).length;
-  console.log(`Importados: ${eventos.length} eventos y ${filasTransacciones.length} movimientos (${estimadas} con fecha estimada).`);
+  console.log(`Importados: ${eventos.length} eventos y ${filasTransacciones.length} movimientos (${estimadas} sin fecha).`);
   if (omitidas.length) console.log(`\nOmitidas (${omitidas.length}):\n  ${omitidas.join("\n  ")}`);
   if (dudosas.length) console.log(`\nFechas dudosas, revisar (${dudosas.length}):\n  ${dudosas.join("\n  ")}`);
 }

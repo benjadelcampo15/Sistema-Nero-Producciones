@@ -63,6 +63,33 @@ export async function obtenerTransacciones(filtros: Filtros) {
     .order("creado_en", { ascending: false })
     .limit(LIMITE_LISTADO + 1);
 
+  consulta = aplicarFiltros(consulta, filtros);
+
+  const { data, error } = await consulta;
+  if (error) throw new Error(`No se pudieron leer los movimientos: ${error.message}`);
+
+  const filas = normalizarTransacciones(data);
+  const truncado = filas.length > LIMITE_LISTADO;
+  const transacciones = filas.slice(0, LIMITE_LISTADO);
+
+  return { transacciones, truncado, totales: calcularTotales(transacciones) };
+}
+
+/** Movimientos sin fecha (con los mismos filtros, salvo las fechas): no entran al cashflow. */
+export async function obtenerSinFecha(filtros: Filtros) {
+  const supabase = await crearClienteServidor();
+  const consulta = aplicarFiltros(
+    supabase.from("transacciones").select(CAMPOS_TRANSACCION).is("eliminado_en", null).is("fecha", null).order("creado_en", { ascending: false }).limit(LIMITE_LISTADO),
+    filtros,
+  );
+  const { data, error } = await consulta;
+  if (error) throw new Error(`No se pudieron leer los movimientos sin fecha: ${error.message}`);
+  const transacciones = normalizarTransacciones(data);
+  return { transacciones, totales: calcularTotales(transacciones) };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- el tipo del query builder de supabase es muy profundo
+function aplicarFiltros<T extends { eq: any; is: any; or: any }>(consulta: T, filtros: Filtros): T {
   if (filtros.tipo) consulta = consulta.eq("tipo", filtros.tipo);
   if (filtros.estado) consulta = consulta.eq("estado", filtros.estado);
   if (filtros.categoria) consulta = consulta.eq("categoria_id", filtros.categoria);
@@ -73,15 +100,7 @@ export async function obtenerTransacciones(filtros: Filtros) {
     const texto = filtros.q.replace(/[,()*%\\]/g, " ").trim();
     if (texto) consulta = consulta.or(`descripcion.ilike.*${texto}*,contraparte.ilike.*${texto}*`);
   }
-
-  const { data, error } = await consulta;
-  if (error) throw new Error(`No se pudieron leer los movimientos: ${error.message}`);
-
-  const filas = normalizarTransacciones(data);
-  const truncado = filas.length > LIMITE_LISTADO;
-  const transacciones = filas.slice(0, LIMITE_LISTADO);
-
-  return { transacciones, truncado, totales: calcularTotales(transacciones) };
+  return consulta;
 }
 
 function totalesDe(transacciones: Pick<Transaccion, "tipo" | "monto">[]): Totales {

@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
   const numericas = new Set(["Monto", "IVA", "IIBB"].map((c) => encabezado.indexOf(c)));
 
   const filas = transacciones.map((t) => [
-    formatoFecha(t.fecha),
+    t.fecha ? formatoFecha(t.fecha) : "Sin fecha",
     t.tipo === "ingreso" ? "Ingreso" : "Egreso",
     NOMBRE_ESTADO_MOVIMIENTO[t.estado],
     t.descripcion,

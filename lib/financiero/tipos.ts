@@ -44,7 +44,8 @@ export type Transaccion = {
   id: string;
   tipo: TipoMovimiento;
   monto: number;
-  fecha: string;
+  // null: sin fecha (no entra al cashflow ni a los totales por período).
+  fecha: string | null;
   descripcion: string;
   contraparte: string | null;
   medio_pago: MedioPago;

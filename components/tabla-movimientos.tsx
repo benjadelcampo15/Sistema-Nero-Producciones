@@ -41,7 +41,7 @@ export function TablaMovimientos({
           )}
           {transacciones.map((t) => (
             <tr key={t.id} className="hover:bg-stone-50">
-              <td className="whitespace-nowrap px-4 py-3 text-stone-600">{formatoFecha(t.fecha)}</td>
+              <td className="whitespace-nowrap px-4 py-3 text-stone-600">{t.fecha ? formatoFecha(t.fecha) : <span className="text-amber-700">Sin fecha</span>}</td>
               <td className="px-4 py-3">
                 <p className="font-medium">
                   {t.descripcion}

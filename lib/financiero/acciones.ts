@@ -29,7 +29,8 @@ const textoOpcional = z
 
 const esquemaTransaccion = z.object({
   tipo: z.enum(TIPOS, "Elegí si es ingreso o egreso"),
-  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"),
+  // Vacía = sin fecha (no entra al cashflow hasta que se le ponga).
+  fecha: z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"), z.literal("")]).transform((v) => v || null),
   monto: z.string(),
   descripcion: z.string().trim().min(1, "Falta la descripción").max(200),
   categoria_id: z.uuid("Elegí una categoría"),

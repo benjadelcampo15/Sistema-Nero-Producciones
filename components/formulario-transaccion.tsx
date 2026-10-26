@@ -86,8 +86,18 @@ export function FormularioTransaccion({ transaccion, categorias, eventos, evento
           />
         </div>
         <div>
-          <label htmlFor="fecha" className="etiqueta">Fecha</label>
-          <input id="fecha" name="fecha" type="date" required defaultValue={v("fecha", transaccion?.fecha ?? hoy())} className="campo" />
+          <label htmlFor="fecha" className="etiqueta">
+            Fecha <span className="font-normal text-stone-400">(vacía = sin fecha, no entra al cashflow)</span>
+          </label>
+          <input
+            id="fecha"
+            name="fecha"
+            type="date"
+            // Uno nuevo arranca con hoy; uno sin fecha se edita sin fecha.
+            defaultValue={v("fecha", transaccion ? (transaccion.fecha ?? "") : hoy())}
+            className="campo"
+          />
+
         </div>
       </div>
 

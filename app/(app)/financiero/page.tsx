@@ -5,6 +5,7 @@ import {
   leerFiltros,
   obtenerCategorias,
   obtenerEventosResumidos,
+  obtenerSinFecha,
   obtenerTransacciones,
 } from "@/lib/financiero/consultas";
 import { formatoPesos, hoy, periodosRapidos } from "@/lib/formato";
@@ -20,8 +21,9 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
 
   const parametros = await searchParams;
   const filtros = leerFiltros(parametros);
-  const [{ transacciones, truncado, totales }, categorias, eventos] = await Promise.all([
+  const [{ transacciones, truncado, totales }, sinFecha, categorias, eventos] = await Promise.all([
     obtenerTransacciones(filtros),
+    obtenerSinFecha(filtros),
     obtenerCategorias({ incluirInactivas: true }),
     obtenerEventosResumidos(),
   ]);
@@ -31,8 +33,8 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
   ).toString();
   // Primero lo que ya pasó (más reciente arriba); lo de fecha futura va aparte, del más cercano al más lejano.
   const fechaHoy = hoy();
-  const pasados = transacciones.filter((t) => t.fecha <= fechaHoy);
-  const proximos = transacciones.filter((t) => t.fecha > fechaHoy).reverse();
+  const pasados = transacciones.filter((t) => t.fecha !== null && t.fecha <= fechaHoy);
+  const proximos = transacciones.filter((t) => t.fecha !== null && t.fecha > fechaHoy).reverse();
 
   const volverA = `/financiero?${consulta}`;
 
@@ -104,6 +106,20 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
               </h2>
               <TablaMovimientos transacciones={proximos} editable={editable} volverA={volverA} />
             </section>
+          )}
+
+          {sinFecha.transacciones.length > 0 && (
+            <details className="space-y-3">
+              <summary className="cursor-pointer text-lg font-semibold">
+                Sin fecha ({sinFecha.transacciones.length}){" "}
+                <span className="text-sm font-normal text-stone-500">
+                  · no entran en los totales ni en el cashflow · ingresos {formatoPesos(sinFecha.totales.total.ingresos)} · egresos{" "}
+                  {formatoPesos(sinFecha.totales.total.egresos)}
+                </span>
+              </summary>
+              <p className="text-sm text-stone-500">Editá cada uno para ponerle fecha cuando se sepa.</p>
+              <TablaMovimientos transacciones={sinFecha.transacciones} editable={editable} volverA={volverA} />
+            </details>
           )}
         </ZonaResultados>
       </div>
