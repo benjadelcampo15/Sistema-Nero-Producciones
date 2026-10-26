@@ -1,5 +1,13 @@
 import type { Persona } from "@/lib/empleados/tipos";
 
+/** "20123456789" → "20-12345678-9" (y a medida que se escribe: "20-123…"). */
+function conGuiones(valor: string) {
+  const d = valor.replace(/\D/g, "").slice(0, 11);
+  if (d.length > 10) return `${d.slice(0, 2)}-${d.slice(2, 10)}-${d.slice(10)}`;
+  if (d.length > 2) return `${d.slice(0, 2)}-${d.slice(2)}`;
+  return d;
+}
+
 /** Campos de datos del empleado: los usa el formulario público y la ficha en la app. */
 export function CamposPersona({ persona, v, sufijo = "" }: { persona?: Partial<Persona>; v: (campo: string, inicial: string) => string; sufijo?: string }) {
   const campo = (id: keyof Persona, inicial = "") => v(id, (persona?.[id] as string | null | undefined) ?? inicial);
@@ -20,7 +28,19 @@ export function CamposPersona({ persona, v, sufijo = "" }: { persona?: Partial<P
       </div>
       <div>
         <label htmlFor={idDe("cuil")} className="etiqueta">CUIL</label>
-        <input id={idDe("cuil")} name="cuil" inputMode="numeric" maxLength={14} placeholder="20-12345678-9" defaultValue={campo("cuil")} className="campo font-mono" />
+        <input
+          id={idDe("cuil")}
+          name="cuil"
+          inputMode="numeric"
+          maxLength={13}
+          placeholder="20-12345678-9"
+          defaultValue={conGuiones(campo("cuil"))}
+          // Los guiones se ponen solos al escribir.
+          onChange={(e) => {
+            e.target.value = conGuiones(e.target.value);
+          }}
+          className="campo font-mono"
+        />
       </div>
       <div>
         <label htmlFor={idDe("fecha_nacimiento")} className="etiqueta">Fecha de nacimiento</label>
