@@ -34,6 +34,9 @@ export const esquemaLiving = z.object({
   notas: z.string().max(500).nullable(),
   x: coordenada.nullable(),
   y: coordenada.nullable(),
+  // Medidas del rectángulo (las calcula la distribución).
+  w: coordenada.nullable().optional(),
+  h: coordenada.nullable().optional(),
   mozo_id: z.string().max(40).nullable(),
 });
 
@@ -85,20 +88,6 @@ export function colorMozo(mozos: Mozo[], id: string | null) {
   return i < 0 ? "#78716c" : COLORES_MOZOS[i % COLORES_MOZOS.length];
 }
 
-/** Personas promedio por living (para escalar el tamaño de cada uno). */
-export function promedioPersonas(livings: Living[]) {
-  const con = livings.filter((l) => l.personas > 0);
-  return con.length ? con.reduce((s, l) => s + l.personas, 0) / con.length : 1;
-}
-
-/**
- * Diámetro del living (en proporción del ancho del jardín): `tamano` es el de
- * un living con la cantidad promedio de personas; el área crece con las personas.
- */
-export function diametroLiving(personas: number, tamano: number, promedio: number) {
-  return tamano * Math.min(1.7, Math.max(0.6, Math.sqrt(Math.max(1, personas) / promedio)));
-}
-
 /** "$1,2M", "$450k": la consumición abreviada para que entre en el living. */
 export function consumicionCorta(monto: number) {
   if (monto >= 1e6) return `$${(monto / 1e6).toFixed(monto >= 1e7 ? 0 : 1).replace(".", ",").replace(/,0$/, "")}M`;
@@ -106,68 +95,116 @@ export function consumicionCorta(monto: number) {
   return `$${Math.round(monto)}`;
 }
 
+/** Tamaño de un living sin medidas (agregado a mano): el de los demás, o uno por defecto. */
+export function medidasPorDefecto(livings: Living[], relacion: number) {
+  const con = livings.filter((l) => l.w && l.h);
+  if (!con.length) return { w: 0.1, h: 0.12 / relacion };
+  return { w: con.reduce((s, l) => s + l.w!, 0) / con.length, h: con.reduce((s, l) => s + l.h!, 0) / con.length };
+}
+
+const peso = (l: Living) => Math.max(1, l.personas);
+
 /**
- * Acomoda los livings en las zonas marcadas. Recorre lugares posibles dentro de
- * las zonas, del más cercano al punto de referencia (escenario) al más lejano,
- * y a cada living (de mayor a menor consumición) le da el primero donde entra
- * entero sin pisar otro living ni nada dibujado (camino, barra, escenario…).
- * Sin referencia, se llenan las zonas en el orden en que se marcaron.
- * `relacion` = alto / ancho del jardín (las coordenadas van de 0 a 1 en cada eje).
+ * Acomoda los livings como rectángulos apilados en columnas dentro de cada
+ * zona: todos los de una columna tienen el mismo ancho y el alto según la
+ * cantidad de personas. Prueba con 1, 2, 3… columnas y se queda con la que
+ * deja los livings más grandes (con formas razonables). Los de mayor
+ * consumición van a la zona y a las columnas más cercanas al escenario, y se
+ * apilan desde el lado del escenario.
+ * `relacion` = alto / ancho del jardín (x e y van de 0 a 1 en cada eje).
  */
-export function distribuir(
-  livings: Living[],
-  zonas: Zona[],
-  tamano: number,
-  relacion: number,
-  referencia: { x: number; y: number } | null,
-  obstaculos: { x: number; y: number; w: number; h: number }[] = [],
-) {
-  const paso = tamano * 0.25;
-  const lugares: { x: number; y: number; zona: Zona; orden: number }[] = [];
-  zonas.forEach((zona, iz) => {
-    let f = 0;
-    for (let y = zona.y; y <= zona.y + zona.h; y += paso / relacion, f++) {
-      let c = 0;
-      for (let x = zona.x; x <= zona.x + zona.w; x += paso, c++) lugares.push({ x, y, zona, orden: iz * 1e8 + f * 1e4 + c });
-    }
-  });
-  if (referencia) {
-    const distancia = (p: { x: number; y: number }) => Math.hypot(p.x - referencia.x, (p.y - referencia.y) * relacion);
-    lugares.sort((a, b) => distancia(a) - distancia(b));
-  } else {
-    lugares.sort((a, b) => a.orden - b.orden);
-  }
-
-  const promedio = promedioPersonas(livings);
-  const margen = tamano * 0.15;
-  const ubicados: { x: number; y: number; r: number }[] = [];
-  const posicion = new Map<string, { x: number; y: number }>();
+export function distribuir(livings: Living[], zonas: Zona[], relacion: number, referencia: { x: number; y: number } | null) {
+  if (!zonas.length || !livings.length) return { livings: livings.map((l) => ({ ...l, x: null, y: null })), sinLugar: livings.length };
   const orden = [...livings].sort((a, b) => b.consumicion - a.consumicion || b.personas - a.personas);
+  const centro = (z: Zona) => ({ x: z.x + z.w / 2, y: z.y + z.h / 2 });
+  const cerca = (p: { x: number; y: number }) => (referencia ? Math.hypot(p.x - referencia.x, (p.y - referencia.y) * relacion) : 0);
+  const zonasOrdenadas = referencia ? [...zonas].sort((a, b) => cerca(centro(a)) - cerca(centro(b))) : zonas;
 
+  // Reparto entre zonas según su superficie (en personas).
+  const superficie = zonasOrdenadas.reduce((s, z) => s + z.w * z.h, 0);
+  const totalPersonas = orden.reduce((s, l) => s + peso(l), 0);
+  const grupos: Living[][] = zonasOrdenadas.map(() => []);
+  let iz = 0;
+  let acumulado = 0;
+  let cupo = (zonasOrdenadas[0].w * zonasOrdenadas[0].h * totalPersonas) / superficie;
   for (const l of orden) {
-    const r = diametroLiving(l.personas, tamano, promedio) / 2;
-    const ry = r / relacion;
-    const lugar = lugares.find(
-      ({ x, y, zona }) =>
-        // Entero dentro de su zona…
-        x - r >= zona.x && x + r <= zona.x + zona.w && y - ry >= zona.y && y + ry <= zona.y + zona.h &&
-        // …sin pisar lo dibujado…
-        !obstaculos.some((o) => x + r > o.x && x - r < o.x + o.w && y + ry > o.y && y - ry < o.y + o.h) &&
-        // …ni a otro living.
-        ubicados.every((u) => Math.hypot(u.x - x, (u.y - y) * relacion) >= u.r + r + margen),
-    );
-    if (!lugar) continue;
-    ubicados.push({ x: lugar.x, y: lugar.y, r });
-    posicion.set(l.id, { x: lugar.x, y: lugar.y });
+    while (iz < zonasOrdenadas.length - 1 && acumulado + peso(l) / 2 > cupo) {
+      iz++;
+      cupo += (zonasOrdenadas[iz].w * zonasOrdenadas[iz].h * totalPersonas) / superficie;
+    }
+    grupos[iz].push(l);
+    acumulado += peso(l);
   }
 
+  const posicion = new Map<string, { x: number; y: number; w: number; h: number }>();
+  zonasOrdenadas.forEach((zona, i) => {
+    for (const [id, p] of apilar(grupos[i], zona, relacion, referencia)) posicion.set(id, p);
+  });
   return {
     livings: livings.map((l) => {
       const p = posicion.get(l.id);
-      return { ...l, x: p ? p.x : null, y: p ? p.y : null };
+      return p ? { ...l, ...p } : { ...l, x: null, y: null };
     }),
     sinLugar: livings.length - posicion.size,
   };
+}
+
+/** Apila los livings (ya ordenados por prioridad) en columnas dentro de una zona. */
+function apilar(livings: Living[], zona: Zona, relacion: number, referencia: { x: number; y: number } | null) {
+  const resultado = new Map<string, { x: number; y: number; w: number; h: number }>();
+  if (!livings.length) return resultado;
+  // Se trabaja en unidades del ancho del jardín en los dos ejes.
+  const ancho = zona.w;
+  const alto = zona.h * relacion;
+  const espacio = Math.max(0.006, Math.min(ancho, alto) * 0.035);
+  const promedio = livings.reduce((s, l) => s + peso(l), 0) / livings.length;
+
+  let mejor: { columnas: Living[][]; anchoColumna: number; unidad: number; puntaje: number } | null = null;
+  for (let k = 1; k <= Math.min(livings.length, 10); k++) {
+    const anchoColumna = (ancho - espacio * (k + 1)) / k;
+    if (anchoColumna <= 0) break;
+    // Cada living a la columna con menos personas: columnas parejas.
+    const columnas: Living[][] = Array.from({ length: k }, () => []);
+    const suma = new Array<number>(k).fill(0);
+    for (const l of livings) {
+      const c = suma.indexOf(Math.min(...suma));
+      columnas[c].push(l);
+      suma[c] += peso(l);
+    }
+    // Alto por persona: el máximo con el que entra la columna más cargada.
+    const unidad = Math.min(...columnas.map((col, c) => (col.length ? (alto - espacio * (col.length + 1)) / suma[c] : Infinity)));
+    if (unidad <= 0) continue;
+    // Más grande es mejor, pero sin livings demasiado finitos ni demasiado chatos.
+    const forma = (unidad * promedio) / anchoColumna;
+    const puntaje = unidad * anchoColumna * (forma > 3.5 ? 3.5 / forma : forma < 0.6 ? forma / 0.6 : 1);
+    if (!mejor || puntaje > mejor.puntaje) mejor = { columnas, anchoColumna, unidad, puntaje };
+  }
+  if (!mejor) return resultado;
+
+  // Columnas más cercanas al escenario primero; se apila desde el lado del escenario.
+  const k = mejor.columnas.length;
+  const xColumna = (i: number) => zona.x + espacio + i * (mejor!.anchoColumna + espacio);
+  const posiciones = Array.from({ length: k }, (_, i) => i);
+  if (referencia) posiciones.sort((a, b) => Math.abs(xColumna(a) + mejor!.anchoColumna / 2 - referencia.x) - Math.abs(xColumna(b) + mejor!.anchoColumna / 2 - referencia.x));
+  const desdeAbajo = referencia !== null && referencia.y > zona.y + zona.h / 2;
+
+  mejor.columnas.forEach((columna, c) => {
+    const altos = columna.map((l) => peso(l) * mejor!.unidad);
+    // El espacio que sobra se reparte parejo entre los livings.
+    const hueco = (alto - altos.reduce((s, h) => s + h, 0)) / (columna.length + 1);
+    let y = hueco;
+    columna.forEach((l, i) => {
+      const yArriba = desdeAbajo ? alto - y - altos[i] : y;
+      resultado.set(l.id, {
+        x: xColumna(posiciones[c]) + mejor!.anchoColumna / 2,
+        y: zona.y + (yArriba + altos[i] / 2) / relacion,
+        w: mejor!.anchoColumna,
+        h: altos[i] / relacion,
+      });
+      y += altos[i] + hueco;
+    });
+  });
+  return resultado;
 }
 
 /**

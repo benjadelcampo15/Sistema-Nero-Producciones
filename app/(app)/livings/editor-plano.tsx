@@ -9,10 +9,9 @@ import {
   asignarMozos,
   colorMozo,
   consumicionCorta,
-  diametroLiving,
+  medidasPorDefecto,
   distribuir,
   nuevoId,
-  promedioPersonas,
   resumenPorMozo,
   type DocumentoPlano,
   type Elemento,
@@ -78,25 +77,13 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
       }
     });
 
-  /**
-   * Acomoda los livings en las zonas (sin zonas, en todo el jardín). Si no
-   * entran todos, achica los livings hasta que entren.
-   */
+  /** Acomoda los livings en columnas dentro de las zonas (sin zonas, en todo el jardín). */
   const acomodar = (livings: Living[]) => {
-    const zonas = doc.zonas.length ? doc.zonas : [{ id: "todo", x: 0.01, y: 0.01, w: 0.98, h: 0.98 }];
-    let tamano = doc.tamano_living;
-    let r = distribuir(livings, zonas, tamano, relacion, referencia, doc.elementos);
-    while (r.sinLugar > 0 && tamano > 0.016) {
-      tamano = Math.max(0.015, tamano * 0.9);
-      r = distribuir(livings, zonas, tamano, relacion, referencia, doc.elementos);
-    }
+    const zonas = doc.zonas.length ? doc.zonas : [{ id: "todo", x: 0.02, y: 0.02, w: 0.96, h: 0.96 }];
+    const r = distribuir(livings, zonas, relacion, referencia);
     const resultado = doc.mozos.length ? asignarMozos(r.livings, doc.mozos, relacion, referencia) : r.livings;
-    cambiar((d) => ({ ...d, tamano_living: tamano, livings: resultado }));
-    const avisos = [
-      !doc.zonas.length && "No hay zonas marcadas: se usó todo el jardín.",
-      tamano < doc.tamano_living && !r.sinLugar && "Se achicaron los livings para que entren todos (agrandá las zonas si los querés más grandes).",
-      r.sinLugar > 0 && `${r.sinLugar} no entraron ni achicándolos: agrandá las zonas.`,
-    ].filter((a): a is string => Boolean(a));
+    cambiar((d) => ({ ...d, livings: resultado }));
+    const avisos = [!doc.zonas.length && "No hay zonas marcadas: se usó todo el jardín."].filter((a): a is string => Boolean(a));
     return { sinLugar: r.sinLugar, avisos };
   };
 
@@ -317,17 +304,6 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
                   <option key={f.proporcion} value={f.proporcion}>{f.nombre}</option>
                 ))}
               </select>
-              <label className="etiqueta" htmlFor="tamano">Tamaño de los livings</label>
-              <input
-                id="tamano"
-                type="range"
-                min={0.015}
-                max={0.12}
-                step={0.001}
-                value={doc.tamano_living}
-                onChange={(e) => cambiar((d) => ({ ...d, tamano_living: Number(e.target.value) }))}
-                className="w-full"
-              />
               <p className="text-xs text-stone-500">
                 {doc.zonas.length} zona{doc.zonas.length === 1 ? "" : "s"} de livings · {referencia ? "escenario dibujado" : "falta dibujar el escenario"}
               </p>
@@ -411,7 +387,10 @@ function Lienzo({
     }
     // Mover: si hay un living elegido sin ubicar, se pone donde se tocó.
     const elegido = doc.livings.find((l) => l.id === seleccionado);
-    if (elegido && elegido.x === null) alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === elegido.id ? { ...l, ...p } : l)) }));
+    if (elegido && elegido.x === null) {
+      const medidas = elegido.w && elegido.h ? {} : medidasPorDefecto(doc.livings, doc.proporcion);
+      alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === elegido.id ? { ...l, ...medidas, ...p } : l)) }));
+    }
     else alSeleccionar(null);
   };
 
@@ -438,7 +417,7 @@ function Lienzo({
   };
 
   const posicion = (r: Rect) => ({ left: `${r.x * 100}%`, top: `${r.y * 100}%`, width: `${r.w * 100}%`, height: `${r.h * 100}%` });
-  const promedio = promedioPersonas(doc.livings);
+  const porDefecto = medidasPorDefecto(doc.livings, doc.proporcion);
   const borrar = (accion: () => void) => (
     <button
       type="button"
@@ -503,8 +482,10 @@ function Lienzo({
         .filter((l) => l.x !== null && l.y !== null)
         .map((l) => {
           const elegido = l.id === seleccionado;
-          // Más personas, living más grande.
-          const diametro = diametroLiving(l.personas, doc.tamano_living, promedio) * anchoPx;
+          // Rectángulo en px: el alto según las personas (lo calcula la distribución).
+          const anchoL = (l.w ?? porDefecto.w) * anchoPx;
+          const altoL = (l.h ?? porDefecto.h) * anchoPx * doc.proporcion;
+          const chico = Math.min(anchoL, altoL);
           return (
             <div
               key={l.id}
@@ -520,21 +501,21 @@ function Lienzo({
                   arrastre.current = l.id;
                 }
               }}
-              className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center overflow-hidden rounded-full border-2 border-white text-center leading-tight text-white shadow ${
+              className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center overflow-hidden rounded-md border-2 border-white text-center leading-tight text-white shadow ${
                 modo === "mover" ? "cursor-grab active:cursor-grabbing" : ""
               } ${elegido ? "z-10 ring-4 ring-amber-400" : ""} ${dibujando ? "pointer-events-none opacity-60" : ""}`}
               style={{
                 left: `${l.x! * 100}%`,
                 top: `${l.y! * 100}%`,
-                width: diametro,
-                height: diametro,
+                width: anchoL,
+                height: altoL,
                 background: colorMozo(doc.mozos, l.mozo_id),
                 printColorAdjust: "exact",
               }}
             >
-              {diametro >= 64 && <span className="w-full truncate px-1 text-[10px] font-semibold">{l.nombre}</span>}
-              <span className={diametro >= 36 ? "text-[11px] font-bold" : "text-[8px] font-bold"}>{l.personas}p</span>
-              {diametro >= 26 && <span className={diametro >= 44 ? "text-[10px]" : "text-[8px]"}>{consumicionCorta(l.consumicion)}</span>}
+              {anchoL >= 50 && altoL >= 46 && <span className="w-full truncate px-1 text-[11px] font-semibold">{l.nombre}</span>}
+              <span className={chico >= 34 ? "text-xs font-bold" : "text-[9px] font-bold"}>{l.personas}p</span>
+              {chico >= 24 && <span className={chico >= 40 ? "text-[11px]" : "text-[9px]"}>{consumicionCorta(l.consumicion)}</span>}
             </div>
           );
         })}
