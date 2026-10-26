@@ -7,6 +7,7 @@ export const SECCIONES = [
   { id: "eventos", nombre: "Eventos", href: "/eventos", grupo: "Eventos" },
   { id: "presupuestos", nombre: "Presupuestos", href: "/presupuestos", grupo: "Eventos" },
   { id: "livings", nombre: "Livings VIP", href: "/livings", grupo: "Eventos" },
+  { id: "operativa", nombre: "Empleados", href: "/empleados", grupo: "Eventos" },
 ] as const;
 
 /**
@@ -38,5 +39,5 @@ export function alcanza(nivel: NivelPermiso, requerido: NivelPermiso) {
 }
 
 export function sinPermisos(): Permisos {
-  return { financiero: "ninguno", eventos: "ninguno", facturas: "ninguno", stock: "ninguno", facturar: "ninguno", presupuestos: "ninguno", cheques: "ninguno", livings: "ninguno" };
+  return { financiero: "ninguno", eventos: "ninguno", facturas: "ninguno", stock: "ninguno", facturar: "ninguno", presupuestos: "ninguno", cheques: "ninguno", livings: "ninguno", operativa: "ninguno" };
 }
