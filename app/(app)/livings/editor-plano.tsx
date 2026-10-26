@@ -25,9 +25,9 @@ type Punto = { x: number; y: number };
 type Rect = { x: number; y: number; w: number; h: number };
 
 const AYUDA: Record<Modo, string> = {
-  mover: "Arrastrá los livings para moverlos. Tocá uno para ver o editar sus datos.",
-  dibujar: "Elegí qué dibujar y arrastrá sobre el pasto. La × lo borra. Los livings de mayor consumición van más cerca del escenario.",
-  zonas: "Arrastrá sobre el pasto para marcar dónde pueden ir livings. La × borra una zona.",
+  mover: "Arrastrá los livings para moverlos. Tocá uno para editarlo y estiralo desde la esquina de abajo a la derecha.",
+  dibujar: "Elegí qué dibujar y arrastrá sobre el pasto. La esquina de abajo a la derecha lo estira y la × lo borra. Los livings de mayor consumición van más cerca del escenario.",
+  zonas: "Arrastrá sobre el pasto para marcar dónde pueden ir livings. La esquina de abajo a la derecha la estira y la × la borra.",
 };
 
 const NOMBRE_MODO: Record<Modo, string> = { mover: "Mover livings", dibujar: "Dibujar jardín", zonas: "Zonas de livings" };
@@ -362,6 +362,8 @@ function Lienzo({
   const [anchoPx, setAnchoPx] = useState(800);
   const [borrador, setBorrador] = useState<{ inicio: Punto; fin: Punto } | null>(null);
   const arrastre = useRef<string | null>(null);
+  // Estirar: qué se está agrandando y su esquina de arriba a la izquierda (fija).
+  const estirando = useRef<{ que: "living" | "zona" | "elemento"; id: string; x: number; y: number } | null>(null);
   const dibujando = modo === "zonas" || modo === "dibujar";
 
   useEffect(() => {
@@ -396,6 +398,16 @@ function Lienzo({
 
   const alMover = (e: EventoPuntero<HTMLDivElement>) => {
     if (borrador) setBorrador({ ...borrador, fin: punto(e) });
+    if (estirando.current) {
+      const { que, id, x, y } = estirando.current;
+      const p = punto(e);
+      const w = Math.max(0.015, p.x - x);
+      const h = Math.max(0.015, p.y - y);
+      if (que === "living") alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === id ? { ...l, w, h, x: x + w / 2, y: y + h / 2 } : l)) }));
+      if (que === "zona") alCambiar((d) => ({ ...d, zonas: d.zonas.map((z) => (z.id === id ? { ...z, w, h } : z)) }));
+      if (que === "elemento") alCambiar((d) => ({ ...d, elementos: d.elementos.map((el) => (el.id === id ? { ...el, w, h } : el)) }));
+      return;
+    }
     if (arrastre.current) {
       const p = punto(e);
       const id = arrastre.current;
@@ -414,10 +426,24 @@ function Lienzo({
     if (rectBorrador && rectBorrador.w > 0.01 && rectBorrador.h > 0.01) alDibujar(rectBorrador);
     setBorrador(null);
     arrastre.current = null;
+    estirando.current = null;
   };
 
   const posicion = (r: Rect) => ({ left: `${r.x * 100}%`, top: `${r.y * 100}%`, width: `${r.w * 100}%`, height: `${r.h * 100}%` });
   const porDefecto = medidasPorDefecto(doc.livings, doc.proporcion);
+  /** Tirador de la esquina de abajo a la derecha para estirar. */
+  const tirador = (que: "living" | "zona" | "elemento", id: string, x: number, y: number) => (
+    <span
+      role="presentation"
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        caja.current?.setPointerCapture(e.pointerId);
+        estirando.current = { que, id, x, y };
+      }}
+      className="absolute bottom-0 right-0 z-20 h-3.5 w-3.5 cursor-nwse-resize rounded-tl-sm border-l-2 border-t-2 border-stone-900 bg-white print:hidden"
+      aria-label="Estirar"
+    />
+  );
   const borrar = (accion: () => void) => (
     <button
       type="button"
@@ -455,6 +481,7 @@ function Lienzo({
           >
             {el.w * anchoPx > 40 && el.h * anchoPx * doc.proporcion > 14 && <span className="px-1">{tipo.id === "escenario" ? "★ " : ""}{tipo.nombre}</span>}
             {modo === "dibujar" && borrar(() => alCambiar((d) => ({ ...d, elementos: d.elementos.filter((x) => x.id !== el.id) })))}
+            {modo === "dibujar" && tirador("elemento", el.id, el.x, el.y)}
           </div>
         );
       })}
@@ -466,6 +493,7 @@ function Lienzo({
           style={posicion(z)}
         >
           {modo === "zonas" && borrar(() => alCambiar((d) => ({ ...d, zonas: d.zonas.filter((x) => x.id !== z.id) })))}
+          {modo === "zonas" && tirador("zona", z.id, z.x, z.y)}
         </div>
       ))}
       {rectBorrador && (
@@ -516,6 +544,7 @@ function Lienzo({
               {anchoL >= 50 && altoL >= 46 && <span className="w-full truncate px-1 text-[11px] font-semibold">{l.nombre}</span>}
               <span className={chico >= 34 ? "text-xs font-bold" : "text-[9px] font-bold"}>{l.personas}p</span>
               {chico >= 24 && <span className={chico >= 40 ? "text-[11px]" : "text-[9px]"}>{consumicionCorta(l.consumicion)}</span>}
+              {elegido && modo === "mover" && tirador("living", l.id, l.x! - (l.w ?? porDefecto.w) / 2, l.y! - (l.h ?? porDefecto.h) / 2)}
             </div>
           );
         })}
