@@ -6,34 +6,28 @@ import { descargarModelo, leerLivingsDeExcel } from "@/lib/livings/excel";
 import {
   ESPACIOS,
   FORMAS,
-  TIPOS_ELEMENTO,
+  LADOS,
   asignarMozosEspacios,
   colorMozo,
   consumicionCorta,
   datosEspacios,
   distribuirEspacios,
   espacioDe,
+  ladoEscenario,
   medidasPorDefecto,
   nuevoId,
   resumenPorMozo,
   type DocumentoPlano,
   type Espacio,
+  type Lado,
   type Living,
-  type TipoElemento,
 } from "@/lib/livings/tipos";
 import { formatoPesos } from "@/lib/formato";
 
-type Modo = "mover" | "dibujar" | "zonas";
 type Punto = { x: number; y: number };
-type Rect = { x: number; y: number; w: number; h: number };
 
-const AYUDA: Record<Modo, string> = {
-  mover: "Arrastrá los livings para moverlos (también del jardín al salón y al revés). Tocá uno para editarlo y estiralo desde la esquina de abajo a la derecha.",
-  dibujar: "Elegí qué dibujar y arrastrá sobre el jardín o el salón. La esquina de abajo a la derecha lo estira y la × lo borra. Los livings de mayor consumición van más cerca del escenario.",
-  zonas: "Arrastrá sobre el jardín o el salón para marcar dónde pueden ir livings (sin zonas se usa todo el espacio). La esquina de abajo a la derecha la estira y la × la borra.",
-};
-
-const NOMBRE_MODO: Record<Modo, string> = { mover: "Mover livings", dibujar: "Dibujar", zonas: "Zonas de livings" };
+const AYUDA =
+  "Arrastrá los livings para moverlos (también del jardín al salón y al revés). Tocá uno para editarlo y estiralo desde la esquina de abajo a la derecha.";
 
 /** Piso de cada espacio: pasto en franjas o baldosas grises. */
 const FONDO: Record<Espacio, React.CSSProperties> = {
@@ -47,8 +41,6 @@ const FONDO: Record<Espacio, React.CSSProperties> = {
 
 export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; editable: boolean }) {
   const [doc, setDoc] = useState<DocumentoPlano>(inicial);
-  const [modo, setModo] = useState<Modo>(!inicial.elementos.length ? "dibujar" : !inicial.zonas.length ? "zonas" : "mover");
-  const [tipoDibujo, setTipoDibujo] = useState<TipoElemento>("escenario");
   const [seleccionado, setSeleccionado] = useState<string | null>(null);
   const [sinGuardar, setSinGuardar] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string; detalles?: string[] } | null>(null);
@@ -73,7 +65,7 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
     iniciarGuardado(async () => {
       const r = await guardarPlano({
         ...doc,
-        referencia: espacios[0].referencia,
+        referencia: null,
         // Un nombre borrado no impide guardar.
         livings: doc.livings.map((l) => ({ ...l, nombre: l.nombre.trim() || "Living" })),
       });
@@ -103,7 +95,6 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
       }
       const r = acomodar(livings, true);
       setSeleccionado(null);
-      setModo("mover");
       setMensaje({ tipo: avisos.length || r.sinLugar ? "error" : "ok", texto: `${livings.length} livings cargados del Excel: ${r.resumen}.`, detalles: avisos });
     } catch {
       setMensaje({ tipo: "error", texto: "No se pudo leer el archivo. Subí un Excel (.xlsx, .xls) o CSV." });
@@ -140,12 +131,6 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
     const id = nuevoId();
     cambiar((d) => ({ ...d, livings: [...d.livings, { id, nombre: `Living ${d.livings.length + 1}`, personas: 0, consumicion: 0, notas: null, x: null, y: null, mozo_id: null }] }));
     setSeleccionado(id);
-    setModo("mover");
-  };
-
-  const alDibujar = (r: Rect, espacio: Espacio) => {
-    if (modo === "zonas") cambiar((d) => ({ ...d, zonas: [...d.zonas, { id: nuevoId(), espacio, ...r }] }));
-    if (modo === "dibujar") cambiar((d) => ({ ...d, elementos: [...d.elementos, { id: nuevoId(), tipo: tipoDibujo, espacio, ...r }] }));
   };
 
   const living = doc.livings.find((l) => l.id === seleccionado) ?? null;
@@ -158,18 +143,6 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
     <div className="space-y-4">
       {editable && (
         <div className="flex flex-wrap items-center gap-2 print:hidden">
-          <div className="flex overflow-hidden rounded-md border border-stone-300 text-sm">
-            {(["dibujar", "zonas", "mover"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setModo(m)}
-                className={`px-3 py-1.5 ${modo === m ? "bg-stone-900 text-white" : "bg-white hover:bg-stone-100"}`}
-              >
-                {NOMBRE_MODO[m]}
-              </button>
-            ))}
-          </div>
           <button type="button" onClick={redistribuir} disabled={!doc.livings.length} className="boton-secundario">Distribuir livings</button>
           <button type="button" onClick={repartirMozos} disabled={!doc.livings.length} className="boton-secundario">Asignar mozos</button>
           <button type="button" onClick={() => window.print()} className="boton-secundario">Imprimir</button>
@@ -190,26 +163,7 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
         </div>
       )}
 
-      {editable && (
-        <div className="flex flex-wrap items-center gap-2 print:hidden">
-          <p className="text-xs text-stone-500">{AYUDA[modo]}</p>
-          {modo === "dibujar" && (
-            <div className="flex flex-wrap gap-1">
-              {TIPOS_ELEMENTO.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setTipoDibujo(t.id)}
-                  className={`rounded-full border px-2.5 py-0.5 text-xs ${tipoDibujo === t.id ? "border-stone-900 ring-2 ring-stone-900" : "border-stone-300"}`}
-                  style={{ background: t.color, color: t.texto }}
-                >
-                  {t.nombre}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {editable && <p className="text-xs text-stone-500 print:hidden">{AYUDA}</p>}
       {doc.livings.length > 0 && (
         <p className={`text-sm ${sinUbicar.length ? "font-medium text-amber-800" : "text-stone-600"} print:hidden`}>
           {doc.livings.length - sinUbicar.length} de {doc.livings.length} livings en el plano
@@ -232,6 +186,17 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
                     </span>
                   </h2>
                   {editable && (
+                    <div className="flex gap-1 print:hidden">
+                    <select
+                      aria-label={`Escenario del ${e.nombre.toLowerCase()}`}
+                      value={ladoEscenario(doc, e.id)}
+                      onChange={(ev) => cambiar((d) => ({ ...d, escenarios: { ...d.escenarios, [e.id]: ev.target.value as Lado } }))}
+                      className="rounded border border-stone-300 bg-white px-1.5 py-0.5 text-xs"
+                    >
+                      {LADOS.map((l) => (
+                        <option key={l.id} value={l.id}>{l.nombre}</option>
+                      ))}
+                    </select>
                     <select
                       aria-label={`Forma del ${e.nombre.toLowerCase()}`}
                       value={relacionDe(e.id)}
@@ -242,19 +207,21 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
                         <option key={f.proporcion} value={f.proporcion}>{f.nombre}</option>
                       ))}
                     </select>
+                    </div>
                   )}
                 </div>
-                <Lienzo
-                  espacio={e.id}
-                  relacion={relacionDe(e.id)}
-                  doc={doc}
-                  modo={editable ? modo : null}
-                  seleccionado={seleccionado}
-                  alSeleccionar={setSeleccionado}
-                  alCambiar={cambiar}
-                  alDibujar={(r) => alDibujar(r, e.id)}
-                  relacionDe={relacionDe}
-                />
+                <ConEscenario lado={ladoEscenario(doc, e.id)}>
+                  <Lienzo
+                    espacio={e.id}
+                    relacion={relacionDe(e.id)}
+                    doc={doc}
+                    editable={editable}
+                    seleccionado={seleccionado}
+                    alSeleccionar={setSeleccionado}
+                    alCambiar={cambiar}
+                    relacionDe={relacionDe}
+                  />
+                </ConEscenario>
               </section>
             );
           })}
@@ -295,7 +262,7 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
                   <p className="text-xs font-medium text-amber-800">Sin ubicar ({sinUbicar.length}): tocá uno y después tocá el plano</p>
                   <div className="flex flex-wrap gap-1">
                     {sinUbicar.map((l) => (
-                      <button key={l.id} type="button" onClick={() => { setSeleccionado(l.id); setModo("mover"); }} className="rounded-full border border-stone-300 bg-white px-2 py-0.5 text-xs hover:border-stone-900">
+                      <button key={l.id} type="button" onClick={() => setSeleccionado(l.id)} className="rounded-full border border-stone-300 bg-white px-2 py-0.5 text-xs hover:border-stone-900">
                         {l.nombre}
                       </button>
                     ))}
@@ -357,36 +324,55 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
   );
 }
 
-/** Un espacio dibujado (jardín o salón) con sus elementos, zonas y livings encima. */
+/** Cartel "Escenario" del lado elegido, afuera del rectángulo de livings. */
+function ConEscenario({ lado, children }: { lado: Lado; children: React.ReactNode }) {
+  if (lado === "ninguno") return <>{children}</>;
+  const vertical = lado === "arriba" || lado === "abajo";
+  const cartel = (
+    <div
+      className={`flex items-center justify-center rounded bg-stone-800 text-[10px] font-bold uppercase tracking-widest text-white ${
+        vertical ? "h-5 w-full" : "w-5 [writing-mode:vertical-rl]"
+      }`}
+      style={{ printColorAdjust: "exact" }}
+    >
+      ★ Escenario
+    </div>
+  );
+  return (
+    <div className={`flex gap-1 ${vertical ? "flex-col" : "flex-row"}`}>
+      {(lado === "arriba" || lado === "izquierda") && cartel}
+      <div className="min-w-0 flex-1">{children}</div>
+      {(lado === "abajo" || lado === "derecha") && cartel}
+    </div>
+  );
+}
+
+/** El rectángulo de livings con reserva de un espacio (jardín o salón). */
 function Lienzo({
   espacio,
   relacion,
   doc,
-  modo,
+  editable,
   seleccionado,
   alSeleccionar,
   alCambiar,
-  alDibujar,
   relacionDe,
 }: {
   espacio: Espacio;
   relacion: number;
   doc: DocumentoPlano;
-  modo: Modo | null;
+  editable: boolean;
   seleccionado: string | null;
   alSeleccionar: (id: string | null) => void;
   alCambiar: (cambio: (d: DocumentoPlano) => DocumentoPlano) => void;
-  alDibujar: (r: Rect) => void;
   relacionDe: (e: Espacio) => number;
 }) {
   const caja = useRef<HTMLDivElement>(null);
   const [anchoPx, setAnchoPx] = useState(600);
-  const [borrador, setBorrador] = useState<{ inicio: Punto; fin: Punto } | null>(null);
   const arrastre = useRef<string | null>(null);
-  // Estirar: qué se está agrandando y su esquina de arriba a la izquierda (fija).
-  const estirando = useRef<{ que: "living" | "zona" | "elemento"; id: string; x: number; y: number } | null>(null);
-  const dibujando = modo === "zonas" || modo === "dibujar";
-  const deAca = <T extends { espacio?: Espacio }>(x: T) => espacioDe(x) === espacio;
+  // Estirar: el living que se agranda y su esquina de arriba a la izquierda (fija).
+  const estirando = useRef<{ id: string; x: number; y: number } | null>(null);
+  const deAca = (x: { espacio?: Espacio }) => espacioDe(x) === espacio;
 
   useEffect(() => {
     const el = caja.current;
@@ -403,49 +389,30 @@ function Lienzo({
   const punto = (e: EventoPuntero) => relativo(e, caja.current!);
 
   const alApretarFondo = (e: EventoPuntero<HTMLDivElement>) => {
-    if (!modo) return;
-    const p = punto(e);
-    if (dibujando) {
-      e.currentTarget.setPointerCapture(e.pointerId);
-      setBorrador({ inicio: p, fin: p });
-      return;
-    }
-    // Mover: si hay un living elegido sin ubicar, se pone donde se tocó (en este espacio).
+    if (!editable) return;
+    // Si hay un living elegido sin ubicar, se pone donde se tocó (en este espacio).
     const elegido = doc.livings.find((l) => l.id === seleccionado);
     if (elegido && elegido.x === null) {
+      const p = punto(e);
       const medidas = elegido.w && elegido.h ? {} : medidasPorDefecto(doc.livings.filter(deAca), relacion);
       alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === elegido.id ? { ...l, ...medidas, ...p, espacio } : l)) }));
     } else alSeleccionar(null);
   };
 
   const alMover = (e: EventoPuntero<HTMLDivElement>) => {
-    if (borrador) setBorrador({ ...borrador, fin: punto(e) });
+    const p = punto(e);
     if (estirando.current) {
-      const { que, id, x, y } = estirando.current;
-      const p = punto(e);
+      const { id, x, y } = estirando.current;
       const w = Math.max(0.015, p.x - x);
       const h = Math.max(0.015, p.y - y);
-      if (que === "living") alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === id ? { ...l, w, h, x: x + w / 2, y: y + h / 2 } : l)) }));
-      if (que === "zona") alCambiar((d) => ({ ...d, zonas: d.zonas.map((z) => (z.id === id ? { ...z, w, h } : z)) }));
-      if (que === "elemento") alCambiar((d) => ({ ...d, elementos: d.elementos.map((el) => (el.id === id ? { ...el, w, h } : el)) }));
-      return;
-    }
-    if (arrastre.current) {
-      const p = punto(e);
+      alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === id ? { ...l, w, h, x: x + w / 2, y: y + h / 2 } : l)) }));
+    } else if (arrastre.current) {
       const id = arrastre.current;
       alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === id ? { ...l, ...p } : l)) }));
     }
   };
 
-  const rectBorrador = borrador && {
-    x: Math.min(borrador.inicio.x, borrador.fin.x),
-    y: Math.min(borrador.inicio.y, borrador.fin.y),
-    w: Math.abs(borrador.fin.x - borrador.inicio.x),
-    h: Math.abs(borrador.fin.y - borrador.inicio.y),
-  };
-
   const alSoltar = (e: EventoPuntero<HTMLDivElement>) => {
-    if (rectBorrador && rectBorrador.w > 0.01 && rectBorrador.h > 0.01) alDibujar(rectBorrador);
     // Living soltado sobre el otro espacio: pasa a ese espacio, donde se soltó.
     const id = arrastre.current;
     if (id) {
@@ -460,84 +427,24 @@ function Lienzo({
         alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === id ? { ...l, ...p, espacio: otro, h: l.h ? Math.min(1, l.h * factor) : l.h } : l)) }));
       }
     }
-    setBorrador(null);
     arrastre.current = null;
     estirando.current = null;
   };
 
-  const posicion = (r: Rect) => ({ left: `${r.x * 100}%`, top: `${r.y * 100}%`, width: `${r.w * 100}%`, height: `${r.h * 100}%` });
-  // Livings sin medidas propias (de antes de las columnas): tamaño fijo, que no
-  // depende de los demás, así estirar uno no cambia al resto.
+  // Livings sin medidas propias: tamaño fijo, que no depende de los demás.
   const porDefecto = medidasPorDefecto([], relacion);
-  /** Tirador de la esquina de abajo a la derecha para estirar. */
-  const tirador = (que: "living" | "zona" | "elemento", id: string, x: number, y: number) => (
-    <span
-      role="presentation"
-      onPointerDown={(e) => {
-        e.stopPropagation();
-        caja.current?.setPointerCapture(e.pointerId);
-        estirando.current = { que, id, x, y };
-      }}
-      className="absolute bottom-0 right-0 z-20 h-3.5 w-3.5 cursor-nwse-resize rounded-tl-sm border-l-2 border-t-2 border-stone-900 bg-white print:hidden"
-      aria-label="Estirar"
-    />
-  );
-  const borrar = (accion: () => void) => (
-    <button
-      type="button"
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={accion}
-      className="absolute right-0 top-0 h-6 w-6 bg-stone-900/80 text-sm leading-6 text-white"
-      aria-label="Borrar"
-    >
-      ×
-    </button>
-  );
-  const borde = espacio === "jardin" ? "border-white" : "border-stone-600";
 
   return (
     <div
       ref={caja}
       data-espacio={espacio}
-      className={`relative w-full touch-none select-none overflow-hidden rounded-md border ${espacio === "jardin" ? "border-green-900/30" : "border-stone-400"} ${dibujando ? "cursor-crosshair" : ""}`}
+      className={`relative w-full touch-none select-none overflow-hidden rounded-md border ${espacio === "jardin" ? "border-green-900/30" : "border-stone-400"}`}
       style={{ aspectRatio: `1 / ${relacion}`, ...FONDO[espacio], printColorAdjust: "exact" }}
       onPointerDown={alApretarFondo}
       onPointerMove={alMover}
       onPointerUp={alSoltar}
       onPointerCancel={alSoltar}
     >
-      {doc.elementos.filter(deAca).map((el) => {
-        const tipo = TIPOS_ELEMENTO.find((t) => t.id === el.tipo)!;
-        return (
-          <div
-            key={el.id}
-            className="absolute flex items-center justify-center overflow-hidden rounded-sm text-center text-[11px] font-semibold uppercase tracking-wide shadow-sm"
-            style={{ ...posicion(el), background: tipo.color, color: tipo.texto, printColorAdjust: "exact" }}
-          >
-            {el.w * anchoPx > 40 && el.h * anchoPx * relacion > 14 && <span className="px-1">{tipo.id === "escenario" ? "★ " : ""}{tipo.nombre}</span>}
-            {modo === "dibujar" && borrar(() => alCambiar((d) => ({ ...d, elementos: d.elementos.filter((x) => x.id !== el.id) })))}
-            {modo === "dibujar" && tirador("elemento", el.id, el.x, el.y)}
-          </div>
-        );
-      })}
-
-      {doc.zonas.filter(deAca).map((z) => (
-        <div
-          key={z.id}
-          className={`absolute border-2 border-dashed ${borde} ${modo === "zonas" ? "bg-white/20" : "opacity-40"} print:hidden`}
-          style={posicion(z)}
-        >
-          {modo === "zonas" && borrar(() => alCambiar((d) => ({ ...d, zonas: d.zonas.filter((x) => x.id !== z.id) })))}
-          {modo === "zonas" && tirador("zona", z.id, z.x, z.y)}
-        </div>
-      ))}
-      {rectBorrador && (
-        <div
-          className={`absolute border-2 ${borde}`}
-          style={{ ...posicion(rectBorrador), background: modo === "dibujar" ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.2)" }}
-        />
-      )}
-
       {doc.livings
         .filter((l) => deAca(l) && l.x !== null && l.y !== null)
         .map((l) => {
@@ -555,17 +462,16 @@ function Lienzo({
               tabIndex={0}
               title={`${l.nombre} · ${l.personas} personas · ${formatoPesos(l.consumicion)}${mozo ? ` · Mozo: ${mozo.nombre}` : ""}`}
               onPointerDown={(e) => {
-                if (dibujando) return;
                 e.stopPropagation();
                 alSeleccionar(l.id);
-                if (modo === "mover") {
+                if (editable) {
                   caja.current?.setPointerCapture(e.pointerId);
                   arrastre.current = l.id;
                 }
               }}
               className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center overflow-hidden rounded-md border-2 border-white text-center leading-tight text-white shadow ${
-                modo === "mover" ? "cursor-grab active:cursor-grabbing" : ""
-              } ${elegido ? "z-10 ring-4 ring-amber-400" : ""} ${dibujando ? "pointer-events-none opacity-60" : ""}`}
+                editable ? "cursor-grab active:cursor-grabbing" : ""
+              } ${elegido ? "z-10 ring-4 ring-amber-400" : ""}`}
               style={{
                 left: `${l.x! * 100}%`,
                 top: `${l.y! * 100}%`,
@@ -586,7 +492,18 @@ function Lienzo({
                 <span className={chico >= 34 ? "text-xs font-bold" : "text-[9px] font-bold"}>{l.personas}p</span>
                 {chico >= 24 && altoL >= 44 && <span className={chico >= 40 ? "text-[11px]" : "text-[9px]"}>{consumicionCorta(l.consumicion)}</span>}
               </span>
-              {elegido && modo === "mover" && tirador("living", l.id, l.x! - (l.w ?? porDefecto.w) / 2, l.y! - (l.h ?? porDefecto.h) / 2)}
+              {elegido && editable && (
+                <span
+                  role="presentation"
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    caja.current?.setPointerCapture(e.pointerId);
+                    estirando.current = { id: l.id, x: l.x! - (l.w ?? porDefecto.w) / 2, y: l.y! - (l.h ?? porDefecto.h) / 2 };
+                  }}
+                  className="absolute bottom-0 right-0 z-20 h-3.5 w-3.5 cursor-nwse-resize rounded-tl-sm border-l-2 border-t-2 border-stone-900 bg-white print:hidden"
+                  aria-label="Estirar"
+                />
+              )}
             </div>
           );
         })}

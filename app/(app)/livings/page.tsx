@@ -14,7 +14,7 @@ export default async function PaginaLivings() {
       <div>
         <h1 className="text-2xl font-semibold">Livings VIP</h1>
         <p className="text-sm text-stone-500 print:hidden">
-          Plano del jardín: subí el Excel con los livings, la app los acomoda en las zonas marcadas y les asigna mozos.
+          Livings con reserva del jardín y del salón: subí el Excel, la app los acomoda y les asigna mozos.
         </p>
       </div>
       <EditorPlano inicial={plano} editable={puede(usuario, "livings", "editar")} />

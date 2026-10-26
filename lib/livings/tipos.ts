@@ -14,6 +14,17 @@ const espacio = z.enum(["jardin", "salon"]).optional();
 /** El espacio de una zona, elemento o living (sin espacio = jardín). */
 export const espacioDe = (x: { espacio?: Espacio }): Espacio => x.espacio ?? "jardin";
 
+/** De qué lado del rectángulo de livings está el escenario (los de mayor consumición van de ese lado). */
+export const LADOS = [
+  { id: "ninguno", nombre: "Sin escenario" },
+  { id: "arriba", nombre: "Escenario arriba" },
+  { id: "abajo", nombre: "Escenario abajo" },
+  { id: "izquierda", nombre: "Escenario a la izquierda" },
+  { id: "derecha", nombre: "Escenario a la derecha" },
+] as const;
+export type Lado = (typeof LADOS)[number]["id"];
+const lado = z.enum(["ninguno", "arriba", "abajo", "izquierda", "derecha"]).optional();
+
 export const esquemaZona = z.object({ id: z.string().max(40), espacio, x: coordenada, y: coordenada, w: coordenada, h: coordenada });
 export const TIPOS_ELEMENTO = [
   { id: "escenario", nombre: "Escenario", color: "#3f3f46", texto: "#ffffff" },
@@ -58,6 +69,7 @@ export const esquemaDocumento = z.object({
   tamano_living: z.number().min(0.005).max(0.3),
   proporcion: z.number().min(0.2).max(3),
   proporcion_salon: z.number().min(0.2).max(3).optional(),
+  escenarios: z.object({ jardin: lado, salon: lado }).optional(),
   elementos: z.array(esquemaElemento).max(200),
   zonas: z.array(esquemaZona).max(100),
   referencia: z.object({ x: coordenada, y: coordenada }).nullable(),
@@ -73,16 +85,19 @@ export type DocumentoPlano = z.infer<typeof esquemaDocumento>;
 
 /** Formas del jardín o del salón (alto / ancho). */
 export const FORMAS = [
-  { nombre: "Apaisado", proporcion: 0.667 },
+  { nombre: "Franja ancha", proporcion: 0.333 },
   { nombre: "Muy apaisado", proporcion: 0.5 },
+  { nombre: "Apaisado", proporcion: 0.667 },
   { nombre: "Cuadrado", proporcion: 1 },
   { nombre: "Vertical", proporcion: 1.5 },
+  { nombre: "Franja alta", proporcion: 2.5 },
 ];
 
 export const PLANO_VACIO: DocumentoPlano = {
   tamano_living: 0.07,
   proporcion: 0.667,
   proporcion_salon: 0.667,
+  escenarios: {},
   elementos: [],
   zonas: [],
   referencia: null,
@@ -282,19 +297,25 @@ export function resumenPorMozo(livings: Living[], mozos: Mozo[]) {
 /** Datos de cada espacio para acomodar: sus zonas, su forma y su escenario. */
 export type DatosEspacio = { id: Espacio; zonas: Zona[]; relacion: number; referencia: { x: number; y: number } | null };
 
-/** Forma (alto / ancho) y escenario de cada espacio del plano. */
+/** Punto (fuera del rectángulo) del lado del escenario: los livings más cerca de él van adelante. */
+const PUNTO_LADO: Record<Lado, { x: number; y: number } | null> = {
+  ninguno: null,
+  arriba: { x: 0.5, y: -0.3 },
+  abajo: { x: 0.5, y: 1.3 },
+  izquierda: { x: -0.3, y: 0.5 },
+  derecha: { x: 1.3, y: 0.5 },
+};
+
+export const ladoEscenario = (doc: DocumentoPlano, espacio: Espacio): Lado => doc.escenarios?.[espacio] ?? "ninguno";
+
+/** Cada espacio es entero el rectángulo de los livings con reserva. */
 export function datosEspacios(doc: DocumentoPlano): DatosEspacio[] {
-  return ESPACIOS.map(({ id }) => {
-    const escenario = doc.elementos.find((e) => e.tipo === "escenario" && espacioDe(e) === id);
-    const zonas = doc.zonas.filter((z) => espacioDe(z) === id);
-    return {
-      id,
-      // Un espacio sin zonas marcadas se usa entero.
-      zonas: zonas.length ? zonas : [{ id: `todo-${id}`, espacio: id, x: 0.02, y: 0.02, w: 0.96, h: 0.96 }],
-      relacion: id === "salon" ? (doc.proporcion_salon ?? 0.667) : doc.proporcion,
-      referencia: escenario ? { x: escenario.x + escenario.w / 2, y: escenario.y + escenario.h / 2 } : null,
-    };
-  });
+  return ESPACIOS.map(({ id }) => ({
+    id,
+    zonas: [{ id: `todo-${id}`, espacio: id, x: 0.015, y: 0.015, w: 0.97, h: 0.97 }],
+    relacion: id === "salon" ? (doc.proporcion_salon ?? 0.667) : doc.proporcion,
+    referencia: PUNTO_LADO[ladoEscenario(doc, id)],
+  }));
 }
 
 /**
