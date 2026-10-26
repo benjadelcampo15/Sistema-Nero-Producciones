@@ -1,10 +1,13 @@
 // Importa la hoja BASE de la planilla de Nero.
-//   npm run importar                → importa .planilla/planilla.xlsx
-//   npm run importar -- borrar      → borra lo importado (marcado en notas)
+//   npm run importar                         → importa .planilla/planilla.xlsx
+//   npm run importar -- prueba [archivo]     → lee y muestra totales, sin escribir nada
+//   npm run importar -- reemplazar [archivo] → respalda y borra TODO Financiero, e importa
+//   npm run importar -- borrar               → borra lo importado (marcado en notas)
 //
 // La planilla se descarga de Google Sheets (Archivo → Descargar → .xlsx) y se
 // guarda en .planilla/ (carpeta ignorada por git: son datos reales).
 
+import { writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createClient } from "@supabase/supabase-js";
 
@@ -13,7 +16,8 @@ const XLSX = require("xlsx") as typeof import("xlsx");
 
 const MARCA = "IMPORTADO PLANILLA";
 const MARCA_FECHA_ESTIMADA = `${MARCA} · fecha estimada (sin fecha en la planilla)`;
-const ARCHIVO = ".planilla/planilla.xlsx";
+const ARCHIVO = process.argv.find((a) => a.endsWith(".xlsx")) ?? ".planilla/planilla.xlsx";
+const MODO = process.argv[2] ?? "importar";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const secreta = process.env.SUPABASE_SECRET_KEY;
@@ -70,6 +74,10 @@ const CATEGORIAS: Record<string, string> = {
   "OTROS INGRESOS": "Otros ingresos",
   SPONSOR: "Sponsor",
   "REVOLEO DE MERCADERIA": "Revoleo de mercadería",
+  MERCADERIA: "Mercadería",
+  SEGUROS: "Seguros",
+  MOBILIARIO: "Mobiliario",
+  SEGURIDAD: "Seguridad",
 };
 
 const MEDIOS: Record<string, string> = {
@@ -163,7 +171,7 @@ async function borrar() {
 
 async function importar() {
   const { data: previos } = await supabase.from("transacciones").select("id").like("notas", `${MARCA}%`).limit(1);
-  if (previos?.length) {
+  if (MODO !== "prueba" && previos?.length) {
     console.log("Ya hay datos importados. Corré `npm run importar -- borrar` primero.");
     return;
   }
@@ -263,9 +271,21 @@ async function importar() {
     return { nombre, fecha, estado: fecha <= hoy ? "cerrado" : "planificado", notas: MARCA };
   });
 
-  const { data: eventos, error: errorEv } = await supabase.from("eventos").insert(filasEventos).select("id, nombre");
-  if (errorEv || !eventos) throw new Error(errorEv?.message ?? "No se crearon eventos");
-  const idEvento = new Map(eventos.map((e) => [e.nombre, e.id]));
+  // Los eventos que ya existen (con presupuestos, cheques o facturas vinculados) se reusan por nombre.
+  const { data: existentes, error: errorEx } = await supabase.from("eventos").select("id, nombre");
+  if (errorEx || !existentes) throw new Error(errorEx?.message ?? "No se leyeron los eventos");
+  const idEvento = new Map(existentes.map((e) => [e.nombre, e.id]));
+  const nuevos = filasEventos.filter((e) => !idEvento.has(e.nombre));
+  if (MODO === "prueba") {
+    resumen(movimientos, omitidas, dudosas, nuevos.map((e) => e.nombre));
+    return;
+  }
+  if (nuevos.length) {
+    const { data: creados, error: errorEv } = await supabase.from("eventos").insert(nuevos).select("id, nombre");
+    if (errorEv || !creados) throw new Error(errorEv?.message ?? "No se crearon eventos");
+    for (const e of creados) idEvento.set(e.nombre, e.id);
+  }
+  const eventos = filasEventos;
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- se descarta el campo auxiliar
   const filasTransacciones = movimientos.map(({ _evento, _estimada, ...m }) => ({
@@ -284,7 +304,47 @@ async function importar() {
   if (dudosas.length) console.log(`\nFechas dudosas, revisar (${dudosas.length}):\n  ${dudosas.join("\n  ")}`);
 }
 
-(process.argv[2] === "borrar" ? borrar : importar)().catch((e) => {
+/** Totales por tipo y estado de lo que se va a importar (para comparar con la planilla). */
+function resumen(movimientos: Record<string, unknown>[], omitidas: string[], dudosas: string[], eventosNuevos: string[]) {
+  const suma = (tipo: string, estado?: string) =>
+    movimientos.filter((m) => m.tipo === tipo && (!estado || m.estado === estado)).reduce((s, m) => s + Number(m.monto), 0).toFixed(2);
+  console.log(`Movimientos: ${movimientos.length} · ingresos ${suma("ingreso")} · egresos ${suma("egreso")}`);
+  for (const e of ["real", "pendiente", "proyectado"]) console.log(`  ${e}: ingresos ${suma("ingreso", e)} · egresos ${suma("egreso", e)}`);
+  console.log(`Eventos nuevos: ${eventosNuevos.join(", ") || "ninguno"}`);
+  if (omitidas.length) console.log(`Omitidas (${omitidas.length}):\n  ${omitidas.join("\n  ")}`);
+  if (dudosas.length) console.log(`Fechas dudosas (${dudosas.length}):\n  ${dudosas.join("\n  ")}`);
+}
+
+/** Respalda todo Financiero en .planilla/, desvincula las facturas emitidas y borra todos los movimientos. */
+async function vaciarFinanciero() {
+  const [t, e, c, ce] = await Promise.all([
+    supabase.from("transacciones").select("*").limit(20000),
+    supabase.from("eventos").select("*"),
+    supabase.from("categorias").select("*"),
+    supabase.from("comprobantes_emitidos").select("id, transaccion_id").not("transaccion_id", "is", null),
+  ]);
+  if (t.error || e.error || c.error || ce.error) throw new Error("No se pudo leer para el respaldo");
+  const archivo = `.planilla/respaldo-financiero-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+  writeFileSync(archivo, JSON.stringify({ transacciones: t.data, eventos: e.data, categorias: c.data, comprobantes: ce.data }, null, 1));
+  console.log(`Respaldo: ${archivo} (${t.data.length} movimientos)`);
+
+  const desv = await supabase.from("comprobantes_emitidos").update({ transaccion_id: null }).not("transaccion_id", "is", null).select("id");
+  if (desv.error) throw new Error(desv.error.message);
+  const borr = await supabase.from("transacciones").delete().not("id", "is", null).select("id");
+  if (borr.error) throw new Error(borr.error.message);
+  console.log(`Desvinculadas ${desv.data.length} facturas emitidas · borrados ${borr.data.length} movimientos`);
+}
+
+const acciones: Record<string, () => Promise<void>> = {
+  borrar,
+  prueba: importar,
+  importar,
+  reemplazar: async () => {
+    await vaciarFinanciero();
+    await importar();
+  },
+};
+(acciones[MODO] ?? importar)().catch((e) => {
   console.error("Error:", e.message);
   process.exit(1);
 });
