@@ -16,6 +16,18 @@ import {
 import { formatoPesos } from "@/lib/formato";
 import { CampoMonto } from "@/components/campo-monto";
 
+/** Color de cada sector de gastos (fuerte para títulos y franja, suave para el fondo). */
+const COLOR_SECTOR: Record<string, { fuerte: string; suave: string }> = {
+  "Artística": { fuerte: "#7c3aed", suave: "#f5f3ff" },
+  "Técnica": { fuerte: "#0369a1", suave: "#f0f9ff" },
+  "Infraestructura": { fuerte: "#b45309", suave: "#fffbeb" },
+  "Contenido y activaciones": { fuerte: "#be185d", suave: "#fdf2f8" },
+  "Recursos humanos": { fuerte: "#047857", suave: "#ecfdf5" },
+  "Mercadería": { fuerte: "#c2410c", suave: "#fff7ed" },
+  "Seguros y aranceles": { fuerte: "#4338ca", suave: "#eef2ff" },
+};
+const colorSector = (nombre: string) => COLOR_SECTOR[nombre] ?? { fuerte: "#57534e", suave: "#f5f5f4" };
+
 const pct = (v: number | null) => (v === null ? "—" : `${(v * 100).toFixed(1).replace(".", ",")}%`);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const celdaTexto =
@@ -147,7 +159,7 @@ export function PlanillaEvento({ eventoId, inicial, editable }: { eventoId: stri
             <tbody className="divide-y divide-stone-100">
               {p.ingresos.map((ing, i) => (
                 <tr key={i}>
-                  <td className="px-1 py-0.5"><input value={ing.detalle} disabled={!editable} maxLength={200} aria-label="Detalle del ingreso" onChange={(e) => editarIngreso(i, { detalle: e.target.value })} className={celdaTexto} /></td>
+                  <td className="px-1 py-0.5"><input value={ing.detalle} disabled={!editable} maxLength={200} aria-label="Detalle del ingreso" onChange={(e) => editarIngreso(i, { detalle: e.target.value })} className={`${celdaTexto} min-w-52`} /></td>
                   <td className="px-1 py-0.5"><CampoMonto valor={ing.neto} disabled={!editable} etiqueta="Neto" alCambiar={(neto) => editarIngreso(i, { neto })} /></td>
                   <td className="px-1 py-0.5"><CampoMonto valor={ing.iva} disabled={!editable} etiqueta="IVA débito" alCambiar={(iva) => editarIngreso(i, { iva })} /></td>
                   <td className="px-1 py-0.5"><CampoMonto valor={ing.bruto} disabled={!editable} etiqueta="Bruto" alCambiar={(bruto) => editarIngreso(i, { bruto })} className="font-semibold" /></td>
@@ -184,7 +196,7 @@ export function PlanillaEvento({ eventoId, inicial, editable }: { eventoId: stri
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">Gastos por sector</h2>
         <div className="tarjeta overflow-x-auto p-0">
-          <table className="w-full min-w-[1150px] text-sm">
+          <table className="w-full min-w-[1250px] text-sm">
             <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
               <tr>
                 <th className="px-2 py-2">Detalle</th>
@@ -202,14 +214,22 @@ export function PlanillaEvento({ eventoId, inicial, editable }: { eventoId: stri
             {c.sectores.map((s) => {
               const filas = p.gastos.map((g, indice) => ({ g, indice })).filter(({ g }) => (g.sector || "Otros") === s.nombre && (!soloPorPagar || diferenciaGasto(g) > 0));
               if (soloPorPagar && !filas.length) return null;
+              const color = colorSector(s.nombre);
+              // Franja de color a la izquierda de todas las filas del sector.
+              const franja = { boxShadow: `inset 4px 0 0 ${color.fuerte}`, printColorAdjust: "exact" as const };
               return (
-                <tbody key={s.nombre} className="divide-y divide-stone-100 border-b-2 border-stone-200">
-                  <tr className="bg-stone-100/70">
-                    <th colSpan={editable ? 10 : 9} className="px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-stone-600">{s.nombre}</th>
+                <tbody key={s.nombre} className="divide-y divide-stone-100 border-t-8 border-white first:border-t-0">
+                  <tr style={{ background: color.fuerte, printColorAdjust: "exact" }}>
+                    <th colSpan={editable ? 10 : 9} className="px-3 py-2 text-left text-sm font-bold uppercase tracking-wide text-white">
+                      {s.nombre}
+                      <span className="ml-3 text-xs font-normal normal-case opacity-80">
+                        {s.gastos.length} gasto{s.gastos.length === 1 ? "" : "s"} · {formatoPesos(s.totales.total)}
+                      </span>
+                    </th>
                   </tr>
                   {filas.map(({ g, indice }) => (
-                    <tr key={indice} className={g.urgente && diferenciaGasto(g) > 0 ? "bg-red-50/60" : ""}>
-                      <td className="px-1 py-0.5"><input value={g.detalle} disabled={!editable} maxLength={200} aria-label="Detalle del gasto" onChange={(e) => editarGasto(indice, { detalle: e.target.value })} className={celdaTexto} /></td>
+                    <tr key={indice} className={g.urgente && diferenciaGasto(g) > 0 ? "bg-red-50/60" : ""} style={franja}>
+                      <td className="px-1 py-0.5"><input value={g.detalle} disabled={!editable} maxLength={200} aria-label="Detalle del gasto" onChange={(e) => editarGasto(indice, { detalle: e.target.value })} className={`${celdaTexto} min-w-52`} /></td>
                       <td className="px-1 py-0.5"><CampoMonto valor={g.neto} disabled={!editable} etiqueta="Neto" alCambiar={(neto) => editarGasto(indice, { neto })} /></td>
                       <td className="px-1 py-0.5">
                         <select value={g.tipo_factura} disabled={!editable} aria-label="Tipo de factura" onChange={(e) => editarGasto(indice, { tipo_factura: e.target.value })} className="rounded border border-transparent bg-transparent px-1 py-0.5 text-xs hover:border-stone-200">
@@ -227,7 +247,7 @@ export function PlanillaEvento({ eventoId, inicial, editable }: { eventoId: stri
                       )}
                     </tr>
                   ))}
-                  <tr className="bg-stone-50 font-semibold">
+                  <tr className="font-semibold" style={{ ...franja, background: color.suave, color: color.fuerte }}>
                     <td className="px-2 py-1.5">
                       {editable && !soloPorPagar ? (
                         <button type="button" onClick={() => agregarGasto(s.nombre === "Otros" ? "" : s.nombre)} className="text-xs font-normal text-stone-600 hover:text-stone-900">+ Agregar gasto</button>
