@@ -7,7 +7,7 @@ import { EnlacesMenu, type ItemMenu } from "./enlaces-menu";
 export default function LayoutApp({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
-      <aside className="flex shrink-0 flex-col bg-stone-950 text-stone-300 md:w-60">
+      <aside className="flex shrink-0 flex-col bg-stone-950 text-stone-300 md:w-60 print:hidden">
         <div className="px-5 py-5">
           <p className="text-lg font-black tracking-[0.3em] text-white">NERO</p>
           <p className="text-[10px] uppercase tracking-widest text-stone-500">Producciones</p>
@@ -16,7 +16,7 @@ export default function LayoutApp({ children }: LayoutProps<"/">) {
           <Menu />
         </Suspense>
       </aside>
-      <main className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+      <main className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8 print:p-0">{children}</main>
     </div>
   );
 }
