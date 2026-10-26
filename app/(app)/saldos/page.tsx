@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
-import { listarCuentas, movimientosEntre, saldoAlInicio, saldosAFecha, totalSaldos } from "@/lib/bancos/consultas";
+import { listarCuentas, movimientosEntre, saldosAFecha, totalSaldos } from "@/lib/bancos/consultas";
 import { TIPOS_CUENTA } from "@/lib/bancos/tipos";
 import { formatoFecha, formatoPesos, hoy, sumar } from "@/lib/formato";
 import { SinAcceso } from "../sin-acceso";
@@ -14,17 +14,17 @@ export default async function PaginaSaldos({ searchParams }: PageProps<"/saldos"
   const { fecha: fechaParam } = await searchParams;
   const fecha = typeof fechaParam === "string" && /^\d{4}-\d{2}-\d{2}$/.test(fechaParam) ? fechaParam : hoy();
 
-  const [cuentas, todas, saldos, inicio, { movimientos }] = await Promise.all([
+  const [cuentas, todas, saldos, { movimientos }] = await Promise.all([
     listarCuentas(),
     editable ? listarCuentas({ incluirInactivas: true }) : Promise.resolve([]),
     saldosAFecha(fecha),
-    saldoAlInicio(fecha),
     movimientosEntre(fecha, fecha),
   ]);
   const t = totalSaldos(cuentas, saldos);
   const ingresos = sumar(movimientos.filter((m) => m.tipo === "ingreso").map((m) => m.monto));
   const egresos = sumar(movimientos.filter((m) => m.tipo === "egreso").map((m) => m.monto));
-  const final = sumar([inicio.saldo, ingresos, -egresos]);
+  // Saldo bancario tal cual está cargado + lo que entra y sale ese día.
+  const final = sumar([t.total, ingresos, -egresos]);
   const excede = final < -t.descubierto;
 
   return (
@@ -118,12 +118,10 @@ export default async function PaginaSaldos({ searchParams }: PageProps<"/saldos"
             <h2 className="font-semibold">Saldo final del {formatoFecha(fecha)}</h2>
             <dl className="grid max-w-md grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-sm">
               <dt className="text-stone-600">
-                Saldo en bancos al empezar el día
-                {inicio.cargadoEl && inicio.cargadoEl !== fecha && (
-                  <span className="block text-xs text-stone-500">saldos del {formatoFecha(inicio.cargadoEl)} + movimientos hasta ayer</span>
-                )}
+                Saldo bancario cargado
+                {t.desde && t.desde !== fecha && <span className="block text-xs text-amber-700">hay saldos de días anteriores: cargá los de hoy</span>}
               </dt>
-              <dd className="text-right font-mono">{formatoPesos(inicio.saldo)}</dd>
+              <dd className="text-right font-mono">{formatoPesos(t.total)}</dd>
               <dt className="text-stone-600">+ Ingresos del día</dt>
               <dd className="text-right font-mono text-green-700">{formatoPesos(ingresos)}</dd>
               <dt className="text-stone-600">− Egresos del día</dt>

@@ -1,7 +1,6 @@
 import "server-only";
 import { crearClienteServidor } from "@/lib/supabase/server";
-import { hoy, sumar } from "@/lib/formato";
-import { sumarDias } from "@/lib/cheques/tipos";
+import { sumar } from "@/lib/formato";
 import type { Cuenta, MovimientoCaja, SaldoCuenta } from "./tipos";
 
 export async function listarCuentas({ incluirInactivas = false } = {}) {
@@ -104,32 +103,4 @@ export async function movimientosEntre(desde: string, hasta: string, { proyectad
   // Por fecha; dentro del día, primero los ingresos.
   movimientos.sort((a, b) => a.fecha.localeCompare(b.fecha) || (a.tipo === b.tipo ? 0 : a.tipo === "ingreso" ? -1 : 1));
   return { movimientos, truncado: (trx.data?.length ?? 0) >= LIMITE };
-}
-
-/**
- * Saldo de caja al empezar el día `fecha`. Parte del total de los últimos saldos
- * bancarios cargados hasta ese día y le suma los movimientos que pasaron entre
- * la carga y `fecha`. Si no hay saldos cargados antes de `fecha` (por ejemplo, un
- * cashflow desde principio de mes con saldos cargados hoy), parte de los
- * últimos cargados y va para atrás restando los movimientos del medio.
- */
-export async function saldoAlInicio(fecha: string, opciones: { proyectados?: boolean; cheques?: boolean } = {}) {
-  const cuentas = await listarCuentas();
-  let t = totalSaldos(cuentas, await saldosAFecha(fecha));
-  let haciaAtras = false;
-  if (!t.desde) {
-    const ultimos = totalSaldos(cuentas, await saldosAFecha(hoy()));
-    if (ultimos.desde && ultimos.desde > fecha) {
-      t = ultimos;
-      haciaAtras = true;
-    }
-  }
-  let saldo = t.total;
-  const neto = (movimientos: { tipo: string; monto: number }[]) => sumar(movimientos.map((m) => (m.tipo === "ingreso" ? m.monto : -m.monto)));
-  if (t.desde && t.desde < fecha) {
-    saldo = sumar([saldo, neto((await movimientosEntre(t.desde, sumarDias(fecha, -1), opciones)).movimientos)]);
-  } else if (haciaAtras && t.desde) {
-    saldo = sumar([saldo, -neto((await movimientosEntre(fecha, sumarDias(t.desde, -1), opciones)).movimientos)]);
-  }
-  return { saldo, descubierto: t.descubierto, cargadoEl: t.desde, sinCargar: t.sinCargar, cuentas: cuentas.length };
 }

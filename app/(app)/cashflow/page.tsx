@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
-import { movimientosEntre, saldoAlInicio } from "@/lib/bancos/consultas";
+import { listarCuentas, movimientosEntre, saldosAFecha, totalSaldos } from "@/lib/bancos/consultas";
 import type { MovimientoCaja } from "@/lib/bancos/tipos";
 import { formatoFecha, formatoPesos, hoy, proximosMeses, sumar } from "@/lib/formato";
 import { SinAcceso } from "../sin-acceso";
@@ -14,14 +15,20 @@ export default async function PaginaCashflow({ searchParams }: PageProps<"/cashf
   if (!puede(usuario, "financiero", "ver")) return <SinAcceso />;
 
   const p = await searchParams;
+  // Punto de partida: el total de los saldos bancarios tal cual se cargaron (el
+  // último de cada cuenta), desde el día de la última carga. Sin saldos históricos.
+  const [cuentas, saldos] = await Promise.all([listarCuentas(), saldosAFecha(hoy())]);
+  const t = totalSaldos(cuentas, saldos);
+  const cargas = [...saldos.values()].map((s) => s.fecha).sort();
+  const desde = cargas.length ? cargas[cargas.length - 1] : hoy();
   const porDefecto = proximosMeses(3);
-  const desde = fechaValida(p.desde) ? (p.desde as string) : porDefecto.desde;
-  const hasta = fechaValida(p.hasta) && (p.hasta as string) >= desde ? (p.hasta as string) : porDefecto.hasta;
+  const hasta = fechaValida(p.hasta) && (p.hasta as string) >= desde ? (p.hasta as string) : porDefecto.hasta > desde ? porDefecto.hasta : desde;
   // Los checkboxes vienen solo si están tildados; sin filtros aplicados, van los dos.
-  const filtrado = p.desde !== undefined;
+  const filtrado = p.hasta !== undefined;
   const opciones = { proyectados: !filtrado || p.proyectados === "1", cheques: !filtrado || p.cheques === "1" };
 
-  const [inicio, { movimientos, truncado }] = await Promise.all([saldoAlInicio(desde, opciones), movimientosEntre(desde, hasta, opciones)]);
+  const { movimientos, truncado } = await movimientosEntre(desde, hasta, opciones);
+  const inicio = { saldo: t.total, descubierto: t.descubierto };
 
   // Saldo acumulado movimiento a movimiento, agrupado por mes.
   let saldo = inicio.saldo;
@@ -39,13 +46,19 @@ export default async function PaginaCashflow({ searchParams }: PageProps<"/cashf
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Cashflow</h1>
-        <p className="text-sm text-stone-500">Ingresos y egresos por fecha, mes a mes, con el saldo a cada fecha. Arranca del saldo en bancos.</p>
+        <p className="text-sm text-stone-500">Arranca del saldo bancario cargado y suma los ingresos y egresos de ahí en adelante, mes a mes, con el saldo a cada fecha.</p>
       </div>
+
+      {cargas.length === 0 && (
+        <p className="alerta-error">
+          Todavía no hay saldos bancarios cargados: el cashflow arranca en /usr/bin/bash. <Link href="/saldos" className="underline">Cargá los saldos del día</Link>.
+        </p>
+      )}
 
       <form className="tarjeta flex flex-wrap items-end gap-3">
         <div>
-          <label htmlFor="desde" className="etiqueta">Desde</label>
-          <input id="desde" name="desde" type="date" defaultValue={desde} className="campo" />
+          <p className="etiqueta">Desde</p>
+          <p className="py-2 text-sm">{formatoFecha(desde)} <span className="text-stone-500">(saldo bancario cargado)</span></p>
         </div>
         <div>
           <label htmlFor="hasta" className="etiqueta">Hasta</label>
@@ -64,10 +77,10 @@ export default async function PaginaCashflow({ searchParams }: PageProps<"/cashf
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="tarjeta">
-          <p className="text-xs uppercase tracking-wide text-stone-500">Saldo inicial · {formatoFecha(desde)}</p>
+          <p className="text-xs uppercase tracking-wide text-stone-500">Saldo bancario · {formatoFecha(desde)}</p>
           <p className={`mt-1 font-mono text-xl font-semibold ${inicio.saldo < 0 ? "text-red-700" : ""}`}>{formatoPesos(inicio.saldo)}</p>
           <p className="text-xs text-stone-500">
-            {inicio.cargadoEl ? `Saldos bancarios del ${formatoFecha(inicio.cargadoEl)}` : "Sin saldos bancarios cargados: arranca en $0"}
+            {cargas.length ? `Total de ${(cuentas.length - t.sinCargar)} cuenta${(cuentas.length - t.sinCargar) === 1 ? "" : "s"}${t.sinCargar ? ` (${t.sinCargar} sin cargar)` : ""}` : "Sin saldos cargados"}
           </p>
         </div>
         <div className="tarjeta">
