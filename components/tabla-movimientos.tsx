@@ -3,6 +3,7 @@ import { NOMBRE_ESTADO_MOVIMIENTO, NOMBRE_MEDIO_PAGO, type Transaccion } from "@
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { BotonEliminar } from "./boton-eliminar-transaccion";
 import { SelectorEstado } from "./selector-estado";
+import { RegistrarPago } from "./registrar-pago";
 
 export function TablaMovimientos({
   transacciones,
@@ -91,7 +92,8 @@ export function TablaMovimientos({
                 {t.tipo === "ingreso" ? "+" : "−"} {formatoPesos(t.monto)}
               </td>
               {editable && (
-                <td className="whitespace-nowrap px-4 py-3 text-right">
+                <td className="space-x-2 whitespace-nowrap px-4 py-3 text-right">
+                  {t.estado !== "real" && <RegistrarPago t={t} />}
                   <Link
                     href={`/financiero/${t.id}/editar?volver_a=${encodeURIComponent(volverA)}`}
                     className="text-xs text-stone-600 hover:text-stone-900"

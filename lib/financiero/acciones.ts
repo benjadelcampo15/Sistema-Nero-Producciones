@@ -201,3 +201,74 @@ export async function cambiarEstadoCategoria(id: string, activa: boolean): Promi
   refresh();
   return {};
 }
+
+/**
+ * Registra el pago (o cobro) de un movimiento pendiente o proyectado. Si se
+ * paga todo, pasa a real con la fecha del pago. Si se paga una parte, se crea
+ * un movimiento real por lo pagado y el pendiente queda por lo que falta (el
+ * IVA se reparte en proporción). Así el cashflow muestra lo que de verdad salió.
+ */
+export async function registrarPago(id: string, _previo: EstadoFormulario, formData: FormData): Promise<EstadoFormulario> {
+  await obtenerUsuario();
+  const valores = valoresDe(formData);
+  const monto = parsearMonto(String(formData.get("monto") ?? ""));
+  const fecha = String(formData.get("fecha") ?? "");
+  const medio = String(formData.get("medio_pago") ?? "");
+  if (monto === null || monto <= 0) return { error: "Monto inválido", valores };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return { error: "Fecha inválida", valores };
+  if (!(MEDIOS_PAGO as readonly string[]).includes(medio)) return { error: "Elegí el medio de pago", valores };
+
+  const supabase = await crearClienteServidor();
+  const { data: t } = await supabase
+    .from("transacciones")
+    .select("tipo, monto, iva, descripcion, categoria_id, evento_id, contraparte, facturado, notas, estado")
+    .eq("id", id)
+    .is("eliminado_en", null)
+    .maybeSingle();
+  if (!t) return { error: "Movimiento no encontrado", valores };
+  if (t.estado === "real") return { error: "Este movimiento ya está pagado", valores };
+  const total = Number(t.monto);
+  if (monto > total + 0.005) return { error: `El pago no puede superar el monto pendiente (${total.toLocaleString("es-AR")})`, valores };
+
+  const fechaTexto = fecha.split("-").reverse().join("/");
+  const nota = (n: string | null, agregado: string) => [n, agregado].filter(Boolean).join(" · ").slice(0, 500);
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+
+  if (monto >= total - 0.005) {
+    // Pago total: el mismo movimiento pasa a real.
+    const { data } = await supabase.from("transacciones").update({ estado: "real", fecha, medio_pago: medio }).eq("id", id).select("id");
+    if (!data?.length) return { error: "No se pudo registrar el pago", valores };
+  } else {
+    const ivaTotal = t.iva === null ? null : Number(t.iva);
+    const ivaPagado = ivaTotal === null ? null : r2((ivaTotal * monto) / total);
+    const resta = r2(total - monto);
+    const palabra = t.tipo === "egreso" ? "Pago" : "Cobro";
+    const { error: errorNuevo } = await supabase.from("transacciones").insert({
+      tipo: t.tipo,
+      monto: r2(monto),
+      fecha,
+      descripcion: t.descripcion,
+      categoria_id: t.categoria_id,
+      evento_id: t.evento_id,
+      contraparte: t.contraparte,
+      medio_pago: medio,
+      estado: "real",
+      facturado: t.facturado,
+      iva: ivaPagado,
+      notas: `${palabra} parcial de “${t.descripcion}” (quedaron $${resta.toLocaleString("es-AR")} pendientes)`.slice(0, 500),
+    });
+    if (errorNuevo) return { error: "No se pudo registrar el pago", valores };
+    const { data } = await supabase
+      .from("transacciones")
+      .update({
+        monto: resta,
+        iva: ivaTotal === null ? null : r2(ivaTotal - (ivaPagado ?? 0)),
+        notas: nota(t.notas, `${palabra} parcial $${r2(monto).toLocaleString("es-AR")} el ${fechaTexto}`),
+      })
+      .eq("id", id)
+      .select("id");
+    if (!data?.length) return { error: "Se registró el pago pero no se pudo actualizar lo pendiente. Revisá el movimiento.", valores };
+  }
+  refresh();
+  return { ok: "Pago registrado" };
+}
