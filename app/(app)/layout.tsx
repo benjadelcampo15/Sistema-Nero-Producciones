@@ -31,6 +31,7 @@ async function Menu() {
   if (usuario.esAdmin) {
     items.push({ href: "/configuracion/usuarios", nombre: "Usuarios", grupo: "Configuración" });
   }
+  items.push({ href: "/plantillas", nombre: "Plantillas Excel", grupo: "Configuración" });
 
   // Agrupados en el orden del menú; un grupo sin secciones visibles no aparece.
   const grupos = ["Administración", "Eventos", "Configuración"]
