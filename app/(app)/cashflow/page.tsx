@@ -15,16 +15,18 @@ export default async function PaginaCashflow({ searchParams }: PageProps<"/cashf
   if (!puede(usuario, "financiero", "ver")) return <SinAcceso />;
 
   const p = await searchParams;
-  // Punto de partida: el total de los saldos bancarios tal cual se cargaron (el
-  // último de cada cuenta), desde el día de la última carga. Sin saldos históricos.
-  const [cuentas, saldos] = await Promise.all([listarCuentas(), saldosAFecha(hoy())]);
+  // Por defecto arranca el día de la última carga de saldos bancarios; se puede elegir otra fecha.
+  const ultimos = await saldosAFecha(hoy());
+  const ultimaCarga = [...ultimos.values()].map((s) => s.fecha).sort().at(-1) ?? hoy();
+  const desde = fechaValida(p.desde) ? (p.desde as string) : ultimaCarga;
+  // Saldo inicial: los saldos bancarios tal cual se cargaron hasta esa fecha (sin calcular saldos históricos).
+  const [cuentas, saldos] = await Promise.all([listarCuentas(), desde === hoy() ? ultimos : saldosAFecha(desde)]);
   const t = totalSaldos(cuentas, saldos);
   const cargas = [...saldos.values()].map((s) => s.fecha).sort();
-  const desde = cargas.length ? cargas[cargas.length - 1] : hoy();
   const porDefecto = proximosMeses(3);
   const hasta = fechaValida(p.hasta) && (p.hasta as string) >= desde ? (p.hasta as string) : porDefecto.hasta > desde ? porDefecto.hasta : desde;
   // Los checkboxes vienen solo si están tildados; sin filtros aplicados, van los dos.
-  const filtrado = p.hasta !== undefined;
+  const filtrado = p.hasta !== undefined || p.desde !== undefined;
   const opciones = { proyectados: !filtrado || p.proyectados === "1", cheques: !filtrado || p.cheques === "1" };
 
   const { movimientos, truncado } = await movimientosEntre(desde, hasta, opciones);
@@ -57,8 +59,8 @@ export default async function PaginaCashflow({ searchParams }: PageProps<"/cashf
 
       <form className="tarjeta flex flex-wrap items-end gap-3">
         <div>
-          <p className="etiqueta">Desde</p>
-          <p className="py-2 text-sm">{formatoFecha(desde)} <span className="text-stone-500">(saldo bancario cargado)</span></p>
+          <label htmlFor="desde" className="etiqueta">Desde</label>
+          <input id="desde" name="desde" type="date" defaultValue={desde} className="campo" />
         </div>
         <div>
           <label htmlFor="hasta" className="etiqueta">Hasta</label>
@@ -77,11 +79,13 @@ export default async function PaginaCashflow({ searchParams }: PageProps<"/cashf
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="tarjeta">
-          <p className="text-xs uppercase tracking-wide text-stone-500">Saldo bancario · {formatoFecha(desde)}</p>
+          <p className="text-xs uppercase tracking-wide text-stone-500">Saldo inicial · {formatoFecha(desde)}</p>
           <p className={`mt-1 font-mono text-xl font-semibold ${inicio.saldo < 0 ? "text-red-700" : ""}`}>{formatoPesos(inicio.saldo)}</p>
           <ConDescubierto saldo={inicio.saldo} descubierto={inicio.descubierto} />
           <p className="text-xs text-stone-500">
-            {cargas.length ? `Total de ${(cuentas.length - t.sinCargar)} cuenta${(cuentas.length - t.sinCargar) === 1 ? "" : "s"}${t.sinCargar ? ` (${t.sinCargar} sin cargar)` : ""}` : "Sin saldos cargados"}
+            {cargas.length
+              ? `Saldos bancarios cargados al ${formatoFecha(cargas.at(-1)!)} (${cuentas.length - t.sinCargar} cuenta${cuentas.length - t.sinCargar === 1 ? "" : "s"}${t.sinCargar ? `, ${t.sinCargar} sin cargar` : ""})`
+              : "No hay saldos bancarios cargados a esa fecha: arranca en $0"}
           </p>
         </div>
         <div className="tarjeta">
