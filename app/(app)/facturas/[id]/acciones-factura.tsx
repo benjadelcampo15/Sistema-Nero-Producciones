@@ -55,14 +55,14 @@ export function AccionesFactura({ id, puedeReintentar }: { id: string; puedeRein
 }
 
 /** Borra la factura. Si estaba aprobada, avisa que se anula su gasto y se descuenta el stock. */
-export function BotonBorrarFactura({ id, aprobada }: { id: string; aprobada: boolean }) {
+export function BotonBorrarFactura({ id, aprobada, irA, chico = false }: { id: string; aprobada: boolean; irA?: string; chico?: boolean }) {
   const router = useRouter();
   const [pendiente, iniciar] = useTransition();
   return (
     <button
       type="button"
       disabled={pendiente}
-      className="text-sm text-red-700 hover:underline disabled:opacity-50"
+      className={`${chico ? "text-xs" : "text-sm"} text-red-700 hover:underline disabled:opacity-50`}
       onClick={() => {
         const aviso = aprobada
           ? "¿Borrar esta factura? Ya estaba aprobada: se elimina su movimiento en Financiero y, si ingresó mercadería, se descuenta del stock. No se puede deshacer."
@@ -71,11 +71,11 @@ export function BotonBorrarFactura({ id, aprobada }: { id: string; aprobada: boo
         iniciar(async () => {
           const r = await borrarFactura(id);
           if (r.error) window.alert(r.error);
-          else router.push("/facturas");
+          else if (irA) router.push(irA);
         });
       }}
     >
-      {pendiente ? "Borrando…" : "Borrar factura"}
+      {pendiente ? "Borrando…" : chico ? "Borrar" : "Borrar factura"}
     </button>
   );
 }

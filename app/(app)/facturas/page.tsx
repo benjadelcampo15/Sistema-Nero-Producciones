@@ -6,6 +6,7 @@ import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { SinAcceso } from "../sin-acceso";
 import { SubidaFacturas } from "./subida";
 import { NavegacionFacturas } from "./navegacion";
+import { BotonBorrarFactura } from "./[id]/acciones-factura";
 
 const PESTANAS: (EstadoFactura | undefined)[] = [undefined, "por_revisar", "error", "aprobada", "rechazada"];
 
@@ -22,6 +23,7 @@ export default async function PaginaFacturas({ searchParams }: PageProps<"/factu
   const { estado: parametro } = await searchParams;
   const estado = leerEstadoFactura(parametro);
   const [facturas, conteo] = await Promise.all([listarFacturas(estado), contarPorEstado()]);
+  const editable = puede(usuario, "facturas", "editar");
 
   return (
     <div className="space-y-6">
@@ -105,7 +107,8 @@ export default async function PaginaFacturas({ searchParams }: PageProps<"/factu
                     </span>
                   )}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-right">
+                <td className="space-x-3 whitespace-nowrap px-4 py-3 text-right">
+                  {editable && <BotonBorrarFactura id={f.id} aprobada={f.estado === "aprobada"} chico />}
                   {/* Ruta que verifica permisos y redirige a un link temporal del archivo. */}
                   <a href={`/facturas/${f.id}/archivo`} target="_blank" rel="noreferrer" className="boton-secundario">
                     Ver

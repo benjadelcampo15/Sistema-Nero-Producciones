@@ -103,7 +103,7 @@ export default async function PaginaFactura({ params }: PageProps<"/facturas/[id
           ) : (
             <ResumenFactura factura={factura} movimiento={movimiento} />
           )}
-          {editable && <BotonBorrarFactura id={factura.id} aprobada={factura.estado === "aprobada"} />}
+          {editable && <BotonBorrarFactura id={factura.id} aprobada={factura.estado === "aprobada"} irA="/facturas" />}
         </div>
       </div>
     </div>
