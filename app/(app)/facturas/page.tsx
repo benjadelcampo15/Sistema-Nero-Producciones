@@ -5,6 +5,7 @@ import { COLOR_ESTADO_FACTURA, NOMBRE_ESTADO_FACTURA, type EstadoFactura } from 
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { SinAcceso } from "../sin-acceso";
 import { SubidaFacturas } from "./subida";
+import { NavegacionFacturas } from "./navegacion";
 
 const PESTANAS: (EstadoFactura | undefined)[] = [undefined, "por_revisar", "error", "aprobada", "rechazada"];
 
@@ -30,6 +31,8 @@ export default async function PaginaFacturas({ searchParams }: PageProps<"/factu
           Subí facturas y la IA lee sus datos. Después las revisás y al aprobarlas se cargan en Financiero.
         </p>
       </div>
+
+      <NavegacionFacturas actual="/facturas" />
 
       {puede(usuario, "facturas", "editar") && <SubidaFacturas />}
 

@@ -12,7 +12,7 @@ import { COLOR_ESTADO_FACTURA, NOMBRE_ESTADO_FACTURA } from "@/lib/facturas/tipo
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { SinAcceso } from "../../sin-acceso";
 import { FormularioAprobacion } from "./formulario-aprobacion";
-import { AccionesFactura } from "./acciones-factura";
+import { AccionesFactura, BotonBorrarFactura } from "./acciones-factura";
 
 export default async function PaginaFactura({ params }: PageProps<"/facturas/[id]">) {
   const usuario = await obtenerUsuario();
@@ -103,6 +103,7 @@ export default async function PaginaFactura({ params }: PageProps<"/facturas/[id
           ) : (
             <ResumenFactura factura={factura} movimiento={movimiento} />
           )}
+          {editable && <BotonBorrarFactura id={factura.id} aprobada={factura.estado === "aprobada"} />}
         </div>
       </div>
     </div>

@@ -302,5 +302,67 @@ export async function aprobarFactura(
     return { error: mensaje, valores };
   }
 
+  // El emisor queda en Proveedores (si ya estaba, no se toca).
+  const cuit = (d.cuit_emisor ?? "").replace(/\D/g, "");
+  if (/^\d{11}$/.test(cuit)) {
+    await supabase
+      .from("proveedores")
+      .upsert({ cuit, razon_social: d.razon_social_emisor?.trim() || `Proveedor ${cuit}` }, { onConflict: "cuit", ignoreDuplicates: true });
+  }
+
   redirect("/facturas?estado=por_revisar");
+}
+
+/**
+ * Borra una factura recibida y su archivo. Si estaba aprobada, anula lo que
+ * generó: su movimiento de Financiero queda eliminado y, si había ingresado
+ * mercadería, se descuenta del stock con un ajuste (el stock es un registro
+ * que no se borra).
+ */
+export async function borrarFactura(id: string): Promise<{ error?: string }> {
+  await exigirPermiso("facturas", "editar");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { error: "Factura inválida" };
+  const supabase = await crearClienteServidor();
+  const { data: f } = await supabase
+    .from("facturas")
+    .select("archivo_path, tipo_comprobante, punto_venta, numero, razon_social_emisor, archivo_nombre")
+    .eq("id", id)
+    .maybeSingle();
+  if (!f) return { error: "Factura no encontrada" };
+  const referencia =
+    [f.tipo_comprobante, f.punto_venta && f.numero ? `${f.punto_venta}-${f.numero}` : null, f.razon_social_emisor].filter(Boolean).join(" ") ||
+    f.archivo_nombre;
+
+  const admin = crearClienteAdmin();
+  // 1) El movimiento de Financiero queda eliminado y deja de apuntar a la factura.
+  const { error: errorMovimiento } = await admin
+    .from("transacciones")
+    .update({ eliminado_en: new Date().toISOString(), factura_id: null })
+    .eq("factura_id", id)
+    .is("eliminado_en", null);
+  if (errorMovimiento) return { error: "No se pudo anular el movimiento de Financiero" };
+
+  // 2) Se borra la factura (lo que la referenciaba queda sin referencia).
+  const { data: entradas } = await admin.from("movimientos_stock").select("producto_id, deposito_id, cantidad").eq("factura_id", id).eq("tipo", "entrada");
+  const { error } = await admin.from("facturas").delete().eq("id", id);
+  if (error) return { error: "No se pudo borrar la factura" };
+  await admin.storage.from("facturas").remove([f.archivo_path]);
+
+  // 3) La mercadería que había ingresado se descuenta con un ajuste (después de borrar, para no duplicarlo si algo falla antes).
+  if (entradas?.length) {
+    const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }).format(new Date());
+    const { error: errorStock } = await admin.from("movimientos_stock").insert(
+      entradas.map((e) => ({
+        producto_id: e.producto_id,
+        deposito_id: e.deposito_id,
+        tipo: "ajuste",
+        cantidad: -Number(e.cantidad),
+        fecha: hoy,
+        motivo: `Factura borrada: ${referencia}`.slice(0, 200),
+      })),
+    );
+    if (errorStock) return { error: "La factura se borró pero no se pudo descontar su mercadería del stock: hacelo con un ajuste en Stock." };
+  }
+  refresh();
+  return {};
 }

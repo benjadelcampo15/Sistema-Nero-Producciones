@@ -9,6 +9,7 @@ import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { ComprobanteVista } from "@/components/comprobante-vista";
 import { SinAcceso } from "../../sin-acceso";
 import { EnviarMail } from "./enviar-mail";
+import { BotonBorrarComprobante } from "../borrar";
 
 export default async function PaginaComprobante({ params, searchParams }: PageProps<"/facturar/[id]">) {
   const usuario = await obtenerUsuario();
@@ -35,6 +36,7 @@ export default async function PaginaComprobante({ params, searchParams }: PagePr
               <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">REAL</span>
             )}
           </div>
+          {puedeEditar && <BotonBorrarComprobante id={c.id} irA="/facturar" real={c.entorno === "produccion" && c.estado === "emitido"} />}
           {c.estado === "emitido" && (
             <a href={`/imprimir/factura/${c.id}`} target="_blank" rel="noreferrer" className="boton">
               Descargar PDF / Imprimir

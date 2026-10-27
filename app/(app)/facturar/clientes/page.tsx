@@ -6,6 +6,7 @@ import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { SinAcceso } from "../../sin-acceso";
 import { NavegacionFacturar } from "../navegacion";
 import { BotonEstadoCliente, FormularioCliente } from "./formulario-cliente";
+import { BotonBorrarCliente } from "../borrar";
 
 export default async function PaginaClientes() {
   const usuario = await obtenerUsuario();
@@ -44,7 +45,10 @@ export default async function PaginaClientes() {
             <details key={c.id} className={c.activo ? "" : "opacity-60"}>
               <summary className="flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-sm">
                 {encabezado}
-                <span className="ml-auto"><BotonEstadoCliente id={c.id} activo={c.activo} /></span>
+                <span className="ml-auto flex gap-3">
+                  <BotonEstadoCliente id={c.id} activo={c.activo} />
+                  {!r && <BotonBorrarCliente id={c.id} nombre={c.razon_social} />}
+                </span>
               </summary>
               <div className="border-t border-stone-100 bg-stone-50 px-4 py-4">
                 <FormularioCliente cliente={c} />

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { rechazarFactura, reprocesarFactura } from "@/lib/facturas/acciones";
+import { borrarFactura, rechazarFactura, reprocesarFactura } from "@/lib/facturas/acciones";
 
 export function AccionesFactura({ id, puedeReintentar }: { id: string; puedeReintentar: boolean }) {
   const router = useRouter();
@@ -51,5 +51,31 @@ export function AccionesFactura({ id, puedeReintentar }: { id: string; puedeRein
         </button>
       </div>
     </div>
+  );
+}
+
+/** Borra la factura. Si estaba aprobada, avisa que se anula su gasto y se descuenta el stock. */
+export function BotonBorrarFactura({ id, aprobada }: { id: string; aprobada: boolean }) {
+  const router = useRouter();
+  const [pendiente, iniciar] = useTransition();
+  return (
+    <button
+      type="button"
+      disabled={pendiente}
+      className="text-sm text-red-700 hover:underline disabled:opacity-50"
+      onClick={() => {
+        const aviso = aprobada
+          ? "¿Borrar esta factura? Ya estaba aprobada: se elimina su movimiento en Financiero y, si ingresó mercadería, se descuenta del stock. No se puede deshacer."
+          : "¿Borrar esta factura y su archivo? No se puede deshacer.";
+        if (!window.confirm(aviso)) return;
+        iniciar(async () => {
+          const r = await borrarFactura(id);
+          if (r.error) window.alert(r.error);
+          else router.push("/facturas");
+        });
+      }}
+    >
+      {pendiente ? "Borrando…" : "Borrar factura"}
+    </button>
   );
 }

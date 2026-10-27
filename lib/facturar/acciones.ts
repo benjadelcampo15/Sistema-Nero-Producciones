@@ -6,6 +6,7 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { exigirPermiso, puede } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
+import { crearClienteAdmin } from "@/lib/supabase/admin";
 import { configuracionArca, entornoConfigurado } from "@/lib/arca/config";
 import { ErrorArca } from "@/lib/arca/soap";
 import { solicitarCae, ultimoAutorizado } from "@/lib/arca/wsfe";
@@ -267,4 +268,20 @@ export async function enviarFacturaPorMail(id: string, _previo: EstadoEnvio, for
   }
   refresh();
   return { ok: `Enviada a ${para}` };
+}
+
+/**
+ * Borra un comprobante emitido de la app. Si es una factura real autorizada,
+ * solo se borra de la app: para ARCA sigue existiendo (se anula con nota de crédito).
+ */
+export async function borrarComprobante(id: string): Promise<{ error?: string }> {
+  await exigirPermiso("facturar", "editar");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { error: "Comprobante inválido" };
+  const supabase = await crearClienteServidor();
+  const { data: c } = await supabase.from("comprobantes_emitidos").select("id").eq("id", id).maybeSingle();
+  if (!c) return { error: "Comprobante no encontrado" };
+  const { error } = await crearClienteAdmin().from("comprobantes_emitidos").delete().eq("id", id);
+  if (error) return { error: "No se pudo borrar" };
+  refresh();
+  return {};
 }

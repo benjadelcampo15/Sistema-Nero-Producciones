@@ -4,6 +4,7 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
+import { crearClienteAdmin } from "@/lib/supabase/admin";
 import { cuitValido } from "@/lib/cuit";
 import { CONDICIONES_IVA } from "@/lib/facturar/tipos";
 
@@ -71,6 +72,18 @@ export async function cambiarEstadoCliente(id: string, activo: boolean): Promise
   const supabase = await crearClienteServidor();
   const { data } = await supabase.from("clientes").update({ activo }).eq("id", id).select("id");
   if (!data?.length) return { error: "No se pudo actualizar el cliente" };
+  refresh();
+  return {};
+}
+
+/** Borra un cliente sin facturas; si tiene facturas emitidas, solo se puede desactivar. */
+export async function borrarCliente(id: string): Promise<{ error?: string }> {
+  await exigirEdicion();
+  const supabase = await crearClienteServidor();
+  const { count } = await supabase.from("comprobantes_emitidos").select("id", { count: "exact", head: true }).eq("cliente_id", id);
+  if (count) return { error: `Tiene ${count} factura${count === 1 ? "" : "s"} emitida${count === 1 ? "" : "s"}: no se puede borrar, desactivalo.` };
+  const { error } = await crearClienteAdmin().from("clientes").delete().eq("id", id);
+  if (error) return { error: "No se pudo borrar el cliente" };
   refresh();
   return {};
 }

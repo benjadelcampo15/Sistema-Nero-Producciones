@@ -5,12 +5,14 @@ import { nombreTipoCbte, numeroComprobante } from "@/lib/facturar/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { SinAcceso } from "../sin-acceso";
 import { NavegacionFacturar } from "./navegacion";
+import { BotonBorrarComprobante } from "./borrar";
 
 export default async function PaginaFacturar() {
   const usuario = await obtenerUsuario();
   if (!puede(usuario, "facturar", "ver")) return <SinAcceso />;
 
   const comprobantes = await listarComprobantes();
+  const editable = puede(usuario, "facturar", "editar");
 
   return (
     <div className="space-y-6">
@@ -69,6 +71,7 @@ export default async function PaginaFacturar() {
                   ) : (
                     <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">Rechazada</span>
                   )}
+                  {editable && <span className="ml-2"><BotonBorrarComprobante id={c.id} real={c.entorno === "produccion" && c.estado === "emitido"} /></span>}
                 </td>
               </tr>
             ))}
