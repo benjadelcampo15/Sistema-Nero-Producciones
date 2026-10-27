@@ -18,10 +18,11 @@ export type Cuenta = {
 /** Último saldo cargado de una cuenta hasta cierta fecha. */
 export type SaldoCuenta = { saldo: number; fecha: string };
 
-/** Un ingreso o egreso del cashflow: de Financiero o un cheque pendiente. */
+/** Un ingreso o egreso del cashflow: de Financiero (de Nero o de Ruta) o un cheque pendiente. */
 export type MovimientoCaja = {
   id: string;
   origen: "financiero" | "cheque";
+  empresa: "nero" | "ruta" | null;
   fecha: string;
   tipo: "ingreso" | "egreso";
   monto: number;

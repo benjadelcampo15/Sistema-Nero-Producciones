@@ -4,7 +4,7 @@ import { crearClienteAdmin } from "@/lib/supabase/admin";
 import { ESTADOS_FACTURA, type EstadoFactura, type Factura } from "./tipos";
 
 const CAMPOS =
-  "id, archivo_path, archivo_nombre, archivo_tipo, estado, error, datos_ia, proveedor_ia, tipo_comprobante, punto_venta, numero, fecha_emision, cuit_emisor, razon_social_emisor, cuit_receptor, razon_social_receptor, neto, iva, total, duplicada_de, creado_en, actualizado_en";
+  "id, empresa, archivo_path, archivo_nombre, archivo_tipo, estado, error, datos_ia, proveedor_ia, tipo_comprobante, punto_venta, numero, fecha_emision, cuit_emisor, razon_social_emisor, cuit_receptor, razon_social_receptor, neto, iva, total, duplicada_de, creado_en, actualizado_en";
 
 function normalizar(f: Factura): Factura {
   const n = (v: number | null) => (v === null ? null : Number(v));

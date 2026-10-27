@@ -15,8 +15,11 @@ export const COLOR_ESTADO_EVENTO: Record<EstadoEvento, string> = {
   cancelado: "bg-red-100 text-red-800",
 };
 
+import type { Empresa } from "@/lib/empresas";
+
 export type Evento = {
   id: string;
+  empresa: Empresa;
   nombre: string;
   fecha: string;
   lugar: string | null;

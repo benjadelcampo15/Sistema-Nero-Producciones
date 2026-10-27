@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { emitirFactura } from "@/lib/facturar/acciones";
+import { CampoEmpresa } from "@/components/empresa";
+import { leerEmpresa } from "@/lib/empresas";
 import {
   ALICUOTAS,
   CONCEPTOS,
@@ -378,6 +380,10 @@ export function FormularioFactura({
 
       <fieldset className="tarjeta space-y-4">
         <legend className="px-1 font-semibold">En la app</legend>
+        <CampoEmpresa
+          defecto={leerEmpresa(v("empresa", "nero"))}
+          ayuda="A qué financiero va el ingreso. La factura se emite igual con los datos de ARCA configurados en la app."
+        />
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="evento_id" className="etiqueta">Evento <span className="font-normal text-stone-400">(opcional)</span></label>

@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
   return new Response(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="movimientos_${filtros.desde}_${filtros.hasta}.csv"`,
+      "Content-Disposition": `attachment; filename="movimientos_${filtros.empresa}_${filtros.desde}_${filtros.hasta}.csv"`,
       "Cache-Control": "no-store",
     },
   });

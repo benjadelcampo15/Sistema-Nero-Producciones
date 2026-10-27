@@ -1,3 +1,7 @@
+import type { Empresa } from "@/lib/empresas";
+
+export { EMPRESAS, NOMBRE_EMPRESA, type Empresa } from "@/lib/empresas";
+
 export const TIPOS = ["ingreso", "egreso"] as const;
 export type TipoMovimiento = (typeof TIPOS)[number];
 
@@ -48,6 +52,7 @@ export type EventoResumido = { id: string; nombre: string; fecha: string };
 
 export type Transaccion = {
   id: string;
+  empresa: Empresa;
   tipo: TipoMovimiento;
   monto: number;
   // null: sin fecha (no entra al cashflow ni a los totales por período).

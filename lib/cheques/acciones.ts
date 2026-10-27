@@ -6,6 +6,7 @@ import { exigirPermiso } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { hoy, parsearMonto } from "@/lib/formato";
 import { DIAS_AVISO, ESTADOS, sumarDias, type EstadoCheque, type TipoCheque } from "./tipos";
+import { EMPRESAS } from "@/lib/empresas";
 
 export type EstadoFormCheque = { error?: string; ok?: string; valores?: Record<string, string> };
 
@@ -23,6 +24,7 @@ const fechaOpcional = z
   .transform((v) => v || null);
 
 const esquema = z.object({
+  empresa: z.enum(EMPRESAS, "Elegí la empresa"),
   contraparte: z.string().trim().min(1, "Falta a quién se le dio / quién lo dio").max(200),
   cuit: textoOpcional(20),
   banco: textoOpcional(100),

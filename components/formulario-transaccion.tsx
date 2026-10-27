@@ -11,12 +11,14 @@ import {
   NOMBRE_MEDIO_PAGO,
   type Categoria,
   type ChequeDeMovimiento,
+  type Empresa,
   type MedioPago,
   type EventoResumido,
   type TipoMovimiento,
   type Transaccion,
 } from "@/lib/financiero/tipos";
 import { formatoFecha, hoy } from "@/lib/formato";
+import { CampoEmpresa } from "@/components/empresa";
 
 type Props = {
   transaccion?: Transaccion;
@@ -29,9 +31,11 @@ type Props = {
   /** Si viene, el movimiento queda fijado a ese evento (alta desde la pantalla del evento). */
   eventoFijo?: EventoResumido;
   volverA: string;
+  /** Empresa de un movimiento nuevo (la que se está mirando en Financiero). */
+  empresa?: Empresa;
 };
 
-export function FormularioTransaccion({ transaccion, cheque, errorCheque, categorias, eventos, eventoFijo, volverA }: Props) {
+export function FormularioTransaccion({ transaccion, cheque, errorCheque, categorias, eventos, eventoFijo, volverA, empresa = "nero" }: Props) {
   const [estado, accion, enviando] = useActionState(
     guardarTransaccion.bind(null, transaccion?.id ?? null),
     {},
@@ -55,6 +59,8 @@ export function FormularioTransaccion({ transaccion, cheque, errorCheque, catego
       {errorCheque && !estado.error && (
         <p className="alerta-error">El movimiento se guardó, pero no se pudo cargar el cheque. Revisá los datos del cheque y guardá de nuevo.</p>
       )}
+
+      <CampoEmpresa defecto={v("empresa", transaccion?.empresa ?? empresa) === "ruta" ? "ruta" : "nero"} />
 
       <fieldset>
         <legend className="etiqueta">Tipo</legend>

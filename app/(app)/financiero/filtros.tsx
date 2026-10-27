@@ -6,6 +6,7 @@ import type { Categoria, EventoResumido } from "@/lib/financiero/tipos";
 import type { Periodo } from "@/lib/formato";
 
 export type ValoresFiltros = {
+  empresa: string;
   desde: string;
   hasta: string;
   tipo: string;

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { guardarMes } from "@/lib/objetivos/acciones";
+import type { Empresa } from "@/lib/empresas";
 import { BLOQUES, MESES, calcularMes, type DatosMes, type Item, type ListaMes } from "@/lib/objetivos/tipos";
 import { formatoPesos, parsearMonto } from "@/lib/formato";
 
@@ -16,6 +17,7 @@ function leerMonto(texto: string) {
 const mostrarMonto = (n: number) => (n ? String(n).replace(".", ",") : "");
 
 export function EditorMes({
+  empresa,
   anio,
   mes,
   inicial,
@@ -23,6 +25,7 @@ export function EditorMes({
   acumuladoAnterior,
   editable,
 }: {
+  empresa: Empresa;
   anio: number;
   mes: number;
   inicial: DatosMes;
@@ -51,7 +54,7 @@ export function EditorMes({
 
   const guardar = () =>
     iniciar(async () => {
-      const r = await guardarMes(anio, mes, datos);
+      const r = await guardarMes(empresa, anio, mes, datos);
       if (r.error) setMensaje({ tipo: "error", texto: r.error });
       else {
         setSinGuardar(false);

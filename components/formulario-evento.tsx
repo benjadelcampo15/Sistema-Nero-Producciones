@@ -5,14 +5,21 @@ import { useActionState } from "react";
 import { guardarEvento } from "@/lib/eventos/acciones";
 import { ESTADOS_EVENTO, NOMBRE_ESTADO_EVENTO, type Evento } from "@/lib/eventos/tipos";
 import { hoy } from "@/lib/formato";
+import { leerEmpresa, type Empresa } from "@/lib/empresas";
+import { CampoEmpresa } from "@/components/empresa";
 
-export function FormularioEvento({ evento }: { evento?: Evento }) {
+export function FormularioEvento({ evento, empresa = "nero" }: { evento?: Evento; empresa?: Empresa }) {
   const [estado, accion, enviando] = useActionState(guardarEvento.bind(null, evento?.id ?? null), {});
   const v = (campo: string, inicial: string) => estado.valores?.[campo] ?? inicial;
 
   return (
     <form action={accion} className="tarjeta max-w-2xl space-y-5">
       {estado.error && <p className="alerta-error">{estado.error}</p>}
+
+      <CampoEmpresa
+        defecto={leerEmpresa(v("empresa", evento?.empresa ?? empresa))}
+        ayuda={evento ? "Si la cambiás, los movimientos del evento pasan al financiero de esa empresa." : "Sus movimientos van al financiero de esta empresa."}
+      />
 
       <div>
         <label htmlFor="nombre" className="etiqueta">Nombre</label>

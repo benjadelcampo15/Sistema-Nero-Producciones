@@ -7,7 +7,7 @@ export default async function PaginaNuevoMovimiento({ searchParams }: PageProps<
   const usuario = await obtenerUsuario();
   if (!puede(usuario, "financiero", "editar")) return <SinAcceso />;
 
-  const { volver_a } = await searchParams;
+  const { volver_a, empresa } = await searchParams;
   const [categorias, eventos] = await Promise.all([obtenerCategorias(), obtenerEventosResumidos()]);
 
   return (
@@ -16,6 +16,7 @@ export default async function PaginaNuevoMovimiento({ searchParams }: PageProps<
       <FormularioTransaccion
         categorias={categorias}
         eventos={eventos}
+        empresa={empresa === "ruta" ? "ruta" : "nero"}
         volverA={typeof volver_a === "string" && volver_a.startsWith("/financiero") ? volver_a : "/financiero"}
       />
     </div>

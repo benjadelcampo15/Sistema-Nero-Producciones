@@ -3,6 +3,7 @@ import { z } from "zod";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { mesActual, sumar } from "@/lib/formato";
 import {
+  EMPRESAS,
   ESTADOS_MOVIMIENTO,
   TIPOS,
   type Categoria,
@@ -17,6 +18,7 @@ export const LIMITE_LISTADO = 2000;
 const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 const esquemaFiltros = z.object({
+  empresa: z.enum(EMPRESAS).catch("nero").default("nero"),
   desde: fecha.optional().catch(undefined),
   hasta: fecha.optional().catch(undefined),
   tipo: z.enum(TIPOS).optional().catch(undefined),
@@ -39,7 +41,7 @@ export function leerFiltros(params: Record<string, string | string[] | undefined
 }
 
 export const CAMPOS_TRANSACCION =
-  "id, tipo, monto, fecha, descripcion, contraparte, medio_pago, estado, facturado, iva, iibb, notas, categoria:categorias(id, nombre), evento:eventos(id, nombre)";
+  "id, empresa, tipo, monto, fecha, descripcion, contraparte, medio_pago, estado, facturado, iva, iibb, notas, categoria:categorias(id, nombre), evento:eventos(id, nombre)";
 
 /** PostgREST devuelve los numeric como texto o número según el caso: se normalizan. */
 export function normalizarTransacciones(filas: unknown[] | null): Transaccion[] {
@@ -91,6 +93,7 @@ export async function obtenerSinFecha(filtros: Filtros) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- el tipo del query builder de supabase es muy profundo
 function aplicarFiltros<T extends { eq: any; is: any; or: any }>(consulta: T, filtros: Filtros): T {
+  consulta = consulta.eq("empresa", filtros.empresa);
   if (filtros.tipo) consulta = consulta.eq("tipo", filtros.tipo);
   if (filtros.estado) consulta = consulta.eq("estado", filtros.estado);
   if (filtros.categoria) consulta = consulta.eq("categoria_id", filtros.categoria);

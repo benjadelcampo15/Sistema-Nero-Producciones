@@ -3,14 +3,19 @@
 import { useActionState, useTransition } from "react";
 import { borrarCheque, cambiarEstadoCheque, guardarCheque } from "@/lib/cheques/acciones";
 import { ESTADOS, type Cheque, type EstadoCheque, type TipoCheque } from "@/lib/cheques/tipos";
+import { CampoEmpresa } from "@/components/empresa";
+import { leerEmpresa, type Empresa } from "@/lib/empresas";
 
 /** Alta (sin cheque) o edición de un cheque. */
 export function FormularioCheque({
   tipo,
   eventos,
   cheque,
+  empresa = "nero",
 }: {
   tipo: TipoCheque;
+  /** Empresa de un cheque nuevo (la que se está mirando). */
+  empresa?: Empresa;
   eventos: { id: string; nombre: string; fecha: string }[];
   cheque?: Cheque;
 }) {
@@ -20,6 +25,7 @@ export function FormularioCheque({
 
   return (
     <form action={accion} className="space-y-3">
+      <CampoEmpresa defecto={leerEmpresa(v("empresa", cheque?.empresa ?? empresa))} />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="lg:col-span-2">
           <label className="etiqueta">{tipo === "emitido" ? "A quién se le dio" : "Quién lo dio (cliente / librador)"}</label>

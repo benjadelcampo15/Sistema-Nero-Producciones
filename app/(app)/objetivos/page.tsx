@@ -4,6 +4,9 @@ import { aniosConDatos, mesesDelAnio } from "@/lib/objetivos/consultas";
 import { MESES, calcularMes } from "@/lib/objetivos/tipos";
 import { formatoPesos, hoy } from "@/lib/formato";
 import { SinAcceso } from "../sin-acceso";
+import { AlternarEmpresa } from "@/components/empresa";
+import { leerEmpresa } from "@/lib/empresas";
+import { AnioRuta } from "./anio-ruta";
 
 const pct = (v: number | null) => (v === null ? "—" : `${(v * 100).toFixed(1).replace(".", ",")}%`);
 
@@ -11,10 +14,13 @@ export default async function PaginaObjetivos({ searchParams }: PageProps<"/obje
   const usuario = await obtenerUsuario();
   if (!puede(usuario, "objetivos", "ver")) return <SinAcceso />;
 
-  const { anio: anioParam } = await searchParams;
+  const { anio: anioParam, empresa: parametroEmpresa } = await searchParams;
+  const empresa = leerEmpresa(parametroEmpresa);
   const anioActual = Number(hoy().slice(0, 4));
   const anio = Number(anioParam) >= 2000 && Number(anioParam) <= 2100 ? Number(anioParam) : anioActual;
-  const [meses, anios] = await Promise.all([mesesDelAnio(anio), aniosConDatos()]);
+  // Ruta tiene su propio modelo (fees por cliente, sueldos por porcentaje, one shots y eventos).
+  if (empresa === "ruta") return <AnioRuta anio={anio} />;
+  const [meses, anios] = await Promise.all([mesesDelAnio(empresa, anio), aniosConDatos(empresa)]);
   const opciones = [...new Set([...anios, anioActual, anioActual + 1])].sort((a, b) => b - a);
   const mesActual = anio === anioActual ? Number(hoy().slice(5, 7)) : null;
 
@@ -37,14 +43,17 @@ export default async function PaginaObjetivos({ searchParams }: PageProps<"/obje
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Objetivos</h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold">Objetivos</h1>
+            <AlternarEmpresa actual={empresa} href={(e) => `/objetivos?empresa=${e}&anio=${anio}`} />
+          </div>
           <p className="text-sm text-stone-500">Análisis mensual de rentabilidad: ingresos, costos, ratios y distribución.</p>
         </div>
         <div className="flex gap-1">
           {opciones.map((a) => (
             <Link
               key={a}
-              href={`/objetivos?anio=${a}`}
+              href={`/objetivos?empresa=${empresa}&anio=${a}`}
               className={`rounded-md border px-3 py-1.5 text-sm ${a === anio ? "border-stone-900 bg-stone-900 text-white" : "border-stone-300 bg-white hover:border-stone-900"}`}
             >
               {a}
@@ -85,7 +94,7 @@ export default async function PaginaObjetivos({ searchParams }: PageProps<"/obje
             {filas.map((f) => (
               <tr key={f.mes} className={f.mes === mesActual ? "bg-amber-50/60" : "hover:bg-stone-50"}>
                 <td className="px-4 py-2">
-                  <Link href={`/objetivos/${anio}/${f.mes}`} className="font-medium underline decoration-stone-300 hover:decoration-stone-900">
+                  <Link href={`/objetivos/${anio}/${f.mes}?empresa=${empresa}`} className="font-medium underline decoration-stone-300 hover:decoration-stone-900">
                     {f.nombre}
                   </Link>
                   {!f.c && <span className="ml-2 text-xs text-stone-400">sin cargar</span>}

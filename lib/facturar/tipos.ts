@@ -1,3 +1,5 @@
+import type { Empresa } from "@/lib/empresas";
+
 /** Comprobantes que emite la app (códigos de ARCA). */
 export const TIPOS_CBTE = [
   { id: 1, nombre: "Factura A", clase: "A" },
@@ -84,6 +86,7 @@ export function calcularTotales(items: ItemComprobante[], clase: ClaseCbte) {
 
 export type Comprobante = {
   id: string;
+  empresa: Empresa;
   entorno: "homologacion" | "produccion";
   estado: "emitido" | "rechazado";
   tipo_cbte: number;

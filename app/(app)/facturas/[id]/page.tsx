@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NOMBRE_EMPRESA } from "@/lib/empresas";
 import { notFound } from "next/navigation";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
 import {
@@ -138,8 +139,8 @@ function ResumenFactura({
       </dl>
       {movimiento && (
         <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-900">
-          Cargada en Financiero: {movimiento.descripcion} ({formatoFecha(movimiento.fecha)}).{" "}
-          <Link href={`/financiero?desde=${movimiento.fecha}&hasta=${movimiento.fecha}`} className="font-medium underline">
+          Cargada en el Financiero de {NOMBRE_EMPRESA[factura.empresa]}: {movimiento.descripcion} ({formatoFecha(movimiento.fecha)}).{" "}
+          <Link href={`/financiero?empresa=${factura.empresa}&desde=${movimiento.fecha}&hasta=${movimiento.fecha}`} className="font-medium underline">
             Ver movimiento
           </Link>
         </p>

@@ -6,7 +6,7 @@ import { z } from "zod";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { parsearMonto } from "@/lib/formato";
-import { ESTADOS_MOVIMIENTO, MEDIOS_CHEQUE, MEDIOS_PAGO, TIPOS, type EstadoMovimiento } from "./tipos";
+import { EMPRESAS, ESTADOS_MOVIMIENTO, MEDIOS_CHEQUE, MEDIOS_PAGO, TIPOS, type EstadoMovimiento } from "./tipos";
 
 export type EstadoFormulario = {
   error?: string;
@@ -28,6 +28,7 @@ const textoOpcional = z
   .transform((v) => v || null);
 
 const esquemaTransaccion = z.object({
+  empresa: z.enum(EMPRESAS, "Elegí la empresa"),
   tipo: z.enum(TIPOS, "Elegí si es ingreso o egreso"),
   // Vacía = sin fecha (no entra al cashflow hasta que se le ponga).
   fecha: z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"), z.literal("")]).transform((v) => v || null),
@@ -110,6 +111,7 @@ export async function guardarTransaccion(
     const { error: errorCheque } = await supabase.from("cheques").upsert(
       {
         transaccion_id: escritas[0].id,
+        empresa: fila.empresa,
         tipo: fila.tipo === "egreso" ? "emitido" : "recibido",
         monto,
         contraparte: fila.contraparte || fila.descripcion,
@@ -221,7 +223,7 @@ export async function registrarPago(id: string, _previo: EstadoFormulario, formD
   const supabase = await crearClienteServidor();
   const { data: t } = await supabase
     .from("transacciones")
-    .select("tipo, monto, iva, descripcion, categoria_id, evento_id, contraparte, facturado, notas, estado")
+    .select("empresa, tipo, monto, iva, descripcion, categoria_id, evento_id, contraparte, facturado, notas, estado")
     .eq("id", id)
     .is("eliminado_en", null)
     .maybeSingle();
@@ -244,6 +246,7 @@ export async function registrarPago(id: string, _previo: EstadoFormulario, formD
     const resta = r2(total - monto);
     const palabra = t.tipo === "egreso" ? "Pago" : "Cobro";
     const { error: errorNuevo } = await supabase.from("transacciones").insert({
+      empresa: t.empresa,
       tipo: t.tipo,
       monto: r2(monto),
       fecha,

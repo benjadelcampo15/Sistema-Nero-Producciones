@@ -4,7 +4,7 @@ import { crearClienteAdmin } from "@/lib/supabase/admin";
 import type { Comprobante } from "./tipos";
 
 const CAMPOS =
-  "id, entorno, estado, tipo_cbte, punto_venta, numero, fecha, concepto, fecha_servicio_desde, fecha_servicio_hasta, fecha_vto_pago, doc_tipo, doc_nro, receptor_nombre, condicion_iva_receptor, items, neto, iva, total, cae, cae_vto, mensajes, transaccion_id, token, mail_enviado_a, mail_enviado_en, creado_en, evento:eventos(id, nombre), cliente:clientes(email)";
+  "id, empresa, entorno, estado, tipo_cbte, punto_venta, numero, fecha, concepto, fecha_servicio_desde, fecha_servicio_hasta, fecha_vto_pago, doc_tipo, doc_nro, receptor_nombre, condicion_iva_receptor, items, neto, iva, total, cae, cae_vto, mensajes, transaccion_id, token, mail_enviado_a, mail_enviado_en, creado_en, evento:eventos(id, nombre), cliente:clientes(email)";
 
 function normalizar(c: Comprobante): Comprobante {
   return { ...c, neto: Number(c.neto), iva: Number(c.iva), total: Number(c.total), numero: c.numero === null ? null : Number(c.numero) };

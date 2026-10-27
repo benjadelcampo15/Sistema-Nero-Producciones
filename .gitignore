@@ -46,3 +46,4 @@ next-env.d.ts
 
 # certificados y claves de ARCA (no subir)
 /.arca/
+.vercel

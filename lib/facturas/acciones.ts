@@ -10,6 +10,7 @@ import { crearClienteAdmin } from "@/lib/supabase/admin";
 import { leerFactura } from "@/lib/ai/leer-factura";
 import { parsearMonto } from "@/lib/formato";
 import { ESTADOS_MOVIMIENTO, MEDIOS_PAGO, TIPOS } from "@/lib/financiero/tipos";
+import { EMPRESAS } from "@/lib/empresas";
 import { TAMANO_MAXIMO } from "./tipos";
 
 export type ResultadoSubida = { id?: string; error?: string; nombre: string };
@@ -202,6 +203,7 @@ const digitos = z
   .transform((v) => v?.replace(/\D/g, "") || null);
 
 const esquemaAprobacion = z.object({
+  empresa: z.enum(EMPRESAS, "Elegí la empresa"),
   // Comprobante
   tipo_comprobante: textoOpcional,
   punto_venta: digitos,
@@ -273,6 +275,7 @@ export async function aprobarFactura(
       total,
     },
     p_transaccion: {
+      empresa: d.empresa,
       tipo: d.tipo,
       monto: total,
       fecha: d.fecha,

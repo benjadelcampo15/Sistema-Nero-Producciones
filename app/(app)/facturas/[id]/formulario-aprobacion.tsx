@@ -15,6 +15,8 @@ import {
 import { formatoFecha, hoy } from "@/lib/formato";
 import type { Deposito, Producto } from "@/lib/stock/tipos";
 import { SeccionStock, type ItemFactura } from "./seccion-stock";
+import { CampoEmpresa } from "@/components/empresa";
+import { leerEmpresa } from "@/lib/empresas";
 
 type DatosIA = {
   emitida_por_nero?: boolean;
@@ -91,6 +93,8 @@ export function FormularioAprobacion({
 
       <fieldset className="tarjeta space-y-3">
         <legend className="px-1 font-semibold">Movimiento en Financiero</legend>
+
+        <CampoEmpresa defecto={leerEmpresa(v("empresa", factura.empresa))} ayuda="A qué financiero va el movimiento." />
 
         <div className="grid grid-cols-2 gap-2">
           {(["egreso", "ingreso"] as const).map((t) => (

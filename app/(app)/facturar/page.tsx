@@ -4,6 +4,7 @@ import { listarComprobantes } from "@/lib/facturar/consultas";
 import { nombreTipoCbte, numeroComprobante } from "@/lib/facturar/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { SinAcceso } from "../sin-acceso";
+import { EtiquetaEmpresa } from "@/components/empresa";
 import { NavegacionFacturar } from "./navegacion";
 import { BotonBorrarComprobante } from "./borrar";
 
@@ -58,6 +59,9 @@ export default async function PaginaFacturar() {
                   )}
                 </td>
                 <td className="px-4 py-3">
+                  <span className="mr-2">
+                    <EtiquetaEmpresa empresa={c.empresa} />
+                  </span>
                   {c.receptor_nombre ?? (c.doc_tipo === 99 ? "Consumidor final" : c.doc_nro)}
                   {c.doc_tipo !== 99 && <span className="block text-xs text-stone-500">{c.doc_tipo === 80 ? "CUIT" : "DNI"} {c.doc_nro}</span>}
                 </td>

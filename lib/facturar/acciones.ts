@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { redirect } from "next/navigation";
 import { refresh } from "next/cache";
 import { z } from "zod";
+import { EMPRESAS } from "@/lib/empresas";
 import { exigirPermiso, puede } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { crearClienteAdmin } from "@/lib/supabase/admin";
@@ -21,6 +22,7 @@ export type EstadoEmision = { error?: string; detalles?: string[]; valores?: Rec
 const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida");
 
 const esquema = z.object({
+  empresa: z.enum(EMPRESAS, "Elegí la empresa"),
   entorno: z.enum(["homologacion", "produccion"], "Elegí si es una factura de prueba o real"),
   tipo_cbte: z.coerce.number().refine((n) => TIPOS_CBTE.some((t) => t.id === n), "Tipo de comprobante inválido"),
   punto_venta: z.coerce.number().int().min(1, "Punto de venta inválido").max(99998),
@@ -166,6 +168,7 @@ export async function emitirFactura(_previo: EstadoEmision, formData: FormData):
   const { data: comprobante, error } = await supabase
     .from("comprobantes_emitidos")
     .insert({
+      empresa: d.empresa,
       entorno,
       estado: respuesta.aprobado ? "emitido" : "rechazado",
       tipo_cbte: d.tipo_cbte,
@@ -215,6 +218,7 @@ export async function emitirFactura(_previo: EstadoEmision, formData: FormData):
     const { data: trx } = await supabase
       .from("transacciones")
       .insert({
+        empresa: d.empresa,
         tipo: "ingreso",
         monto: totales.total,
         fecha: d.fecha,

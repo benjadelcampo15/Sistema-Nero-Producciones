@@ -10,6 +10,7 @@ import {
 } from "@/lib/financiero/consultas";
 import { formatoPesos, hoy, periodosRapidos } from "@/lib/formato";
 import { NOMBRE_ESTADO_MOVIMIENTO } from "@/lib/financiero/tipos";
+import { AlternarEmpresa } from "@/components/empresa";
 import { SinAcceso } from "../sin-acceso";
 import { TablaMovimientos } from "@/components/tabla-movimientos";
 import { Filtros, ProveedorFiltros, ZonaResultados } from "./filtros";
@@ -37,6 +38,12 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
   const proximos = transacciones.filter((t) => t.fecha !== null && t.fecha > fechaHoy).reverse();
 
   const volverA = `/financiero?${consulta}`;
+  // Mismos filtros, otra empresa.
+  const hrefEmpresa = (empresa: string) => {
+    const p = new URLSearchParams(consulta);
+    p.set("empresa", empresa);
+    return `/financiero?${p}`;
+  };
 
   // Con un estado filtrado, los números son los de ese estado; sin filtro, la caja real
   // grande y abajo el escenario con pendientes y proyectados.
@@ -48,14 +55,17 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
     <ProveedorFiltros>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold">Financiero</h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold">Financiero</h1>
+            <AlternarEmpresa actual={filtros.empresa} href={hrefEmpresa} />
+          </div>
           <div className="flex flex-wrap gap-2">
             {editable && (
               <Link href="/financiero/categorias" className="boton-secundario">Categorías</Link>
             )}
             <a href={`/financiero/exportar?${consulta}`} className="boton-secundario">Exportar a Excel</a>
             {editable && (
-              <Link href={`/financiero/nuevo?volver_a=${encodeURIComponent(volverA)}`} className="boton">
+              <Link href={`/financiero/nuevo?empresa=${filtros.empresa}&volver_a=${encodeURIComponent(volverA)}`} className="boton">
                 + Nuevo movimiento
               </Link>
             )}
@@ -64,6 +74,7 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
 
         <Filtros
           iniciales={{
+            empresa: filtros.empresa,
             desde: filtros.desde,
             hasta: filtros.hasta,
             tipo: filtros.tipo ?? "",

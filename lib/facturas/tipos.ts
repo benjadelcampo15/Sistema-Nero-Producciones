@@ -1,3 +1,5 @@
+import type { Empresa } from "@/lib/empresas";
+
 export const ESTADOS_FACTURA = ["procesando", "por_revisar", "aprobada", "rechazada", "error"] as const;
 export type EstadoFactura = (typeof ESTADOS_FACTURA)[number];
 
@@ -22,6 +24,7 @@ export const TAMANO_MAXIMO = 10 * 1024 * 1024;
 
 export type Factura = {
   id: string;
+  empresa: Empresa;
   archivo_path: string;
   archivo_nombre: string;
   archivo_tipo: string;

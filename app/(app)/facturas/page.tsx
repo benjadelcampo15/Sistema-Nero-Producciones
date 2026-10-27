@@ -4,6 +4,7 @@ import { contarPorEstado, leerEstadoFactura, listarFacturas } from "@/lib/factur
 import { COLOR_ESTADO_FACTURA, NOMBRE_ESTADO_FACTURA, type EstadoFactura } from "@/lib/facturas/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { SinAcceso } from "../sin-acceso";
+import { EtiquetaEmpresa } from "@/components/empresa";
 import { SubidaFacturas } from "./subida";
 import { NavegacionFacturas } from "./navegacion";
 import { BotonBorrarFactura } from "./[id]/acciones-factura";
@@ -101,6 +102,11 @@ export default async function PaginaFacturas({ searchParams }: PageProps<"/factu
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${COLOR_ESTADO_FACTURA[f.estado]}`}>
                     {NOMBRE_ESTADO_FACTURA[f.estado]}
                   </span>
+                  {f.estado === "aprobada" && (
+                    <span className="ml-1">
+                      <EtiquetaEmpresa empresa={f.empresa} />
+                    </span>
+                  )}
                   {f.duplicada_de && f.estado === "por_revisar" && (
                     <span className="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
                       ¿Duplicada?

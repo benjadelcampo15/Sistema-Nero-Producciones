@@ -5,6 +5,7 @@ import { z } from "zod";
 import { exigirPermiso } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { parsearMonto } from "@/lib/formato";
+import { EMPRESAS } from "@/lib/empresas";
 import { ESTADOS_EVENTO } from "./tipos";
 import { PLANILLA_VACIA, esquemaPlanilla, type Planilla } from "./planilla";
 import { planillaDesdeMovimientos } from "./desde-movimientos";
@@ -19,6 +20,7 @@ const textoOpcional = (max: number) =>
     .transform((v) => v || null);
 
 const esquemaEvento = z.object({
+  empresa: z.enum(EMPRESAS, "Elegí la empresa"),
   nombre: z.string().trim().min(1, "Falta el nombre").max(120),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"),
   lugar: textoOpcional(200),
@@ -60,6 +62,8 @@ export async function guardarEvento(
   if (error || !data?.length) {
     return { error: "No se pudo guardar el evento", valores };
   }
+  // Los movimientos del evento van al financiero de la empresa del evento.
+  if (id) await supabase.from("transacciones").update({ empresa: fila.empresa }).eq("evento_id", id).neq("empresa", fila.empresa);
 
   redirect(`/eventos/${data[0].id}`);
 }

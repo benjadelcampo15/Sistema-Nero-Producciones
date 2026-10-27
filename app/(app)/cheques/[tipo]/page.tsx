@@ -7,17 +7,20 @@ import { DIAS_AVISO, PESTANAS, diasEntre, nombreEstado, type Cheque } from "@/li
 import { formatoFecha, formatoPesos, hoy, sumar } from "@/lib/formato";
 import { SinAcceso } from "../../sin-acceso";
 import { AccionesCheque, FormularioCheque } from "./formulario-cheque";
+import { AlternarEmpresa } from "@/components/empresa";
+import { NOMBRE_EMPRESA, leerEmpresa } from "@/lib/empresas";
 
-export default async function PaginaChequesPorTipo({ params }: PageProps<"/cheques/[tipo]">) {
+export default async function PaginaChequesPorTipo({ params, searchParams }: PageProps<"/cheques/[tipo]">) {
   const usuario = await obtenerUsuario();
   if (!puede(usuario, "cheques", "ver")) return <SinAcceso />;
   const { tipo: ruta } = await params;
   const pestana = PESTANAS.find((p) => p.ruta === ruta);
   if (!pestana) notFound();
   const tipo = pestana.tipo;
+  const empresa = leerEmpresa((await searchParams).empresa);
   const editable = puede(usuario, "cheques", "editar");
 
-  const [cheques, eventos] = await Promise.all([listarCheques(tipo), editable ? obtenerEventosResumidos() : []]);
+  const [cheques, eventos] = await Promise.all([listarCheques(tipo, empresa), editable ? obtenerEventosResumidos() : []]);
   const fechaHoy = hoy();
   const pendientes = cheques.filter((c) => c.estado === "pendiente");
   // Historial: lo último primero.
@@ -28,13 +31,16 @@ export default async function PaginaChequesPorTipo({ params }: PageProps<"/chequ
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Cheques</h1>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-2xl font-semibold">Cheques</h1>
+        <AlternarEmpresa actual={empresa} href={(e) => `/cheques/${ruta}?empresa=${e}`} />
+      </div>
 
       <nav className="flex gap-1 border-b border-stone-200">
         {PESTANAS.map((p) => (
           <Link
             key={p.ruta}
-            href={`/cheques/${p.ruta}`}
+            href={`/cheques/${p.ruta}?empresa=${empresa}`}
             className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
               p.ruta === ruta ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500 hover:text-stone-900"
             }`}
@@ -64,9 +70,9 @@ export default async function PaginaChequesPorTipo({ params }: PageProps<"/chequ
 
       {editable && (
         <details className="tarjeta">
-          <summary className="cursor-pointer font-semibold">+ Nuevo cheque {tipo}</summary>
+          <summary className="cursor-pointer font-semibold">+ Nuevo cheque {tipo} de {NOMBRE_EMPRESA[empresa]}</summary>
           <div className="mt-4">
-            <FormularioCheque tipo={tipo} eventos={eventos} />
+            <FormularioCheque tipo={tipo} eventos={eventos} empresa={empresa} />
           </div>
         </details>
       )}
@@ -75,7 +81,7 @@ export default async function PaginaChequesPorTipo({ params }: PageProps<"/chequ
         Se avisa por mail {DIAS_AVISO} días antes de la fecha de pago de cada cheque pendiente.
       </p>
 
-      <Lista titulo="Pendientes" cheques={pendientes} fechaHoy={fechaHoy} editable={editable} eventos={eventos} vacio="No hay cheques pendientes." />
+      <Lista titulo="Pendientes" cheques={pendientes} fechaHoy={fechaHoy} editable={editable} eventos={eventos} vacio={`No hay cheques pendientes de ${NOMBRE_EMPRESA[empresa]}.`} />
       {resto.length > 0 && <Lista titulo="Historial" cheques={resto} fechaHoy={fechaHoy} editable={editable} eventos={eventos} />}
     </div>
   );

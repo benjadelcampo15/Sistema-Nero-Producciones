@@ -48,12 +48,12 @@ export default async function PaginaCashflow({ searchParams }: PageProps<"/cashf
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Cashflow</h1>
-        <p className="text-sm text-stone-500">Arranca del saldo bancario cargado y suma los ingresos y egresos de ahí en adelante, mes a mes, con el saldo a cada fecha.</p>
+        <p className="text-sm text-stone-500">Arranca del saldo bancario cargado y suma los ingresos y egresos de Nero y de Ruta de ahí en adelante, mes a mes, con el saldo a cada fecha.</p>
       </div>
 
       {cargas.length === 0 && (
         <p className="alerta-error">
-          Todavía no hay saldos bancarios cargados: el cashflow arranca en /usr/bin/bash. <Link href="/saldos" className="underline">Cargá los saldos del día</Link>.
+          Todavía no hay saldos bancarios cargados: el cashflow arranca en $0. <Link href="/saldos" className="underline">Cargá los saldos del día</Link>.
         </p>
       )}
 
@@ -142,6 +142,15 @@ export default async function PaginaCashflow({ searchParams }: PageProps<"/cashf
                   <tr key={f.origen + f.id} className={f.fecha === fechaHoy ? "bg-amber-50/60" : ""}>
                     <td className="whitespace-nowrap px-4 py-2 font-mono text-stone-600">{formatoFecha(f.fecha)}</td>
                     <td className="px-4 py-2">
+                      {f.empresa && (
+                        <span
+                          className={`mr-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
+                            f.empresa === "ruta" ? "bg-sky-100 text-sky-800" : "bg-stone-800 text-white"
+                          }`}
+                        >
+                          {f.empresa}
+                        </span>
+                      )}
                       {f.descripcion}
                       {(f.origen === "cheque" || f.estado !== "real") && (
                         <span className="ml-2 rounded-full bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-stone-600">

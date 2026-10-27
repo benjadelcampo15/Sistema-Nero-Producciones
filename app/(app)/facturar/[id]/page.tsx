@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NOMBRE_EMPRESA } from "@/lib/empresas";
 import { notFound } from "next/navigation";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
 import { obtenerComprobante } from "@/lib/facturar/consultas";
@@ -89,11 +90,11 @@ async function Emitido({ c, puedeEditar }: { c: Comprobante; puedeEditar: boolea
           </div>
         )}
         <div className="tarjeta p-4">
-          <p className="text-xs uppercase tracking-wide text-stone-500">Financiero</p>
+          <p className="text-xs uppercase tracking-wide text-stone-500">Financiero de {NOMBRE_EMPRESA[c.empresa]}</p>
           {c.transaccion_id ? (
             <p>
               Registrada como ingreso pendiente de cobro.{" "}
-              <Link href={`/financiero?desde=${c.fecha}&hasta=${c.fecha}`} className="underline">Ver</Link>
+              <Link href={`/financiero?empresa=${c.empresa}&desde=${c.fecha}&hasta=${c.fecha}`} className="underline">Ver</Link>
             </p>
           ) : (
             <p className="text-stone-500">No se registró ingreso en Financiero.</p>

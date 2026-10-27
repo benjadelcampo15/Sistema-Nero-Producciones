@@ -7,6 +7,7 @@ import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { BarraPresupuesto } from "@/components/barra-presupuesto";
 import { TablaMovimientos } from "@/components/tabla-movimientos";
 import { SinAcceso } from "../../sin-acceso";
+import { EtiquetaEmpresa } from "@/components/empresa";
 import { PlanillaEvento } from "./planilla-evento";
 
 export default async function PaginaEvento({ params, searchParams }: PageProps<"/eventos/[id]">) {
@@ -36,6 +37,7 @@ export default async function PaginaEvento({ params, searchParams }: PageProps<"
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-semibold">{evento.nombre}</h1>
+              <EtiquetaEmpresa empresa={evento.empresa} />
               <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${COLOR_ESTADO_EVENTO[evento.estado]}`}>
                 {NOMBRE_ESTADO_EVENTO[evento.estado]}
               </span>

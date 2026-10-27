@@ -1,8 +1,10 @@
-// Importa la hoja BASE de la planilla de Nero.
+// Importa la hoja BASE de la planilla de Nero (o, con --ruta, la de Ruta).
 //   npm run importar                         → importa .planilla/planilla.xlsx
 //   npm run importar -- prueba [archivo]     → lee y muestra totales, sin escribir nada
 //   npm run importar -- reemplazar [archivo] → respalda y borra TODO Financiero, e importa
 //   npm run importar -- borrar               → borra lo importado (marcado en notas)
+//   npm run importar -- prueba .planilla/ruta/ruta.xlsx --ruta → lo mismo con la planilla de Ruta:
+//     sus movimientos quedan con empresa "ruta", no crea eventos y "reemplazar" borra solo lo de Ruta.
 //
 // La planilla se descarga de Google Sheets (Archivo → Descargar → .xlsx) y se
 // guarda en .planilla/ (carpeta ignorada por git: son datos reales).
@@ -14,7 +16,8 @@ import { createClient } from "@supabase/supabase-js";
 const require = createRequire(import.meta.url);
 const XLSX = require("xlsx") as typeof import("xlsx");
 
-const MARCA = "IMPORTADO PLANILLA";
+const EMPRESA = process.argv.includes("--ruta") ? "ruta" : "nero";
+const MARCA = EMPRESA === "ruta" ? "IMPORTADO RUTA" : "IMPORTADO PLANILLA";
 const MARCA_SIN_FECHA = `${MARCA} · sin fecha en la planilla`;
 const ARCHIVO = process.argv.find((a) => a.endsWith(".xlsx")) ?? ".planilla/planilla.xlsx";
 const MODO = process.argv[2] ?? "importar";
@@ -30,7 +33,7 @@ const supabase = createClient(url, secreta, { auth: { autoRefreshToken: false, p
 // ─── Mapeos ──────────────────────────────────────────────────────────────
 
 /** Valores de la columna EVENTO que son eventos (el resto son cuentas/proveedores). */
-const EVENTOS: Record<string, string> = {
+const EVENTOS_NERO: Record<string, string> = {
   VALN: "Vino a la Nave",
   "VINO A LA NAVE": "Vino a la Nave",
   "VINO A": "Vino a la Nave",
@@ -55,6 +58,8 @@ const EVENTOS: Record<string, string> = {
   PREBODA: "Preboda",
   INVIERNO: "Invierno",
 };
+// En la planilla de Ruta la columna EVENTO son cuentas (Sueldos, Fee, Shopping…): van como proveedor/cuenta.
+const EVENTOS: Record<string, string> = EMPRESA === "ruta" ? {} : EVENTOS_NERO;
 
 const CATEGORIAS: Record<string, string> = {
   EVENTOS: "Eventos",
@@ -78,6 +83,13 @@ const CATEGORIAS: Record<string, string> = {
   SEGUROS: "Seguros",
   MOBILIARIO: "Mobiliario",
   SEGURIDAD: "Seguridad",
+  // Planilla de Ruta.
+  EQUIPO: "Equipo",
+  FEE: "Fee",
+  CONTENTS: "Contents",
+  COBERTURAS: "Coberturas",
+  SOCIEDAD: "Sociedad",
+  ADMINISTRACION: "Administración",
 };
 
 const MEDIOS: Record<string, string> = {
@@ -87,6 +99,8 @@ const MEDIOS: Record<string, string> = {
   "CHEQUE EMITIDO": "cheque_emitido",
   "CHEQUE A EMITIR": "cheque_a_emitir",
   "CHEQUE A COBRAR": "cheque_a_cobrar",
+  // Cheque recibido que se endosó para pagar.
+  ENDOSADO: "cheque",
 };
 
 const ESTADOS: Record<string, string> = {
@@ -164,7 +178,7 @@ function parsearFecha(valor: unknown, semanaPlanilla: number): ResultadoFecha {
 
 async function borrar() {
   const t = await supabase.from("transacciones").delete().like("notas", `${MARCA}%`).select("id");
-  const e = await supabase.from("eventos").delete().eq("notas", MARCA).select("id");
+  const e = EMPRESA === "ruta" ? { data: [], error: null } : await supabase.from("eventos").delete().eq("notas", MARCA).select("id");
   if (t.error || e.error) throw new Error((t.error ?? e.error)!.message);
   console.log(`Borrados: ${t.data.length} movimientos y ${e.data.length} eventos importados.`);
 }
@@ -188,6 +202,22 @@ async function importar() {
 
   const { data: categorias, error: errorCat } = await supabase.from("categorias").select("id, nombre, tipo");
   if (errorCat || !categorias) throw new Error(errorCat?.message ?? "Sin categorías");
+  // Categorías de la planilla que todavía no existen en la app: se crean (en prueba solo se listan).
+  const faltan = new Map<string, { nombre: string; tipo: string }>();
+  for (const f of filas) {
+    const tipo = clave(f["TIPO"]) === "INGRESO" ? "ingreso" : clave(f["TIPO"]) === "EGRESO" ? "egreso" : null;
+    const nombre = CATEGORIAS[clave(f["CATEGORIA"])];
+    if (tipo && nombre && !categorias.some((c) => c.nombre === nombre && c.tipo === tipo)) faltan.set(`${nombre}|${tipo}`, { nombre, tipo });
+  }
+  if (faltan.size) {
+    console.log(`Categorías nuevas: ${[...faltan.values()].map((c) => `${c.nombre} (${c.tipo})`).join(", ")}`);
+    if (MODO === "prueba") for (const c of faltan.values()) categorias.push({ id: `nueva-${c.nombre}-${c.tipo}`, ...c });
+    else {
+      const { data: creadas, error } = await supabase.from("categorias").insert([...faltan.values()]).select("id, nombre, tipo");
+      if (error || !creadas) throw new Error(error?.message ?? "No se crearon las categorías");
+      categorias.push(...creadas);
+    }
+  }
   const idCategoria = (nombre: string, tipo: string) => categorias.find((c) => c.nombre === nombre && c.tipo === tipo)?.id;
 
   const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }).format(new Date());
@@ -233,6 +263,7 @@ async function importar() {
 
     movimientos.push({
       _evento: evento,
+      empresa: EMPRESA,
       tipo,
       monto: importe,
       fecha,
@@ -308,6 +339,7 @@ function resumen(movimientos: Record<string, unknown>[], omitidas: string[], dud
 
 /** Respalda todo Financiero en .planilla/, desvincula las facturas emitidas y borra todos los movimientos. */
 async function vaciarFinanciero() {
+  if (EMPRESA === "ruta") return vaciarRuta();
   const [t, e, c, ce] = await Promise.all([
     supabase.from("transacciones").select("*").limit(20000),
     supabase.from("eventos").select("*"),
@@ -324,6 +356,21 @@ async function vaciarFinanciero() {
   const borr = await supabase.from("transacciones").delete().not("id", "is", null).select("id");
   if (borr.error) throw new Error(borr.error.message);
   console.log(`Desvinculadas ${desv.data.length} facturas emitidas · borrados ${borr.data.length} movimientos`);
+}
+
+/** Respalda y borra solo los movimientos de Ruta (los de Nero no se tocan). */
+async function vaciarRuta() {
+  const t = await supabase.from("transacciones").select("*").eq("empresa", "ruta").limit(20000);
+  if (t.error) throw new Error("No se pudo leer para el respaldo");
+  const archivo = `.planilla/respaldo-ruta-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+  writeFileSync(archivo, JSON.stringify({ transacciones: t.data }, null, 1));
+  console.log(`Respaldo: ${archivo} (${t.data.length} movimientos de Ruta)`);
+  const ids = t.data.map((x) => x.id);
+  const desv = ids.length ? await supabase.from("comprobantes_emitidos").update({ transaccion_id: null }).in("transaccion_id", ids).select("id") : { data: [], error: null };
+  if (desv.error) throw new Error(desv.error.message);
+  const borr = await supabase.from("transacciones").delete().eq("empresa", "ruta").select("id");
+  if (borr.error) throw new Error(borr.error.message);
+  console.log(`Borrados ${borr.data.length} movimientos de Ruta`);
 }
 
 const acciones: Record<string, () => Promise<void>> = {

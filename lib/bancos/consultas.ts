@@ -54,7 +54,7 @@ export async function movimientosEntre(desde: string, hasta: string, { proyectad
   const [trx, chq, vinculados] = await Promise.all([
     supabase
       .from("transacciones")
-      .select("id, tipo, monto, fecha, descripcion, contraparte, estado, categoria:categorias(nombre)")
+      .select("id, empresa, tipo, monto, fecha, descripcion, contraparte, estado, categoria:categorias(nombre)")
       .is("eliminado_en", null)
       .gte("fecha", desde)
       .lte("fecha", hasta)
@@ -64,7 +64,7 @@ export async function movimientosEntre(desde: string, hasta: string, { proyectad
     cheques
       ? supabase
           .from("cheques")
-          .select("id, tipo, estado, monto, fecha_pago, contraparte, banco, numero")
+          .select("id, empresa, tipo, estado, monto, fecha_pago, contraparte, banco, numero")
           .in("estado", ["pendiente", "depositado"])
           .gte("fecha_pago", desde)
           .lte("fecha_pago", hasta)
@@ -85,6 +85,7 @@ export async function movimientosEntre(desde: string, hasta: string, { proyectad
     return {
       id: t.id,
       origen: "financiero",
+      empresa: t.empresa,
       fecha: t.fecha,
       tipo: t.tipo,
       monto: Number(t.monto),
@@ -99,6 +100,7 @@ export async function movimientosEntre(desde: string, hasta: string, { proyectad
     movimientos.push({
       id: c.id,
       origen: "cheque",
+      empresa: c.empresa,
       fecha: c.fecha_pago,
       tipo: c.tipo === "emitido" ? "egreso" : "ingreso",
       monto: Number(c.monto),

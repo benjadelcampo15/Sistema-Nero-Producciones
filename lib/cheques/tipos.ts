@@ -1,8 +1,11 @@
+import type { Empresa } from "@/lib/empresas";
+
 export type TipoCheque = "emitido" | "recibido";
 export type EstadoCheque = "pendiente" | "depositado" | "cobrado" | "debitado" | "endosado" | "rechazado" | "anulado";
 
 export type Cheque = {
   id: string;
+  empresa: Empresa;
   tipo: TipoCheque;
   estado: EstadoCheque;
   electronico: boolean;

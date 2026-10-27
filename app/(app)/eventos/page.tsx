@@ -5,21 +5,33 @@ import { COLOR_ESTADO_EVENTO, ESTADOS_EVENTO, NOMBRE_ESTADO_EVENTO } from "@/lib
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { BarraPresupuesto } from "@/components/barra-presupuesto";
 import { SinAcceso } from "../sin-acceso";
+import { AlternarEmpresa } from "@/components/empresa";
+import { NOMBRE_EMPRESA, leerEmpresa } from "@/lib/empresas";
 
 export default async function PaginaEventos({ searchParams }: PageProps<"/eventos">) {
   const usuario = await obtenerUsuario();
   if (!puede(usuario, "eventos", "ver")) return <SinAcceso />;
 
-  const { estado: parametro } = await searchParams;
+  const { estado: parametro, empresa: parametroEmpresa } = await searchParams;
   const estado = leerEstado(parametro);
-  const eventos = await listarEventos(estado);
+  const empresa = leerEmpresa(parametroEmpresa);
+  const eventos = await listarEventos(empresa, estado);
+  const href = (cambios: { empresa?: string; estado?: string | null }) => {
+    const p = new URLSearchParams({ empresa: cambios.empresa ?? empresa });
+    const e = cambios.estado === undefined ? estado : cambios.estado;
+    if (e) p.set("estado", e);
+    return `/eventos?${p}`;
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Eventos</h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-semibold">Eventos</h1>
+          <AlternarEmpresa actual={empresa} href={(e) => href({ empresa: e })} />
+        </div>
         {puede(usuario, "eventos", "editar") && (
-          <Link href="/eventos/nuevo" className="boton">+ Nuevo evento</Link>
+          <Link href={`/eventos/nuevo?empresa=${empresa}`} className="boton">+ Nuevo evento</Link>
         )}
       </div>
 
@@ -28,7 +40,7 @@ export default async function PaginaEventos({ searchParams }: PageProps<"/evento
         {[undefined, ...ESTADOS_EVENTO].map((e) => (
           <Link
             key={e ?? "todos"}
-            href={e ? `/eventos?estado=${e}` : "/eventos"}
+            href={href({ estado: e ?? null })}
             scroll={false}
             className={`rounded-full border px-3 py-1 text-xs font-medium ${
               estado === e
@@ -42,7 +54,7 @@ export default async function PaginaEventos({ searchParams }: PageProps<"/evento
       </nav>
 
       {eventos.length === 0 ? (
-        <p className="tarjeta text-center text-sm text-stone-500">No hay eventos{estado ? " en este estado" : ""}.</p>
+        <p className="tarjeta text-center text-sm text-stone-500">No hay eventos de {NOMBRE_EMPRESA[empresa]}{estado ? " en este estado" : ""}.</p>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {eventos.map((e) => {

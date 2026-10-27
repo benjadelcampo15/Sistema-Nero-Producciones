@@ -4,8 +4,9 @@ import { enviarMail, escaparHtml, mailConfigurado } from "@/lib/mail";
 import { formatoFecha, formatoPesos, hoy } from "@/lib/formato";
 import { urlBase } from "@/lib/url";
 import { DIAS_AVISO, diasEntre, sumarDias, type TipoCheque } from "./tipos";
+import { NOMBRE_EMPRESA } from "@/lib/empresas";
 
-type ChequeAviso = { id: string; tipo: TipoCheque; monto: number; fecha_pago: string; contraparte: string; banco: string | null; numero: string | null };
+type ChequeAviso = { id: string; empresa: "nero" | "ruta"; tipo: TipoCheque; monto: number; fecha_pago: string; contraparte: string; banco: string | null; numero: string | null };
 
 /**
  * A quién avisar: CHEQUES_AVISO_PARA (emails separados por coma) si está
@@ -40,7 +41,7 @@ export async function avisarChequesPorVencer() {
   const fechaHoy = hoy();
   const { data, error } = await admin
     .from("cheques")
-    .select("id, tipo, monto, fecha_pago, contraparte, banco, numero")
+    .select("id, empresa, tipo, monto, fecha_pago, contraparte, banco, numero")
     .eq("estado", "pendiente")
     .is("aviso_enviado_en", null)
     .lte("fecha_pago", sumarDias(fechaHoy, DIAS_AVISO))
@@ -58,7 +59,7 @@ export async function avisarChequesPorVencer() {
     if (!lista.length) return { html: "", texto: "" };
     const filas = lista
       .map((c) => {
-        const detalle = [c.banco, c.numero ? `N° ${c.numero}` : null].filter(Boolean).join(" · ");
+        const detalle = [NOMBRE_EMPRESA[c.empresa], c.banco, c.numero ? `N° ${c.numero}` : null].filter(Boolean).join(" · ");
         return `<tr>
           <td style="padding:6px 8px;border-bottom:1px solid #e7e5e4">${formatoFecha(c.fecha_pago)}<br><span style="font-size:12px;color:#b91c1c">${cuandoVence(diasEntre(fechaHoy, c.fecha_pago))}</span></td>
           <td style="padding:6px 8px;border-bottom:1px solid #e7e5e4">${escaparHtml(c.contraparte)}${detalle ? `<br><span style="font-size:12px;color:#78716c">${escaparHtml(detalle)}</span>` : ""}</td>
@@ -71,7 +72,7 @@ export async function avisarChequesPorVencer() {
         <p style="margin:0 0 8px;font-size:13px;color:#57534e">${explicacion}</p>
         <table style="width:100%;border-collapse:collapse;font-size:14px">${filas}</table>
         <p style="margin:12px 0"><a href="${base}/cheques/${tipo}s" style="color:#1c1917">Ver cheques ${tipo}s</a></p>`,
-      texto: `${titulo}:\n${lista.map((c) => `- ${formatoFecha(c.fecha_pago)} (${cuandoVence(diasEntre(fechaHoy, c.fecha_pago))}) · ${c.contraparte} · ${formatoPesos(Number(c.monto))}`).join("\n")}\n`,
+      texto: `${titulo}:\n${lista.map((c) => `- ${formatoFecha(c.fecha_pago)} (${cuandoVence(diasEntre(fechaHoy, c.fecha_pago))}) · ${NOMBRE_EMPRESA[c.empresa]} · ${c.contraparte} · ${formatoPesos(Number(c.monto))}`).join("\n")}\n`,
     };
   };
   const emitidos = bloque("emitido", "Cheques emitidos por debitarse", "Tiene que haber fondos en la cuenta.");

@@ -24,6 +24,7 @@ export default async function PaginaMovimientoEvento({ params }: PageProps<"/eve
       <FormularioTransaccion
         categorias={categorias}
         eventos={[]}
+        empresa={evento.empresa}
         eventoFijo={{ id: evento.id, nombre: evento.nombre, fecha: evento.fecha }}
         volverA={`/eventos/${id}`}
       />
