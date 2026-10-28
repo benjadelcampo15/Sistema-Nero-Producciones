@@ -18,6 +18,7 @@ export const SECCIONES = [
 export const PANTALLAS_EXTRA = [
   { permiso: "financiero", nombre: "Cashflow", href: "/cashflow", grupo: "Administración" },
   { permiso: "financiero", nombre: "Saldos bancarios", href: "/saldos", grupo: "Administración" },
+  { permiso: "financiero", nombre: "Extractos bancarios", href: "/extractos", grupo: "Administración" },
 ] as const;
 
 export type Seccion = (typeof SECCIONES)[number]["id"];

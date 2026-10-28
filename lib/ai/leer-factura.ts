@@ -22,6 +22,24 @@ function descripcionFallo(e: ErrorIA) {
  * Es lo único que usa la app: cambiar de proveedor o de modelos no toca nada más.
  */
 export async function leerFactura(archivo: Archivo, categorias: string[]): Promise<ResultadoLectura> {
+  return extraerConIA(archivo, instruccionesFactura(categorias), jsonSchemaFactura(categorias), (crudo) => {
+    const validacion = esquemaDatosFactura.safeParse(crudo);
+    if (!validacion.success) throw new Error(`La IA devolvió datos incompletos: ${validacion.error.issues[0].path.join(".")}`);
+    return validacion.data;
+  });
+}
+
+/**
+ * Extrae datos de un archivo (PDF o imagen) con el proveedor y modelos
+ * configurados, probando el siguiente modelo si uno falla. `validar` recibe
+ * el JSON devuelto y tira un error si no sirve.
+ */
+export async function extraerConIA<T>(
+  archivo: Archivo,
+  instrucciones: string,
+  esquema: object,
+  validar: (crudo: unknown) => T,
+): Promise<{ datos: T; proveedor: string; crudo: unknown }> {
   const nombre = (process.env.AI_PROVIDER ?? "gemini") as NombreProveedor;
   const proveedor = PROVEEDORES[nombre];
   if (!proveedor) throw new Error(`AI_PROVIDER inválido: "${nombre}" (usar gemini u openai)`);
@@ -34,12 +52,12 @@ export async function leerFactura(archivo: Archivo, categorias: string[]): Promi
     throw new Error("Falta AI_MODEL en las variables de entorno (npm run ia:modelos lista los disponibles)");
   }
 
-  const pedido = { archivo, instrucciones: instruccionesFactura(categorias), esquema: jsonSchemaFactura(categorias) };
+  const pedido = { archivo, instrucciones, esquema };
   let fallos: string[] = [];
 
   for (let vuelta = 0; vuelta < VUELTAS; vuelta++) {
     if (vuelta > 0) await new Promise((r) => setTimeout(r, ESPERA_ENTRE_VUELTAS_MS));
-    const intento = await probarModelos(proveedor, modelos, pedido);
+    const intento = await probarModelos(proveedor, modelos, pedido, validar);
     if ("resultado" in intento) {
       return { ...intento.resultado, proveedor: `${nombre}/${intento.resultado.proveedor}` };
     }
@@ -48,16 +66,17 @@ export async function leerFactura(archivo: Archivo, categorias: string[]): Promi
     if (!intento.todosTemporales) break;
   }
 
-  throw new Error(`Ningún modelo de IA pudo leer la factura. Probá de nuevo en unos minutos. (${fallos.join(" · ")})`);
+  throw new Error(`Ningún modelo de IA pudo leer el archivo. Probá de nuevo en unos minutos. (${fallos.join(" · ")})`);
 }
 
-type Intento = { resultado: ResultadoLectura } | { fallos: string[]; todosTemporales: boolean };
+type Intento<T> = { resultado: { datos: T; proveedor: string; crudo: unknown } } | { fallos: string[]; todosTemporales: boolean };
 
-async function probarModelos(
+async function probarModelos<T>(
   proveedor: Proveedor,
   modelos: string[],
   pedido: Omit<Parameters<Proveedor>[0], "modelo">,
-): Promise<Intento> {
+  validar: (crudo: unknown) => T,
+): Promise<Intento<T>> {
   const fallos: string[] = [];
   let todosTemporales = true;
 
@@ -71,21 +90,14 @@ async function probarModelos(
       if (!e.temporal) todosTemporales = false;
       continue;
     }
-    return { resultado: validar(texto, modelo) };
+    let crudo: unknown;
+    try {
+      crudo = JSON.parse(texto);
+    } catch {
+      throw new Error("La IA devolvió una respuesta que no es JSON válido");
+    }
+    return { resultado: { datos: validar(crudo), proveedor: modelo, crudo } };
   }
   return { fallos, todosTemporales };
 }
 
-function validar(texto: string, modelo: string): ResultadoLectura {
-  let crudo: unknown;
-  try {
-    crudo = JSON.parse(texto);
-  } catch {
-    throw new Error("La IA devolvió una respuesta que no es JSON válido");
-  }
-  const validacion = esquemaDatosFactura.safeParse(crudo);
-  if (!validacion.success) {
-    throw new Error(`La IA devolvió datos incompletos: ${validacion.error.issues[0].path.join(".")}`);
-  }
-  return { datos: validacion.data, proveedor: modelo, crudo };
-}
