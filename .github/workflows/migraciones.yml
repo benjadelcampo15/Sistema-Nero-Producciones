@@ -41,4 +41,10 @@ jobs:
             echo "Falta el secreto ${{ matrix.secreto }}: se saltea ${{ matrix.base }}."
             exit 0
           fi
-          supabase db push --db-url "$DB_URL" --yes
+          # Si falla, el error queda en el resumen de la corrida (sin la contraseña).
+          if ! supabase db push --db-url "$DB_URL" --yes > salida.txt 2>&1; then
+            cat salida.txt
+            echo "::error title=${{ matrix.base }}::$(tail -n 5 salida.txt | sed "s#$DB_URL#***#g" | tr '\n' ' ')"
+            exit 1
+          fi
+          cat salida.txt
