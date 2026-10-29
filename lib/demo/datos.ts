@@ -9,12 +9,13 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export const EMAIL_DEMO = "demo@planixops.com";
+export const EMAIL_DEMO = "demo@demo.com";
+export const CLAVE_DEMO = "demo1234";
 
 /** Base de Nero: la demo nunca se carga ahí. */
 const REF_NERO = "kxlbygaidukxepszkoeo";
 
-export async function cargarDemo(sb: SupabaseClient, url: string, CLAVE_DEMO = "PlanixDemo2026") {
+export async function cargarDemo(sb: SupabaseClient, url: string, clave = CLAVE_DEMO) {
   if (url.includes(REF_NERO)) throw new Error("La demo no se carga en la base de Nero");
 
   // ─── Utilidades ──────────────────────────────────────────────────────────────
@@ -52,14 +53,16 @@ export async function cargarDemo(sb: SupabaseClient, url: string, CLAVE_DEMO = "
 
   // ─── 2. Usuario demo ─────────────────────────────────────────────────────────
   const { data: usuarios } = await sb.auth.admin.listUsers();
+  // En la demo solo existe el usuario demo: los demás (y los de antes) se borran.
+  for (const u of usuarios?.users ?? []) if (u.email !== EMAIL_DEMO) await sb.auth.admin.deleteUser(u.id);
   let idDemo = usuarios?.users.find((u) => u.email === EMAIL_DEMO)?.id;
   if (!idDemo) {
-    const { data, error } = await sb.auth.admin.createUser({ email: EMAIL_DEMO, password: CLAVE_DEMO, email_confirm: true });
+    const { data, error } = await sb.auth.admin.createUser({ email: EMAIL_DEMO, password: clave, email_confirm: true });
     if (error || !data.user) throw new Error(`usuario demo: ${error?.message}`);
     idDemo = data.user.id;
   } else {
     // Cada noche vuelve la clave de siempre (por si alguien la cambió).
-    await sb.auth.admin.updateUserById(idDemo, { password: CLAVE_DEMO });
+    await sb.auth.admin.updateUserById(idDemo, { password: clave });
   }
   await sb.from("permisos").delete().eq("usuario_id", idDemo);
   await sb.from("perfiles").upsert({ id: idDemo, nombre: "Usuario Demo", email: EMAIL_DEMO, es_admin: false, activo: true, debe_cambiar_contrasena: false });
