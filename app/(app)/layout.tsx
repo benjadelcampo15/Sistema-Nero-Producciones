@@ -13,7 +13,6 @@ const encabezado = (
       <LogoPlanix className="h-9 w-9 shrink-0" />
       <p className="text-lg font-black tracking-[0.2em]">PLANIX</p>
     </div>
-    <p className="hidden text-[10px] leading-snug text-stone-500 md:block">Toda la operación de la empresa alrededor de un mismo sistema</p>
   </div>
 );
 
