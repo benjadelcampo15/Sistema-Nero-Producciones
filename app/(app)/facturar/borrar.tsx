@@ -31,7 +31,8 @@ export function BotonBorrarComprobante({ id, irA, real = false }: { id: string; 
   );
 }
 
-export function BotonBorrarCliente({ id, nombre }: { id: string; nombre: string }) {
+export function BotonBorrarCliente({ id, nombre, irA }: { id: string; nombre: string; irA?: string }) {
+  const router = useRouter();
   const [pendiente, iniciar] = useTransition();
   return (
     <button
@@ -44,6 +45,7 @@ export function BotonBorrarCliente({ id, nombre }: { id: string; nombre: string 
         iniciar(async () => {
           const r = await borrarCliente(id);
           if (r.error) window.alert(r.error);
+          else if (irA) router.push(irA);
         });
       }}
     >

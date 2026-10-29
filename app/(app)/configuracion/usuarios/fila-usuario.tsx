@@ -5,7 +5,6 @@ import { NOMBRE_NIVEL, SECCIONES, type Permisos } from "@/lib/permisos";
 import {
   actualizarPermisos,
   cambiarEstadoUsuario,
-  restablecer2FA,
   restablecerContrasena,
   type EstadoAccion,
 } from "./acciones";
@@ -19,7 +18,6 @@ export type UsuarioListado = {
   esAdmin: boolean;
   activo: boolean;
   debeCambiarContrasena: boolean;
-  tiene2FA: boolean;
   ultimoIngreso: string | null;
   permisos: Permisos;
   esUsuarioActual: boolean;
@@ -65,7 +63,6 @@ export function FilaUsuario({ usuario }: { usuario: UsuarioListado }) {
         <span className="flex flex-wrap gap-1 text-xs">
           {!usuario.activo && <Etiqueta color="red">Desactivado</Etiqueta>}
           {usuario.debeCambiarContrasena && <Etiqueta color="amber">Contraseña temporal</Etiqueta>}
-          {usuario.tiene2FA ? <Etiqueta color="green">2FA</Etiqueta> : <Etiqueta color="amber">Sin 2FA</Etiqueta>}
         </span>
       </summary>
 
@@ -105,19 +102,6 @@ export function FilaUsuario({ usuario }: { usuario: UsuarioListado }) {
               }
             >
               Restablecer contraseña
-            </button>
-            <button
-              type="button"
-              disabled={pendiente || !usuario.tiene2FA}
-              className="boton-secundario"
-              onClick={() =>
-                ejecutar(
-                  `¿Restablecer la verificación en dos pasos de ${usuario.nombre}? La va a tener que configurar de nuevo.`,
-                  () => restablecer2FA(usuario.id),
-                )
-              }
-            >
-              Restablecer 2FA
             </button>
             <button
               type="button"

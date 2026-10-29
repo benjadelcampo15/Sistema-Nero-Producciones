@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 /** Pantallas del ingreso: el usuario va a una sola según su estado. */
-const PASOS_INGRESO = ["/login", "/cambiar-contrasena", "/mfa/configurar", "/mfa/verificar"];
+const PASOS_INGRESO = ["/login", "/cambiar-contrasena"];
 
 /** Sin sesión: páginas públicas por link con token (/p/) y crons (/api/cron/, se validan con CRON_SECRET). */
 const PUBLICAS = /^\/(p|api\/cron)\//;
@@ -61,10 +61,10 @@ export async function proxy(request: NextRequest) {
     return ruta === "/login" ? response : ir("/login");
   }
 
-  // Sesión completa (2FA verificado) navegando la app: no se consulta el perfil
-  // acá, para no sumar una consulta a la base en cada navegación. La página lo
-  // valida (obtenerUsuario: activo y contraseña) y la base lo exige (RLS).
-  if (claims.aal === "aal2" && !PASOS_INGRESO.includes(ruta)) {
+  // Con sesión, navegando la app: no se consulta el perfil acá, para no sumar
+  // una consulta a la base en cada navegación. La página lo valida
+  // (obtenerUsuario: activo y contraseña) y la base lo exige (RLS).
+  if (!PASOS_INGRESO.includes(ruta)) {
     return response;
   }
 
@@ -79,26 +79,9 @@ export async function proxy(request: NextRequest) {
     return ir("/login?error=inactivo");
   }
 
-  // Orden del ingreso:
-  //   con 2FA configurado → verificar código → (cambiar contraseña si hace falta)
-  //   sin 2FA            → cambiar contraseña temporal → configurar 2FA
-  // Con 2FA configurado, Supabase exige verificarlo antes de cambiar la contraseña.
-  let pasoPendiente: string | null = null;
-  if (claims.aal !== "aal2") {
-    const { data: nivel } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (nivel?.nextLevel === "aal2") {
-      pasoPendiente = "/mfa/verificar";
-    } else if (perfil.debe_cambiar_contrasena) {
-      pasoPendiente = "/cambiar-contrasena";
-    } else {
-      pasoPendiente = "/mfa/configurar";
-    }
-  } else if (perfil.debe_cambiar_contrasena) {
-    pasoPendiente = "/cambiar-contrasena";
-  }
-
-  if (pasoPendiente) {
-    return ruta === pasoPendiente ? response : ir(pasoPendiente);
+  // Con contraseña temporal, lo único pendiente es cambiarla.
+  if (perfil.debe_cambiar_contrasena) {
+    return ruta === "/cambiar-contrasena" ? response : ir("/cambiar-contrasena");
   }
   if (PASOS_INGRESO.includes(ruta)) {
     return ir("/");

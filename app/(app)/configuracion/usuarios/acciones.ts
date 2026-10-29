@@ -207,35 +207,3 @@ export async function restablecerContrasena(usuarioId: string): Promise<EstadoAc
   refresh();
   return { ok: "Contraseña restablecida", contrasenaTemporal };
 }
-
-export async function restablecer2FA(usuarioId: string): Promise<EstadoAccion> {
-  const admin = await exigirAdmin();
-  if (usuarioId === admin.id) {
-    return { error: "Para restablecer tu propio 2FA pedíselo a otro administrador" };
-  }
-
-  const supabase = crearClienteAdmin();
-  const { data, error } = await supabase.auth.admin.mfa.listFactors({ userId: usuarioId });
-  if (error) {
-    return { error: "No se pudo restablecer la verificación en dos pasos" };
-  }
-  for (const factor of data.factors) {
-    const { error: errorBorrado } = await supabase.auth.admin.mfa.deleteFactor({
-      userId: usuarioId,
-      id: factor.id,
-    });
-    if (errorBorrado) {
-      return { error: "No se pudo restablecer la verificación en dos pasos" };
-    }
-  }
-
-  await registrarAuditoria({
-    usuarioId: admin.id,
-    accion: "RESTABLECER_2FA",
-    tabla: "perfiles",
-    registroId: usuarioId,
-  });
-
-  refresh();
-  return { ok: "2FA restablecido: el usuario lo configura de nuevo al ingresar" };
-}

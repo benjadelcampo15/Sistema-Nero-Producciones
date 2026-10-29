@@ -11,7 +11,7 @@ export default async function PaginaUsuarios() {
   if (!actual.esAdmin) return <SinAcceso />;
 
   // Perfiles y permisos se leen con la sesión del admin (pasa por RLS);
-  // el estado del 2FA y el último ingreso solo los tiene la API de Auth.
+  // el último ingreso solo lo tiene la API de Auth.
   const supabase = await crearClienteServidor();
   const [{ data: perfiles }, { data: permisos }, { data: auth }] = await Promise.all([
     supabase.from("perfiles").select("id, nombre, email, es_admin, activo, debe_cambiar_contrasena").order("nombre"),
@@ -34,7 +34,6 @@ export default async function PaginaUsuarios() {
       esAdmin: p.es_admin,
       activo: p.activo,
       debeCambiarContrasena: p.debe_cambiar_contrasena,
-      tiene2FA: (authUsuario?.factors ?? []).some((f) => f.status === "verified"),
       ultimoIngreso: authUsuario?.last_sign_in_at ?? null,
       permisos: suyos,
       esUsuarioActual: p.id === actual.id,

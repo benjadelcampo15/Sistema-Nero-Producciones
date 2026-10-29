@@ -3,6 +3,7 @@ import Link from "next/link";
 const ENLACES = [
   { href: "/stock", nombre: "Stock" },
   { href: "/stock/movimientos", nombre: "Movimientos" },
+  { href: "/stock/pedidos", nombre: "Pedidos" },
   { href: "/stock/productos", nombre: "Productos" },
   { href: "/stock/depositos", nombre: "Depósitos" },
   { href: "/stock/importar", nombre: "Importar Excel" },

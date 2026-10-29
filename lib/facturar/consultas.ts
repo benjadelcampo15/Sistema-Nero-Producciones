@@ -10,9 +10,11 @@ function normalizar(c: Comprobante): Comprobante {
   return { ...c, neto: Number(c.neto), iva: Number(c.iva), total: Number(c.total), numero: c.numero === null ? null : Number(c.numero) };
 }
 
-export async function listarComprobantes() {
+export async function listarComprobantes(filtros: { cliente?: string } = {}) {
   const supabase = await crearClienteServidor();
-  const { data, error } = await supabase.from("comprobantes_emitidos").select(CAMPOS).order("creado_en", { ascending: false }).limit(300);
+  let consulta = supabase.from("comprobantes_emitidos").select(CAMPOS).order("creado_en", { ascending: false }).limit(300);
+  if (filtros.cliente) consulta = consulta.eq("cliente_id", filtros.cliente);
+  const { data, error } = await consulta;
   if (error) throw new Error(`No se pudieron leer los comprobantes: ${error.message}`);
   return ((data ?? []) as unknown as Comprobante[]).map(normalizar);
 }

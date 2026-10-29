@@ -39,7 +39,7 @@ export default async function PaginaFactura({ params }: PageProps<"/facturas/[id
   return (
     <div className="space-y-4">
       <div>
-        <Link href="/facturas" className="text-sm text-stone-500 hover:text-stone-900">← Facturas</Link>
+        <Link href="/facturas/lista" className="text-sm text-stone-500 hover:text-stone-900">← Facturas</Link>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-semibold">{factura.razon_social_emisor ?? factura.archivo_nombre}</h1>
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${COLOR_ESTADO_FACTURA[factura.estado]}`}>
@@ -104,7 +104,7 @@ export default async function PaginaFactura({ params }: PageProps<"/facturas/[id
           ) : (
             <ResumenFactura factura={factura} movimiento={movimiento} />
           )}
-          {editable && <BotonBorrarFactura id={factura.id} aprobada={factura.estado === "aprobada"} irA="/facturas" />}
+          {editable && <BotonBorrarFactura id={factura.id} aprobada={factura.estado === "aprobada"} irA="/facturas/lista" />}
         </div>
       </div>
     </div>

@@ -27,7 +27,7 @@ export const PLANTILLAS: Plantilla[] = [
       { titulo: "Depósito", clave: "deposito", obligatoria: true, ayuda: "Depósito del movimiento (en una transferencia, el de origen)." },
       { titulo: "Depósito destino", clave: "destino", ayuda: "Solo para transferencias: a qué depósito va." },
       { titulo: "Cantidad", clave: "cantidad", obligatoria: true, ayuda: "En un Ajuste va lo que se contó físicamente (la app registra la diferencia)." },
-      { titulo: "Costo unitario", clave: "costo", ayuda: "Opcional, para entradas." },
+      { titulo: "Costo unitario", clave: "costo", ayuda: "Para entradas y ajustes que suman (como la carga inicial del stock). Sin costo, las salidas no tienen costo." },
       { titulo: "Fecha", clave: "fecha", ayuda: "dd/mm/aaaa. Vacía = hoy." },
       { titulo: "Evento", clave: "evento", ayuda: "Opcional: nombre del evento (por ejemplo, para salidas que se consumieron en un evento)." },
       { titulo: "Motivo", clave: "motivo", ayuda: "Opcional." },
@@ -36,7 +36,7 @@ export const PLANTILLAS: Plantilla[] = [
       ["Entrada", "Fernet Branca 750cc", "Centro", "", 24, 9500, "27/10/2026", "", "Compra"],
       ["Salida", "Fernet Branca 750cc", "Centro", "", 6, "", "28/10/2026", "Gauchito", "Consumo del evento"],
       ["Transferencia", "Fernet Branca 750cc", "Centro", "Isidris", 10, "", "28/10/2026", "", ""],
-      ["Ajuste", "Fernet Branca 750cc", "Isidris", "", 9, "", "29/10/2026", "", "Conteo de inventario"],
+      ["Ajuste", "Fernet Branca 750cc", "Isidris", "", 9, 9500, "29/10/2026", "", "Conteo de inventario"],
     ],
   },
   {

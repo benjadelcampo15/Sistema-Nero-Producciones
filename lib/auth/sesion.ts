@@ -19,7 +19,7 @@ export type UsuarioActual = {
 };
 
 /**
- * Usuario de la sesión actual, con 2FA verificado y activo.
+ * Usuario de la sesión actual, activo.
  * Redirige al login si no cumple. El proxy ya filtra antes, pero cada
  * página y acción lo vuelve a verificar del lado del servidor.
  */
@@ -27,7 +27,7 @@ export const obtenerUsuario = cache(async (): Promise<UsuarioActual> => {
   const supabase = await crearClienteServidor();
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims;
-  if (!claims || claims.aal !== "aal2") {
+  if (!claims) {
     redirect("/login");
   }
 

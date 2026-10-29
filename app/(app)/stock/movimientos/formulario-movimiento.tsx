@@ -2,17 +2,20 @@
 
 import { useActionState, useState } from "react";
 import { registrarMovimiento } from "@/lib/stock/acciones";
-import { NOMBRE_TIPO_STOCK, TIPOS_MOVIMIENTO_STOCK, type Deposito, type Producto, type TipoMovimientoStock } from "@/lib/stock/tipos";
+import { NOMBRE_TIPO_STOCK, TIPOS_MOVIMIENTO_STOCK, type Deposito, type FilaStock, type Producto, type TipoMovimientoStock } from "@/lib/stock/tipos";
+import { FormularioSalida } from "./formulario-salida";
 import type { EventoResumido } from "@/lib/financiero/tipos";
-import { formatoFecha, hoy } from "@/lib/formato";
+import { hoy } from "@/lib/formato";
 
 export function FormularioMovimiento({
   productos,
   depositos,
   eventos,
   productoInicial,
+  stock,
 }: {
   productos: Producto[];
+  stock: FilaStock[];
   depositos: Deposito[];
   eventos: EventoResumido[];
   productoInicial?: string;
@@ -21,25 +24,43 @@ export function FormularioMovimiento({
   const [tipo, setTipo] = useState<TipoMovimientoStock>("entrada");
   const v = (campo: string, inicial = "") => estado.valores?.[campo] ?? inicial;
 
+  const selectorTipo = (
+    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+      {TIPOS_MOVIMIENTO_STOCK.map((t) => (
+        <label
+          key={t}
+          className={`cursor-pointer rounded-md border px-3 py-2 text-center text-sm font-medium ${
+            tipo === t ? "border-stone-900 bg-stone-900 text-white" : "border-stone-300 bg-white text-stone-600"
+          }`}
+        >
+          <input type="radio" name="tipo" value={t} checked={tipo === t} onChange={() => setTipo(t)} className="sr-only" />
+          {NOMBRE_TIPO_STOCK[t]}
+        </label>
+      ))}
+    </div>
+  );
+
+  // La salida es de varios productos juntos (conteo de barra): tiene su propio formulario.
+  if (tipo === "salida") {
+    return (
+      <section className="space-y-4">
+        <div className="tarjeta space-y-4">
+          <h2 className="font-semibold">Registrar movimiento</h2>
+          {selectorTipo}
+        </div>
+        <FormularioSalida stock={stock} depositos={depositos} eventos={eventos} />
+      </section>
+    );
+  }
+
   return (
     <form action={accion} className="tarjeta space-y-4">
       <h2 className="font-semibold">Registrar movimiento</h2>
       {estado.error && <p className="alerta-error">{estado.error}</p>}
       {estado.ok && <p className="text-sm text-green-700">{estado.ok}</p>}
 
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {TIPOS_MOVIMIENTO_STOCK.map((t) => (
-          <label
-            key={t}
-            className={`cursor-pointer rounded-md border px-3 py-2 text-center text-sm font-medium ${
-              tipo === t ? "border-stone-900 bg-stone-900 text-white" : "border-stone-300 bg-white text-stone-600"
-            }`}
-          >
-            <input type="radio" name="tipo" value={t} checked={tipo === t} onChange={() => setTipo(t)} className="sr-only" />
-            {NOMBRE_TIPO_STOCK[t]}
-          </label>
-        ))}
-      </div>
+      {selectorTipo}
+
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="lg:col-span-2">
@@ -91,25 +112,12 @@ export function FormularioMovimiento({
             <input id="fecha" name="fecha" type="date" required defaultValue={v("fecha", hoy())} className="campo" />
           </div>
         )}
-        {tipo === "entrada" && (
+        {(tipo === "entrada" || tipo === "ajuste") && (
           <div>
             <label htmlFor="costo_unitario" className="etiqueta">
               Costo unitario ($) <span className="font-normal text-stone-400">(opcional)</span>
             </label>
             <input id="costo_unitario" name="costo_unitario" inputMode="decimal" defaultValue={v("costo_unitario")} className="campo text-right font-mono" />
-          </div>
-        )}
-        {tipo === "salida" && (
-          <div>
-            <label htmlFor="evento_id" className="etiqueta">
-              Evento <span className="font-normal text-stone-400">(si se usó en uno)</span>
-            </label>
-            <select id="evento_id" name="evento_id" defaultValue={v("evento_id")} className="campo">
-              <option value="">Ninguno</option>
-              {eventos.map((e) => (
-                <option key={e.id} value={e.id}>{e.nombre} · {formatoFecha(e.fecha)}</option>
-              ))}
-            </select>
           </div>
         )}
         <div className="sm:col-span-2">
@@ -121,7 +129,6 @@ export function FormularioMovimiento({
             name="motivo"
             maxLength={200}
             defaultValue={v("motivo")}
-            placeholder={tipo === "salida" ? "Ej: consumo barra, rotura, venta…" : ""}
             className="campo"
           />
         </div>

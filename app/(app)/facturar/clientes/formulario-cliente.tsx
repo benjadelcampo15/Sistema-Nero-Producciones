@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { cambiarEstadoCliente, guardarCliente } from "@/lib/clientes/acciones";
+import { useRouter } from "next/navigation";
+import { cambiarEstadoCliente, guardarCliente, type EstadoCliente } from "@/lib/clientes/acciones";
 import { CONDICIONES_IVA, TIPOS_DOC } from "@/lib/facturar/tipos";
 
 export type ClienteEditable = {
@@ -18,7 +19,13 @@ export type ClienteEditable = {
 
 /** Alta (sin cliente) o edición de un cliente. */
 export function FormularioCliente({ cliente }: { cliente?: ClienteEditable }) {
-  const [estado, accion, enviando] = useActionState(guardarCliente.bind(null, cliente?.id ?? null), {});
+  const router = useRouter();
+  const [estado, accion, enviando] = useActionState(async (previo: EstadoCliente, formData: FormData) => {
+    const r = await guardarCliente(cliente?.id ?? null, previo, formData);
+    // Un cliente nuevo se ve en su ficha.
+    if (!cliente && r.id) router.push(`/facturar/clientes/${r.id}`);
+    return r;
+  }, {});
   const v = (campo: string, inicial: string) => estado.valores?.[campo] ?? inicial;
   const [docTipo, setDocTipo] = useState(Number(v("doc_tipo", String(cliente?.doc_tipo ?? 80))));
 

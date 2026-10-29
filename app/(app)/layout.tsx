@@ -1,16 +1,16 @@
 import { Suspense } from "react";
 import { obtenerUsuario } from "@/lib/auth/sesion";
 import { salir } from "@/lib/auth/acciones";
-import { PANTALLAS_EXTRA, SECCIONES } from "@/lib/permisos";
-import { EnlacesMenu, type ItemMenu } from "./enlaces-menu";
+import { MENU } from "@/lib/permisos";
+import { EnlacesMenu, type GrupoMenu } from "./enlaces-menu";
 
 export default function LayoutApp({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <aside className="flex shrink-0 flex-col bg-stone-950 text-stone-300 md:w-60 print:hidden">
         <div className="px-5 py-5">
-          <p className="text-lg font-black tracking-[0.3em] text-white">NERO</p>
-          <p className="text-[10px] uppercase tracking-widest text-stone-500">Producciones</p>
+          <p className="text-lg font-black tracking-[0.2em] text-white">ÓRBITA</p>
+          <p className="text-[10px] leading-snug text-stone-500">Toda la operación de la empresa alrededor de un mismo sistema</p>
         </div>
         <Suspense fallback={<div className="flex-1" />}>
           <Menu />
@@ -24,23 +24,18 @@ export default function LayoutApp({ children }: LayoutProps<"/">) {
 async function Menu() {
   const usuario = await obtenerUsuario();
 
-  const items: ItemMenu[] = SECCIONES.filter((s) => usuario.permisos[s.id] !== "ninguno").flatMap((s) => [
-    { href: s.href, nombre: s.nombre, grupo: s.grupo },
-    ...PANTALLAS_EXTRA.filter((p) => p.permiso === s.id).map((p) => ({ href: p.href, nombre: p.nombre, grupo: p.grupo })),
-  ]);
-  if (usuario.esAdmin) {
-    items.push({ href: "/configuracion/usuarios", nombre: "Usuarios", grupo: "Configuración" });
-  }
-  items.push({ href: "/plantillas", nombre: "Plantillas Excel", grupo: "Configuración" });
-
-  // Agrupados en el orden del menú; un grupo sin secciones visibles no aparece.
-  const grupos = ["Administración", "Eventos", "Configuración"]
-    .map((nombre) => ({ nombre, items: items.filter((i) => i.grupo === nombre) }))
-    .filter((g) => g.items.length > 0);
-
+  // Cada grupo con las pantallas que el usuario puede ver; un grupo vacío no aparece.
+  const grupos: GrupoMenu[] = MENU.map((g) => ({
+    nombre: g.grupo,
+    items: g.items.filter((i) => usuario.permisos[i.permiso] !== "ninguno").map(({ nombre, href }) => ({ nombre, href })),
+  }));
+  grupos.push({
+    nombre: "Configuración",
+    items: [...(usuario.esAdmin ? [{ href: "/configuracion/usuarios", nombre: "Usuarios" }] : []), { href: "/plantillas", nombre: "Plantillas Excel" }],
+  });
   return (
     <div className="flex flex-1 flex-col">
-      <EnlacesMenu grupos={grupos} />
+      <EnlacesMenu grupos={grupos.filter((g) => g.items.length > 0)} />
       <div className="border-t border-stone-800 px-5 py-4">
         <p className="truncate text-sm font-medium text-white">{usuario.nombre}</p>
         <p className="truncate text-xs text-stone-500">{usuario.email}</p>

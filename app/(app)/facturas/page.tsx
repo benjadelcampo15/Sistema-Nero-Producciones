@@ -1,130 +1,61 @@
 import Link from "next/link";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
-import { contarPorEstado, leerEstadoFactura, listarFacturas } from "@/lib/facturas/consultas";
-import { COLOR_ESTADO_FACTURA, NOMBRE_ESTADO_FACTURA, type EstadoFactura } from "@/lib/facturas/tipos";
-import { formatoFecha, formatoPesos } from "@/lib/formato";
+import { listarProveedores, resumenFacturasPorProveedor } from "@/lib/facturas/consultas";
+import { formatoDocumento } from "@/lib/cuit";
+import { hoy } from "@/lib/formato";
+import { TarjetasFichas } from "@/components/tarjetas-fichas";
 import { SinAcceso } from "../sin-acceso";
-import { EtiquetaEmpresa } from "@/components/empresa";
-import { SubidaFacturas } from "./subida";
 import { NavegacionFacturas } from "./navegacion";
-import { BotonBorrarFactura } from "./[id]/acciones-factura";
 
-const PESTANAS: (EstadoFactura | undefined)[] = [undefined, "por_revisar", "error", "aprobada", "rechazada"];
+const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
-const fechaHora = new Intl.DateTimeFormat("es-AR", {
-  dateStyle: "short",
-  timeStyle: "short",
-  timeZone: "America/Argentina/Buenos_Aires",
-});
-
-export default async function PaginaFacturas({ searchParams }: PageProps<"/facturas">) {
+/** Proveedores: una tarjeta por proveedor con lo facturado en el mes (facturas aprobadas) y su ficha. */
+export default async function PaginaProveedores() {
   const usuario = await obtenerUsuario();
   if (!puede(usuario, "facturas", "ver")) return <SinAcceso />;
-
-  const { estado: parametro } = await searchParams;
-  const estado = leerEstadoFactura(parametro);
-  const [facturas, conteo] = await Promise.all([listarFacturas(estado), contarPorEstado()]);
   const editable = puede(usuario, "facturas", "editar");
+  const [proveedores, resumen] = await Promise.all([listarProveedores(), resumenFacturasPorProveedor()]);
+  const activos = proveedores.filter((p) => p.activo).length;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Facturas</h1>
-        <p className="mt-1 text-sm text-stone-600">
-          Subí facturas y la IA lee sus datos. Después las revisás y al aprobarlas se cargan en Financiero.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Proveedores</h1>
+          <p className="text-sm text-stone-500">
+            {activos} {activos === 1 ? "proveedor" : "proveedores"} · se agregan solos al aprobar una factura
+          </p>
+        </div>
+        {editable && (
+          <div className="flex gap-2">
+            <Link href="/facturas/lista" className="boton-secundario">Subir facturas</Link>
+            <Link href="/facturas/proveedores/nuevo" className="boton">+ Nuevo proveedor</Link>
+          </div>
+        )}
       </div>
 
       <NavegacionFacturas actual="/facturas" />
 
-      {puede(usuario, "facturas", "editar") && <SubidaFacturas />}
-
-      <nav className="flex flex-wrap gap-2">
-        {PESTANAS.map((e) => {
-          const cantidad = e ? conteo[e] : Object.values(conteo).reduce((a, b) => a + b, 0);
-          return (
-            <Link
-              key={e ?? "todas"}
-              href={e ? `/facturas?estado=${e}` : "/facturas"}
-              scroll={false}
-              className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                estado === e
-                  ? "border-stone-900 bg-stone-900 text-white"
-                  : "border-stone-300 bg-white text-stone-700 hover:border-stone-500"
-              }`}
-            >
-              {e ? NOMBRE_ESTADO_FACTURA[e] : "Todas"} ({cantidad})
-            </Link>
-          );
+      <TarjetasFichas
+        editable={editable}
+        rutas={{ ficha: "/facturas/proveedores", accion: { texto: "Cargar factura", href: "/facturas/lista" }, agregar: { texto: "Agregar proveedor", href: "/facturas/proveedores/nuevo" } }}
+        mes={MESES[Number(hoy().slice(5, 7)) - 1]}
+        fichas={proveedores.map((p) => {
+          const r = p.cuit ? resumen.get(p.cuit) : undefined;
+          return {
+            id: p.id,
+            nombre: p.razon_social,
+            documento: p.cuit ? formatoDocumento(80, p.cuit) : "Sin CUIT",
+            condicion: p.alias_cbu ? `Alias ${p.alias_cbu}` : "",
+            activo: p.activo,
+            contacto: p.telefono ?? p.email,
+            mes: r?.mes ?? { cantidad: 0, total: 0 },
+            total: r?.total ?? 0,
+            cantidad: r?.cantidad ?? 0,
+            ultima: r?.ultima ?? null,
+          };
         })}
-      </nav>
-
-      <div className="tarjeta overflow-x-auto p-0">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
-            <tr>
-              <th className="px-4 py-3">Subida</th>
-              <th className="px-4 py-3">Emisor</th>
-              <th className="px-4 py-3">Comprobante</th>
-              <th className="px-4 py-3">Fecha</th>
-              <th className="px-4 py-3 text-right">Total</th>
-              <th className="px-4 py-3">Estado</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-stone-100">
-            {facturas.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-stone-500">No hay facturas.</td>
-              </tr>
-            )}
-            {facturas.map((f) => (
-              <tr key={f.id} className="hover:bg-stone-50">
-                <td className="whitespace-nowrap px-4 py-3 text-stone-600">{fechaHora.format(new Date(f.creado_en))}</td>
-                <td className="px-4 py-3">
-                  <Link href={`/facturas/${f.id}`} className="font-medium underline decoration-stone-300 hover:decoration-stone-900">
-                    {f.razon_social_emisor ?? f.archivo_nombre}
-                  </Link>
-                  {f.cuit_emisor && <p className="text-xs text-stone-500">CUIT {f.cuit_emisor}</p>}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-stone-600">
-                  {[f.tipo_comprobante, f.punto_venta && f.numero ? `${f.punto_venta}-${f.numero}` : null]
-                    .filter(Boolean)
-                    .join(" ") || "—"}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-stone-600">
-                  {f.fecha_emision ? formatoFecha(f.fecha_emision) : "—"}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-right font-mono">
-                  {f.total !== null ? formatoPesos(f.total) : "—"}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${COLOR_ESTADO_FACTURA[f.estado]}`}>
-                    {NOMBRE_ESTADO_FACTURA[f.estado]}
-                  </span>
-                  {f.estado === "aprobada" && (
-                    <span className="ml-1">
-                      <EtiquetaEmpresa empresa={f.empresa} />
-                    </span>
-                  )}
-                  {f.duplicada_de && f.estado === "por_revisar" && (
-                    <span className="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
-                      ¿Duplicada?
-                    </span>
-                  )}
-                </td>
-                <td className="space-x-3 whitespace-nowrap px-4 py-3 text-right">
-                  {editable && <BotonBorrarFactura id={f.id} aprobada={f.estado === "aprobada"} chico />}
-                  {/* Ruta que verifica permisos y redirige a un link temporal del archivo. */}
-                  <a href={`/facturas/${f.id}/archivo`} target="_blank" rel="noreferrer" className="boton-secundario">
-                    Ver
-                  </a>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      />
     </div>
   );
 }

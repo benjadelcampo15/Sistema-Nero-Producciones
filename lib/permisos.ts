@@ -1,24 +1,56 @@
 export const SECCIONES = [
-  { id: "financiero", nombre: "Financiero", href: "/financiero", grupo: "Administración" },
-  { id: "objetivos", nombre: "Objetivos", href: "/objetivos", grupo: "Administración" },
-  { id: "facturas", nombre: "Facturas", href: "/facturas", grupo: "Administración" },
-  { id: "facturar", nombre: "Facturar", href: "/facturar", grupo: "Administración" },
-  { id: "cheques", nombre: "Cheques", href: "/cheques", grupo: "Administración" },
-  { id: "stock", nombre: "Stock", href: "/stock", grupo: "Administración" },
-  { id: "eventos", nombre: "Eventos", href: "/eventos", grupo: "Eventos" },
-  { id: "presupuestos", nombre: "Presupuestos", href: "/presupuestos", grupo: "Eventos" },
-  { id: "livings", nombre: "Livings VIP", href: "/livings", grupo: "Eventos" },
-  { id: "operativa", nombre: "Empleados", href: "/empleados", grupo: "Eventos" },
+  { id: "financiero", nombre: "Financiero", href: "/financiero" },
+  { id: "objetivos", nombre: "Objetivos", href: "/objetivos" },
+  { id: "facturas", nombre: "Facturas", href: "/facturas" },
+  { id: "facturar", nombre: "Facturar", href: "/facturar" },
+  { id: "cheques", nombre: "Cheques", href: "/cheques" },
+  { id: "stock", nombre: "Stock", href: "/stock" },
+  { id: "eventos", nombre: "Eventos", href: "/eventos" },
+  { id: "presupuestos", nombre: "Presupuestos", href: "/presupuestos" },
+  { id: "livings", nombre: "Livings VIP", href: "/livings" },
+  { id: "operativa", nombre: "Empleados", href: "/empleados" },
 ] as const;
 
 /**
- * Pantallas que usan el permiso de otra sección (no tienen permiso propio): se
- * muestran en el menú después de esa sección.
+ * Menú lateral: grupos desplegables y, en cada uno, las pantallas con el
+ * permiso que hace falta para verlas (varias pantallas usan el de otra sección).
  */
-export const PANTALLAS_EXTRA = [
-  { permiso: "financiero", nombre: "Cashflow", href: "/cashflow", grupo: "Administración" },
-  { permiso: "financiero", nombre: "Saldos bancarios", href: "/saldos", grupo: "Administración" },
-  { permiso: "financiero", nombre: "Extractos bancarios", href: "/extractos", grupo: "Administración" },
+export const MENU = [
+  {
+    grupo: "Administración",
+    items: [
+      { nombre: "Financiero", href: "/financiero", permiso: "financiero" },
+      { nombre: "Cashflow", href: "/cashflow", permiso: "financiero" },
+      { nombre: "Saldos bancarios", href: "/saldos", permiso: "financiero" },
+      { nombre: "Extractos bancarios", href: "/extractos", permiso: "financiero" },
+      { nombre: "Objetivos", href: "/objetivos", permiso: "objetivos" },
+    ],
+  },
+  {
+    grupo: "Contabilidad",
+    items: [
+      { nombre: "Proveedores", href: "/facturas", permiso: "facturas" },
+      { nombre: "Clientes", href: "/facturar", permiso: "facturar" },
+      { nombre: "Cheques", href: "/cheques", permiso: "cheques" },
+      { nombre: "Libros contables", href: "/contabilidad", permiso: "financiero" },
+    ],
+  },
+  {
+    grupo: "Stock",
+    items: [
+      { nombre: "Stock", href: "/stock", permiso: "stock" },
+      { nombre: "Pedidos", href: "/stock/pedidos", permiso: "stock" },
+    ],
+  },
+  {
+    grupo: "Eventos",
+    items: [
+      { nombre: "Eventos", href: "/eventos", permiso: "eventos" },
+      { nombre: "Presupuestos", href: "/presupuestos", permiso: "presupuestos" },
+      { nombre: "Livings VIP", href: "/livings", permiso: "livings" },
+      { nombre: "Empleados", href: "/empleados", permiso: "operativa" },
+    ],
+  },
 ] as const;
 
 export type Seccion = (typeof SECCIONES)[number]["id"];

@@ -6,7 +6,8 @@ import { z } from "zod";
 import { exigirPermiso } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { parsearMonto } from "@/lib/formato";
-import { UNIDADES } from "./tipos";
+import { obtenerStock } from "./consultas";
+import { UNIDADES, costoDeSalida, r3 } from "./tipos";
 
 export type EstadoStock = { error?: string; ok?: string; valores?: Record<string, string> };
 
@@ -86,6 +87,8 @@ export async function registrarMovimiento(_previo: EstadoStock, formData: FormDa
         deposito_id: d.deposito_id,
         tipo: "ajuste",
         cantidad: diferencia,
+        // Lo que se suma entra con su costo (si se cargó).
+        costo_unitario: diferencia > 0 ? costo : null,
         motivo: d.motivo || `Inventario: se contaron ${cantidad} (el sistema tenía ${disponible})`,
       },
     ];
@@ -110,6 +113,68 @@ export async function registrarMovimiento(_previo: EstadoStock, formData: FormDa
 
   refresh();
   return { ok: "Movimiento registrado" };
+}
+
+const esquemaSalida = z.object({
+  deposito_id: z.uuid("Elegí el depósito"),
+  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Falta la fecha"),
+  evento_id: z.union([z.uuid(), z.literal("")]).optional(),
+  modo: z.enum(["conteo", "cantidad"]),
+  motivo: z.string().trim().max(200).optional(),
+  lineas: z.array(z.object({ producto_id: z.uuid(), valor: z.number().min(0, "No puede haber cantidades negativas").max(1e9) })).max(2000),
+});
+export type DatosSalida = z.input<typeof esquemaSalida>;
+
+/**
+ * Salida de varios productos juntos. En modo conteo cada valor es lo que quedó:
+ * sale la diferencia con lo que había en el depósito. Cada producto lleva el
+ * costo promedio del momento, así queda el costo total de la salida.
+ */
+export async function registrarSalida(datos: DatosSalida): Promise<{ error?: string; id?: string }> {
+  await exigirPermiso("stock", "editar");
+  const r = esquemaSalida.safeParse(datos);
+  if (!r.success) return { error: r.error.issues[0].message };
+  const d = r.data;
+
+  const stock = new Map((await obtenerStock()).map((f) => [f.producto.id, f]));
+  const errores: string[] = [];
+  const lineas: { producto_id: string; cantidad: number; costo_unitario: number | null; stock_inicial: number | null; stock_contado: number | null }[] = [];
+  for (const l of d.lineas) {
+    const fila = stock.get(l.producto_id);
+    if (!fila) {
+      errores.push("Hay un producto que no existe o está desactivado");
+      continue;
+    }
+    const hay = r3(fila.porDeposito[d.deposito_id] ?? 0);
+    const cantidad = d.modo === "conteo" ? r3(hay - l.valor) : r3(l.valor);
+    if (d.modo === "conteo" && l.valor > hay) {
+      errores.push(`${fila.producto.nombre}: contaste ${l.valor} y había ${hay} (si sobra, hacé un ajuste de inventario)`);
+      continue;
+    }
+    if (d.modo === "cantidad" && cantidad > hay) {
+      errores.push(`${fila.producto.nombre}: salen ${cantidad} y hay ${hay}`);
+      continue;
+    }
+    if (cantidad <= 0) continue;
+    lineas.push({
+      producto_id: l.producto_id,
+      cantidad,
+      costo_unitario: costoDeSalida(fila, d.deposito_id),
+      stock_inicial: d.modo === "conteo" ? hay : null,
+      stock_contado: d.modo === "conteo" ? r3(l.valor) : null,
+    });
+  }
+  if (errores.length) return { error: errores.slice(0, 5).join(" · ") + (errores.length > 5 ? ` · y ${errores.length - 5} más` : "") };
+  if (!lineas.length) return { error: d.modo === "conteo" ? "Lo contado coincide con lo que había: no salió nada" : "Cargá al menos un producto" };
+
+  const supabase = await crearClienteServidor();
+  const { data, error } = await supabase.rpc("registrar_salida_stock", {
+    p_salida: { fecha: d.fecha, deposito_id: d.deposito_id, evento_id: d.evento_id ?? "", modo: d.modo, motivo: d.motivo ?? "" },
+    p_lineas: lineas,
+  });
+  if (error) return { error: "No se pudo registrar la salida" };
+  refresh();
+  return { id: data as string };
 }
 
 const esquemaProducto = z.object({

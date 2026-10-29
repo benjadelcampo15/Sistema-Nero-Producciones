@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useTransition } from "react";
-import { borrarProveedor, guardarProveedor } from "@/lib/facturas/proveedores";
+import { useRouter } from "next/navigation";
+import { borrarProveedor, guardarProveedor, type EstadoProveedor } from "@/lib/facturas/proveedores";
 
 export type Proveedor = {
   id: string;
@@ -17,7 +18,13 @@ export type Proveedor = {
 
 /** Alta (sin proveedor) o edición de un proveedor. */
 export function FormularioProveedor({ proveedor }: { proveedor?: Proveedor }) {
-  const [estado, accion, enviando] = useActionState(guardarProveedor.bind(null, proveedor?.id ?? null), {});
+  const router = useRouter();
+  const [estado, accion, enviando] = useActionState(async (previo: EstadoProveedor, formData: FormData) => {
+    const r = await guardarProveedor(proveedor?.id ?? null, previo, formData);
+    // Un proveedor nuevo se ve en su ficha.
+    if (!proveedor && r.id) router.push(`/facturas/proveedores/${r.id}`);
+    return r;
+  }, {});
   const v = (campo: keyof Proveedor) => estado.valores?.[campo] ?? ((proveedor?.[campo] as string | null | undefined) ?? "");
   const id = (campo: string) => `${campo}-${proveedor?.id ?? "nuevo"}`;
   return (
@@ -61,7 +68,8 @@ export function FormularioProveedor({ proveedor }: { proveedor?: Proveedor }) {
   );
 }
 
-export function BotonBorrarProveedor({ id, nombre }: { id: string; nombre: string }) {
+export function BotonBorrarProveedor({ id, nombre, irA }: { id: string; nombre: string; irA?: string }) {
+  const router = useRouter();
   const [pendiente, iniciar] = useTransition();
   return (
     <button
@@ -73,6 +81,7 @@ export function BotonBorrarProveedor({ id, nombre }: { id: string; nombre: strin
         iniciar(async () => {
           const r = await borrarProveedor(id);
           if (r.error) window.alert(r.error);
+          else if (irA) router.push(irA);
         });
       }}
     >

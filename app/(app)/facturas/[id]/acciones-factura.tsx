@@ -43,7 +43,7 @@ export function AccionesFactura({ id, puedeReintentar }: { id: string; puedeRein
             ejecutar(
               "¿Rechazar esta factura? No se carga en Financiero (queda registrada como rechazada).",
               () => rechazarFactura(id),
-              () => router.push("/facturas?estado=por_revisar"),
+              () => router.push("/facturas/lista?estado=por_revisar"),
             )
           }
         >

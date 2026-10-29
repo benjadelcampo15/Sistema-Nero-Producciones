@@ -25,7 +25,7 @@ export default async function PaginaComprobante({ params, searchParams }: PagePr
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/facturar" className="text-sm text-stone-500 hover:text-stone-900">← Facturar</Link>
+        <Link href="/facturar/comprobantes" className="text-sm text-stone-500 hover:text-stone-900">← Comprobantes</Link>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold">
@@ -37,7 +37,7 @@ export default async function PaginaComprobante({ params, searchParams }: PagePr
               <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">REAL</span>
             )}
           </div>
-          {puedeEditar && <BotonBorrarComprobante id={c.id} irA="/facturar" real={c.entorno === "produccion" && c.estado === "emitido"} />}
+          {puedeEditar && <BotonBorrarComprobante id={c.id} irA="/facturar/comprobantes" real={c.entorno === "produccion" && c.estado === "emitido"} />}
           {c.estado === "emitido" && (
             <a href={`/imprimir/factura/${c.id}`} target="_blank" rel="noreferrer" className="boton">
               Descargar PDF / Imprimir

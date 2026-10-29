@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nero Producciones · Administración",
-  description: "Administración y contabilidad de Nero Producciones",
+  title: "Órbita",
+  description: "Toda la operación de la empresa alrededor de un mismo sistema",
   robots: { index: false, follow: false },
 };
 

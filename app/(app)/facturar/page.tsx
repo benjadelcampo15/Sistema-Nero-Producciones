@@ -1,87 +1,60 @@
 import Link from "next/link";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
-import { listarComprobantes } from "@/lib/facturar/consultas";
-import { nombreTipoCbte, numeroComprobante } from "@/lib/facturar/tipos";
-import { formatoFecha, formatoPesos } from "@/lib/formato";
+import { listarClientes, resumenFacturacionPorCliente } from "@/lib/clientes/consultas";
+import { CONDICIONES_IVA } from "@/lib/facturar/tipos";
+import { formatoDocumento } from "@/lib/cuit";
+import { hoy } from "@/lib/formato";
 import { SinAcceso } from "../sin-acceso";
-import { EtiquetaEmpresa } from "@/components/empresa";
 import { NavegacionFacturar } from "./navegacion";
-import { BotonBorrarComprobante } from "./borrar";
+import { TarjetasFichas } from "@/components/tarjetas-fichas";
 
-export default async function PaginaFacturar() {
+const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+/** Clientes: una tarjeta por cliente con lo facturado en el mes, su ficha y el botón para facturarle. */
+export default async function PaginaClientes() {
   const usuario = await obtenerUsuario();
   if (!puede(usuario, "facturar", "ver")) return <SinAcceso />;
-
-  const comprobantes = await listarComprobantes();
   const editable = puede(usuario, "facturar", "editar");
+  const [clientes, resumen] = await Promise.all([listarClientes({ incluirInactivos: true }), resumenFacturacionPorCliente()]);
+  const activos = clientes.filter((c) => c.activo).length;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-semibold">Facturar</h1>
+        <div>
+          <h1 className="text-2xl font-semibold">Clientes</h1>
+          <p className="text-sm text-stone-500">{activos} {activos === 1 ? "cliente" : "clientes"}</p>
         </div>
-        {puede(usuario, "facturar", "editar") && (
-          <Link href="/facturar/nueva" className="boton">+ Nueva factura</Link>
+        {editable && (
+          <div className="flex gap-2">
+            <Link href="/facturar/nueva" className="boton-secundario">Factura sin cliente guardado</Link>
+            <Link href="/facturar/clientes/nuevo" className="boton">+ Nuevo cliente</Link>
+          </div>
         )}
       </div>
 
       <NavegacionFacturar actual="/facturar" />
 
-      <div className="tarjeta overflow-x-auto p-0">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
-            <tr>
-              <th className="px-4 py-3">Fecha</th>
-              <th className="px-4 py-3">Comprobante</th>
-              <th className="px-4 py-3">Cliente</th>
-              <th className="px-4 py-3 text-right">Total</th>
-              <th className="px-4 py-3">Estado</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-stone-100">
-            {comprobantes.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-stone-500">Todavía no se emitieron facturas.</td>
-              </tr>
-            )}
-            {comprobantes.map((c) => (
-              <tr key={c.id} className="hover:bg-stone-50">
-                <td className="whitespace-nowrap px-4 py-3 text-stone-600">{formatoFecha(c.fecha)}</td>
-                <td className="whitespace-nowrap px-4 py-3">
-                  <Link href={`/facturar/${c.id}`} className="font-medium underline decoration-stone-300 hover:decoration-stone-900">
-                    {nombreTipoCbte(c.tipo_cbte)} {c.numero ? numeroComprobante(c) : ""}
-                  </Link>
-                  {c.entorno === "homologacion" ? (
-                    <span className="ml-2 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-800">Prueba</span>
-                  ) : (
-                    <span className="ml-2 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-red-800">Real</span>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  <span className="mr-2">
-                    <EtiquetaEmpresa empresa={c.empresa} />
-                  </span>
-                  {c.receptor_nombre ?? (c.doc_tipo === 99 ? "Consumidor final" : c.doc_nro)}
-                  {c.doc_tipo !== 99 && <span className="block text-xs text-stone-500">{c.doc_tipo === 80 ? "CUIT" : "DNI"} {c.doc_nro}</span>}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-right font-mono">{formatoPesos(c.total)}</td>
-                <td className="px-4 py-3">
-                  {c.estado === "emitido" ? (
-                    <>
-                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">CAE {c.cae}</span>
-                      <a href={`/imprimir/factura/${c.id}`} target="_blank" rel="noreferrer" className="ml-2 text-xs font-medium underline">PDF</a>
-                    </>
-                  ) : (
-                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">Rechazada</span>
-                  )}
-                  {editable && <span className="ml-2"><BotonBorrarComprobante id={c.id} real={c.entorno === "produccion" && c.estado === "emitido"} /></span>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <TarjetasFichas
+        editable={editable}
+        rutas={{ ficha: "/facturar/clientes", accion: { texto: "Facturar", href: "/facturar/nueva?cliente={id}" }, agregar: { texto: "Agregar cliente", href: "/facturar/clientes/nuevo" } }}
+        mes={MESES[Number(hoy().slice(5, 7)) - 1]}
+        fichas={clientes.map((c) => {
+          const r = resumen.get(c.id);
+          return {
+            id: c.id,
+            nombre: c.razon_social,
+            documento: formatoDocumento(c.doc_tipo, c.doc_nro),
+            condicion: CONDICIONES_IVA.find((x) => x.id === c.condicion_iva)?.nombre ?? "",
+            activo: c.activo,
+            contacto: c.telefono ?? c.email,
+            mes: r?.mes ?? { cantidad: 0, total: 0 },
+            total: r?.total ?? 0,
+            cantidad: r?.cantidad ?? 0,
+            ultima: r?.ultima ?? null,
+          };
+        })}
+      />
     </div>
   );
 }

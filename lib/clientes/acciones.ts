@@ -8,7 +8,7 @@ import { crearClienteAdmin } from "@/lib/supabase/admin";
 import { cuitValido } from "@/lib/cuit";
 import { CONDICIONES_IVA } from "@/lib/facturar/tipos";
 
-export type EstadoCliente = { error?: string; ok?: string; valores?: Record<string, string> };
+export type EstadoCliente = { error?: string; ok?: string; id?: string; valores?: Record<string, string> };
 
 const textoOpcional = (max: number) =>
   z
@@ -64,7 +64,7 @@ export async function guardarCliente(id: string | null, _previo: EstadoCliente, 
     return { error: error?.code === "23505" ? "Ya hay un cliente con ese CUIT/DNI" : "No se pudo guardar el cliente", valores };
   }
   refresh();
-  return { ok: id ? "Cliente actualizado" : "Cliente agregado" };
+  return { ok: id ? "Cliente actualizado" : "Cliente agregado", id: data[0].id };
 }
 
 export async function cambiarEstadoCliente(id: string, activo: boolean): Promise<{ error?: string }> {

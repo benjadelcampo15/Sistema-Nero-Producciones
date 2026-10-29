@@ -27,7 +27,10 @@ export function FormularioFactura({
   realDisponible,
   puntoVenta,
   clientes,
+  clienteInicial,
 }: {
+  /** Cliente ya elegido (al entrar con "Facturar" desde su tarjeta). */
+  clienteInicial?: string;
   eventos: EventoResumido[];
   categorias: Categoria[];
   puedeRegistrarIngreso: boolean;
@@ -38,16 +41,19 @@ export function FormularioFactura({
 }) {
   const [estado, accion, enviando] = useActionState(emitirFactura, {});
   const v = (campo: string, inicial: string) => estado.valores?.[campo] ?? inicial;
+  const c0 = clientes.find((x) => x.id === clienteInicial);
+  // Con cliente elegido: A si puede recibirla (CUIT y condición que admite A), si no B.
+  const tipoInicial = c0 && c0.doc_tipo === 80 && (CONDICIONES_IVA.find((x) => x.id === c0.condicion_iva)?.clases as readonly string[] | undefined)?.includes("A") ? "1" : "6";
 
-  const [tipo, setTipo] = useState(Number(v("tipo_cbte", "6")));
+  const [tipo, setTipo] = useState(Number(v("tipo_cbte", tipoInicial)));
   const [concepto, setConcepto] = useState(Number(v("concepto", "2")));
-  const [docTipo, setDocTipo] = useState(Number(v("doc_tipo", "99")));
-  const [clienteId, setClienteId] = useState(v("cliente_id", ""));
-  const [docNro, setDocNro] = useState(v("doc_nro", ""));
-  const [nombre, setNombre] = useState(v("receptor_nombre", ""));
-  const [condicion, setCondicion] = useState(Number(v("condicion_iva_receptor", "5")));
-  const [email, setEmail] = useState(v("email_cliente", ""));
-  const [enviarMail, setEnviarMail] = useState(estado.valores ? estado.valores.enviar_mail === "on" : false);
+  const [docTipo, setDocTipo] = useState(Number(v("doc_tipo", String(c0?.doc_tipo ?? 99))));
+  const [clienteId, setClienteId] = useState(v("cliente_id", c0?.id ?? ""));
+  const [docNro, setDocNro] = useState(v("doc_nro", c0 && c0.doc_tipo !== 99 ? c0.doc_nro : ""));
+  const [nombre, setNombre] = useState(v("receptor_nombre", c0?.razon_social ?? ""));
+  const [condicion, setCondicion] = useState(Number(v("condicion_iva_receptor", String(c0?.condicion_iva ?? 5))));
+  const [email, setEmail] = useState(v("email_cliente", c0?.email ?? ""));
+  const [enviarMail, setEnviarMail] = useState(estado.valores ? estado.valores.enviar_mail === "on" : Boolean(c0?.email));
 
   const elegirCliente = (id: string) => {
     setClienteId(id);

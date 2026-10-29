@@ -110,6 +110,24 @@ export function ListaPersonal({ personal, editable }: { personal: Persona[]; edi
   const filtrados = texto
     ? personal.filter((p) => `${p.nombre} ${p.apellido} ${p.dni} ${p.cuil ?? ""} ${p.telefono ?? ""}`.toLowerCase().includes(texto))
     : personal;
+  const [elegidos, setElegidos] = useState<Set<string>>(new Set());
+  const todosLosFiltrados = filtrados.length > 0 && filtrados.every((p) => elegidos.has(p.id));
+  const alternar = (id: string) =>
+    setElegidos((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const alternarFiltrados = () =>
+    setElegidos((s) => {
+      const n = new Set(s);
+      for (const p of filtrados) {
+        if (todosLosFiltrados) n.delete(p.id);
+        else n.add(p.id);
+      }
+      return n;
+    });
 
   return (
     <section className="space-y-2">
@@ -124,11 +142,45 @@ export function ListaPersonal({ personal, editable }: { personal: Persona[]; edi
           className="campo max-w-xs"
         />
       </div>
+      {personal.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Excel: los elegidos (campos "id") o, con el otro botón, todos. */}
+          <form method="post" action="/empleados/exportar">
+            {[...elegidos].map((id) => (
+              <input key={id} type="hidden" name="id" value={id} />
+            ))}
+            <button type="submit" disabled={!elegidos.size} className="boton disabled:opacity-40">
+              Descargar Excel de seleccionados{elegidos.size ? ` (${elegidos.size})` : ""}
+            </button>
+          </form>
+          <form method="post" action="/empleados/exportar">
+            <button type="submit" className="boton-secundario">Descargar Excel de todos ({personal.length})</button>
+          </form>
+          {elegidos.size > 0 && (
+            <button type="button" onClick={() => setElegidos(new Set())} className="text-sm text-stone-600 hover:text-stone-900">
+              Quitar selección
+            </button>
+          )}
+        </div>
+      )}
       <div className="tarjeta divide-y divide-stone-100 p-0">
+        {filtrados.length > 0 && (
+          <label className="flex cursor-pointer items-center gap-3 bg-stone-50 px-4 py-2 text-xs font-medium text-stone-600">
+            <input type="checkbox" checked={todosLosFiltrados} onChange={alternarFiltrados} />
+            {texto ? `Seleccionar los ${filtrados.length} de la búsqueda` : "Seleccionar todos"}
+          </label>
+        )}
         {filtrados.length === 0 && <p className="p-6 text-center text-sm text-stone-500">{personal.length ? "No hay coincidencias." : "Todavía no hay personal cargado."}</p>}
         {filtrados.map((p) => (
-          <details key={p.id}>
-            <summary className="flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-sm">
+          <div key={p.id} className="flex items-start">
+            <input
+              type="checkbox"
+              checked={elegidos.has(p.id)}
+              onChange={() => alternar(p.id)}
+              aria-label={`Seleccionar a ${nombreCompleto(p)}`}
+              className="ml-4 mt-3.5 shrink-0"
+            />
+          <details className="min-w-0 flex-1">            <summary className="flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-sm">
               <span className="min-w-48 flex-1 font-medium">{nombreCompleto(p)}</span>
               <span className="font-mono text-xs text-stone-500">DNI {p.dni}</span>
               {p.cuil && <span className="font-mono text-xs text-stone-500">CUIL {p.cuil.slice(0, 2)}-{p.cuil.slice(2, 10)}-{p.cuil.slice(10)}</span>}
@@ -157,6 +209,7 @@ export function ListaPersonal({ personal, editable }: { personal: Persona[]; edi
               )}
             </div>
           </details>
+          </div>
         ))}
       </div>
     </section>

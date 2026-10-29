@@ -1,8 +1,8 @@
 import Link from "next/link";
 
 const ENLACES = [
-  { href: "/facturar", nombre: "Facturas" },
-  { href: "/facturar/clientes", nombre: "Clientes" },
+  { href: "/facturar", nombre: "Clientes" },
+  { href: "/facturar/comprobantes", nombre: "Comprobantes" },
 ];
 
 export function NavegacionFacturar({ actual }: { actual: string }) {

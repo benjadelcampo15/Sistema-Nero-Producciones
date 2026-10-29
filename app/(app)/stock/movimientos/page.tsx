@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
-import { listarDepositos, listarMovimientos, listarProductos } from "@/lib/stock/consultas";
+import { listarDepositos, listarMovimientos, listarProductos, listarSalidas, obtenerStock } from "@/lib/stock/consultas";
 import { obtenerEventosResumidos } from "@/lib/financiero/consultas";
 import { formatoCantidad } from "@/lib/stock/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
@@ -23,12 +23,20 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
   const filtroProducto = typeof producto === "string" ? producto : undefined;
   const filtroDeposito = typeof deposito === "string" ? deposito : undefined;
 
-  const [productos, depositos, movimientos, eventos] = await Promise.all([
+  // Sin filtro de producto, las salidas de varios productos se ven agrupadas (una fila por salida).
+  const agrupar = !filtroProducto;
+  const [productos, depositos, movimientos, eventos, stock, salidas] = await Promise.all([
     listarProductos(),
     listarDepositos(),
-    listarMovimientos({ producto: filtroProducto, deposito: filtroDeposito }),
+    listarMovimientos({ producto: filtroProducto, deposito: filtroDeposito, sinSalidas: agrupar }),
     editable ? obtenerEventosResumidos() : [],
+    editable ? obtenerStock() : [],
+    agrupar ? listarSalidas({ deposito: filtroDeposito }) : [],
   ]);
+  const historial = [
+    ...movimientos.map((m) => ({ clave: m.fecha + m.creado_en, movimiento: m, salida: null })),
+    ...salidas.map((s) => ({ clave: s.fecha + s.creado_en, movimiento: null, salida: s })),
+  ].sort((a, b) => b.clave.localeCompare(a.clave));
   const productoFiltrado = productos.find((p) => p.id === filtroProducto);
 
   return (
@@ -38,7 +46,7 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
 
       {editable &&
         (productos.length && depositos.length ? (
-          <FormularioMovimiento productos={productos} depositos={depositos} eventos={eventos} productoInicial={filtroProducto} />
+          <FormularioMovimiento productos={productos} depositos={depositos} eventos={eventos} productoInicial={filtroProducto} stock={stock} />
         ) : (
           <p className="tarjeta text-sm text-stone-600">
             Para registrar movimientos primero creá un <Link href="/stock/productos" className="underline">producto</Link>.
@@ -65,16 +73,38 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
                 <th className="px-4 py-3">Depósito</th>
                 <th className="px-4 py-3 text-right">Cantidad</th>
                 <th className="px-4 py-3 text-right">Costo unit.</th>
+                <th className="px-4 py-3 text-right">Costo total</th>
                 <th className="px-4 py-3">Detalle</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
-              {movimientos.length === 0 && (
+              {historial.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-stone-500">No hay movimientos.</td>
+                  <td colSpan={8} className="px-4 py-10 text-center text-stone-500">No hay movimientos.</td>
                 </tr>
               )}
-              {movimientos.map((m) => (
+              {historial.map(({ movimiento: m, salida: s }) =>
+                s ? (
+                  <tr key={s.id} className="hover:bg-stone-50">
+                    <td className="whitespace-nowrap px-4 py-3 text-stone-600">{formatoFecha(s.fecha)}</td>
+                    <td className="px-4 py-3">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ETIQUETA.salida.clase}`}>{s.modo === "conteo" ? "Salida por conteo" : "Salida"}</span>
+                    </td>
+                    <td className="px-4 py-3 font-medium">{s.productos} {s.productos === 1 ? "producto" : "productos"}</td>
+                    <td className="px-4 py-3 text-stone-600">{s.deposito.nombre}</td>
+                    <td className="px-4 py-3 text-right text-stone-400">—</td>
+                    <td className="px-4 py-3 text-right text-stone-400">—</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right font-mono font-medium">
+                      {formatoPesos(s.costoTotal)}
+                      {s.sinCosto > 0 && <span className="block text-xs font-normal text-amber-700">{s.sinCosto} sin costo</span>}
+                    </td>
+                    <td className="px-4 py-3 text-stone-600">
+                      {s.motivo}
+                      {s.evento && <span className="ml-1">({s.evento.nombre})</span>}
+                      <Link href={`/stock/salidas/${s.id}`} className="ml-1 font-medium text-stone-900 underline">ver detalle</Link>
+                    </td>
+                  </tr>
+                ) : m && (
                 <tr key={m.id} className="hover:bg-stone-50">
                   <td className="whitespace-nowrap px-4 py-3 text-stone-600">{formatoFecha(m.fecha)}</td>
                   <td className="px-4 py-3">
@@ -91,6 +121,9 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
                   <td className="whitespace-nowrap px-4 py-3 text-right font-mono text-stone-600">
                     {m.costo_unitario !== null ? formatoPesos(m.costo_unitario) : "—"}
                   </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right font-mono">
+                    {m.costo_unitario !== null ? formatoPesos(Math.abs(m.cantidad) * m.costo_unitario) : "—"}
+                  </td>
                   <td className="px-4 py-3 text-stone-600">
                     {m.motivo}
                     {m.evento && (
@@ -103,9 +136,15 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
                         ver factura
                       </Link>
                     )}
+                    {m.salida_id && (
+                      <Link href={`/stock/salidas/${m.salida_id}`} className="ml-1 underline">
+                        ver salida
+                      </Link>
+                    )}
                   </td>
                 </tr>
-              ))}
+                ),
+              )}
             </tbody>
           </table>
         </div>

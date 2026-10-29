@@ -6,7 +6,7 @@ import { exigirPermiso } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { cuitValido } from "@/lib/cuit";
 
-export type EstadoProveedor = { error?: string; ok?: string; valores?: Record<string, string> };
+export type EstadoProveedor = { error?: string; ok?: string; id?: string; valores?: Record<string, string> };
 
 const opcional = (max: number) =>
   z
@@ -41,7 +41,7 @@ export async function guardarProveedor(id: string | null, _previo: EstadoProveed
     : await supabase.from("proveedores").insert(datos.data).select("id");
   if (error || !data?.length) return { error: error?.code === "23505" ? "Ya hay un proveedor con ese CUIT" : "No se pudo guardar", valores };
   refresh();
-  return { ok: id ? "Proveedor actualizado" : "Proveedor agregado" };
+  return { ok: id ? "Proveedor actualizado" : "Proveedor agregado", id: data[0].id };
 }
 
 /** Borra un proveedor (sus facturas no se tocan: siguen teniendo el CUIT y la razón social). */

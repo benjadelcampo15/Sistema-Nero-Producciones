@@ -110,9 +110,19 @@ export async function importarMovimientosStock(filas: FilaExcel[], aplicar: bool
       // En el ajuste la cantidad es lo que se contó: se registra la diferencia.
       const diferencia = r3(cantidad - disponible);
       if (diferencia === 0) return resultados.push({ fila, ok: true, mensaje: `${producto.nombre} en ${deposito.nombre}: el conteo coincide, no hay ajuste` });
-      nuevas.push({ ...base, deposito_id: deposito.id, tipo: "ajuste", cantidad: diferencia, motivo: motivo ?? `Inventario: se contaron ${cantidad} (el sistema tenía ${disponible})` });
+      // Si suma (por ejemplo, la carga inicial del stock), lo que se suma entra con su costo.
+      const conCosto = diferencia > 0 && costo !== null;
+      nuevas.push({
+        ...base,
+        deposito_id: deposito.id,
+        tipo: "ajuste",
+        cantidad: diferencia,
+        costo_unitario: conCosto ? costo : null,
+        motivo: motivo ?? `Inventario: se contaron ${cantidad} (el sistema tenía ${disponible})`,
+      });
       actual.set(clave, cantidad);
-      return resultados.push({ fila, ok: true, mensaje: `Ajuste ${producto.nombre} en ${deposito.nombre}: ${disponible} → ${cantidad} (${diferencia > 0 ? "+" : ""}${diferencia})` });
+      const nota = conCosto ? `, costo $${costo}` : costo !== null ? " (el costo no se usa: el ajuste resta)" : diferencia > 0 ? " · sin costo" : "";
+      return resultados.push({ fila, ok: true, mensaje: `Ajuste ${producto.nombre} en ${deposito.nombre}: ${disponible} → ${cantidad} (${diferencia > 0 ? "+" : ""}${diferencia})${nota}` });
     }
     const destino = depositosPorNombre.get(normalizar(texto(f.destino)));
     if (!destino) return mal(`Falta el depósito de destino o no existe ("${texto(f.destino)}")`);

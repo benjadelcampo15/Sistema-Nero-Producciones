@@ -5,10 +5,11 @@ import { listarClientes } from "@/lib/clientes/consultas";
 import { SinAcceso } from "../../sin-acceso";
 import { FormularioFactura } from "./formulario-factura";
 
-export default async function PaginaNuevaFactura() {
+export default async function PaginaNuevaFactura({ searchParams }: PageProps<"/facturar/nueva">) {
   const usuario = await obtenerUsuario();
   if (!puede(usuario, "facturar", "editar")) return <SinAcceso />;
 
+  const { cliente } = await searchParams;
   const registraIngreso = puede(usuario, "financiero", "editar");
   const [eventos, categorias, clientes] = await Promise.all([
     obtenerEventosResumidos(),
@@ -32,6 +33,7 @@ export default async function PaginaNuevaFactura() {
         realDisponible={realDisponible}
         puntoVenta={puntoVenta}
         clientes={clientes}
+        clienteInicial={typeof cliente === "string" ? cliente : undefined}
       />
     </div>
   );

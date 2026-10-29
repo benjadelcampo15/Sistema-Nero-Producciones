@@ -313,7 +313,7 @@ export async function aprobarFactura(
       .upsert({ cuit, razon_social: d.razon_social_emisor?.trim() || `Proveedor ${cuit}` }, { onConflict: "cuit", ignoreDuplicates: true });
   }
 
-  redirect("/facturas?estado=por_revisar");
+  redirect("/facturas/lista?estado=por_revisar");
 }
 
 /**
