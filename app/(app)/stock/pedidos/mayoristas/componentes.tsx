@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { crearMayorista, guardarCatalogo, guardarDatosMayorista } from "@/lib/pedidos/acciones";
 import { describirPromo, leerPromo, type Mayorista, type ProductoParaPedir } from "@/lib/pedidos/tipos";
 import { formatoCantidad } from "@/lib/stock/tipos";
-import { AYUDA_WHATSAPP, whatsappNacional } from "@/lib/pedidos/whatsapp";
 import { hoy, parsearMonto } from "@/lib/formato";
 
 const normalizar = (t: string) =>
@@ -48,10 +47,9 @@ export function NuevoMayorista() {
       </div>
       <div>
         <label htmlFor="nuevo_telefono" className="etiqueta">
-          WhatsApp <span className="font-normal text-stone-400">(obligatorio)</span>
+          Teléfono <span className="font-normal text-stone-400">(opcional)</span>
         </label>
-        <input id="nuevo_telefono" required inputMode="tel" placeholder="2615551234" value={datos.telefono} onChange={(e) => setDatos({ ...datos, telefono: e.target.value })} className="campo" />
-        <AyudaWhatsapp valor={datos.telefono} />
+        <input id="nuevo_telefono" inputMode="tel" value={datos.telefono} onChange={(e) => setDatos({ ...datos, telefono: e.target.value })} className="campo" />
       </div>
       <button type="submit" disabled={pendiente} className="boton">{pendiente ? "Agregando…" : "Agregar"}</button>
       <button type="button" onClick={() => setAbierto(false)} className="pb-2 text-sm text-stone-600 hover:text-stone-900">Cancelar</button>
@@ -81,10 +79,7 @@ export function DatosMayorista({ mayorista, editable }: { mayorista: Mayorista; 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {campo("razon_social", "Nombre", { required: true })}
         {campo("contacto", "Contacto")}
-        <div>
-          {campo("telefono", "WhatsApp (obligatorio)", { required: true, inputMode: "tel", placeholder: "2615551234" })}
-          <AyudaWhatsapp valor={datos.telefono} />
-        </div>
+        {campo("telefono", "Teléfono", { inputMode: "tel" })}
         {campo("email", "Email", { type: "email" })}
       </div>
       {editable && (
@@ -321,20 +316,5 @@ export function CatalogoMayorista({ proveedorId, productos, editable }: { provee
         </div>
       )}
     </section>
-  );
-}
-/** Cómo se carga el WhatsApp y, si ya está bien, a qué número va a escribir. */
-export function AyudaWhatsapp({ valor }: { valor: string }) {
-  const n = whatsappNacional(valor);
-  return (
-    <p className={`mt-1 max-w-xs text-xs ${valor.trim() && !n ? "text-red-700" : "text-stone-500"}`}>
-      {n ? (
-        <>
-          ✓ Le va a escribir a <span className="font-mono">+54 9 {n}</span>
-        </>
-      ) : (
-        AYUDA_WHATSAPP
-      )}
-    </p>
   );
 }

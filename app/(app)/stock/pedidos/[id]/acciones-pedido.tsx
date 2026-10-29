@@ -56,6 +56,7 @@ export function AccionesPedido({ pedido, editable, recibirAbierto = false }: { p
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
+        <a href={`/p/proveedor/${pedido.proveedor.token}/pedido/${pedido.numero}/pdf`} download className="boton-secundario">Descargar PDF</a>
         <a href={`/imprimir/pedido/${pedido.id}`} target="_blank" rel="noreferrer" className="boton-secundario">Imprimir</a>
         {editable && abierto && (
           <>

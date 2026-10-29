@@ -2,13 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
 import { obtenerPedido } from "@/lib/pedidos/consultas";
-import { ESTADO_PEDIDO, describirPromo, pedidoAbierto, totalPedido } from "@/lib/pedidos/tipos";
+import { ESTADO_PEDIDO, describirPromo, totalPedido } from "@/lib/pedidos/tipos";
 import { formatoCantidad } from "@/lib/stock/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
-import { urlBase } from "@/lib/url";
 import { SinAcceso } from "../../../sin-acceso";
 import { AccionesPedido } from "./acciones-pedido";
-import { PanelEnviarPedido } from "../enviar-pedido";
 
 const fechaHora = new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Argentina/Buenos_Aires" });
 
@@ -16,7 +14,7 @@ export default async function PaginaPedido({ params, searchParams }: PageProps<"
   const usuario = await obtenerUsuario();
   if (!puede(usuario, "stock", "ver")) return <SinAcceso />;
   const { id } = await params;
-  const [pedido, base, { recibir, enviar }] = await Promise.all([obtenerPedido(id), urlBase(), searchParams]);
+  const [pedido, { recibir }] = await Promise.all([obtenerPedido(id), searchParams]);
   if (!pedido) notFound();
   const recibido = pedido.estado === "recibido";
   const respondio = pedido.confirmado_en !== null;
@@ -64,8 +62,6 @@ export default async function PaginaPedido({ params, searchParams }: PageProps<"
           {pedido.respuesta_proveedor && <p className="mt-1">“{pedido.respuesta_proveedor}”</p>}
         </section>
       )}
-
-      {pedidoAbierto(pedido.estado) && <PanelEnviarPedido pedido={pedido} urlBase={base} destacado={enviar === "1"} />}
 
       <AccionesPedido pedido={pedido} editable={puede(usuario, "stock", "editar")} recibirAbierto={recibir === "1"} />
 

@@ -3,13 +3,9 @@
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { crearMayorista, guardarPedido, guardarWhatsappMayorista } from "@/lib/pedidos/acciones";
+import { crearMayorista, guardarPedido } from "@/lib/pedidos/acciones";
 import { bonificadasDe, describirPromo, descuentoDe, faltante, precioSugerido, promoVigente, type Mayorista, type Pedido, type ProductoParaPedir } from "@/lib/pedidos/tipos";
 import { formatoCantidad, type Deposito } from "@/lib/stock/tipos";
-import { IconoWhatsApp } from "@/components/icono-whatsapp";
-import { whatsappNacional } from "@/lib/pedidos/whatsapp";
-import { AyudaWhatsapp } from "./mayoristas/componentes";
-import { puedeCompartirArchivo } from "./enviar-pedido";
 import { formatoPesos, hoy, parsearMonto, sumar } from "@/lib/formato";
 
 const normalizar = (t: string) =>
@@ -141,39 +137,21 @@ export function FormularioPedido({
     iniciar(async () => {
       const r = await crearMayorista({ razon_social: nuevoMayorista.nombre, telefono: nuevoMayorista.telefono });
       if (r.error || !r.id) return setError(r.error ?? "No se pudo agregar el mayorista");
-      setMayoristas((m) => [...m, { id: r.id!, razon_social: nuevoMayorista.nombre.trim(), telefono: nuevoMayorista.telefono.trim(), email: null, contacto: null, token: "" }].sort((a, b) => a.razon_social.localeCompare(b.razon_social, "es")));
+      setMayoristas((m) => [...m, { id: r.id!, razon_social: nuevoMayorista.nombre.trim(), telefono: nuevoMayorista.telefono.trim() || null, email: null, contacto: null, token: "" }].sort((a, b) => a.razon_social.localeCompare(b.razon_social, "es")));
       setProveedor(r.id);
       setNuevoMayorista(null);
       setError(null);
     });
   }
 
-  const telefonoProveedor = mayoristas.find((m) => m.id === proveedor)?.telefono ?? null;
-  // El pedido le llega al proveedor por WhatsApp: sin número no se puede pedir.
-  const tieneWhatsapp = whatsappNacional(telefonoProveedor) !== null;
-  const [whatsappNuevo, setWhatsappNuevo] = useState("");
   const yaEnviado = Boolean(pedido && pedido.estado !== "borrador");
 
-  function cargarWhatsapp() {
-    setError(null);
-    iniciar(async () => {
-      const r = await guardarWhatsappMayorista(proveedor, whatsappNuevo);
-      if (r.error) return setError(r.error);
-      setMayoristas((m) => m.map((x) => (x.id === proveedor ? { ...x, telefono: whatsappNuevo.trim() } : x)));
-      setWhatsappNuevo("");
-    });
-  }
-
-  /** enviar: guarda y abre WhatsApp con el pedido; si no, solo guarda (borrador o cambios sin reenviar). */
-  function guardar(estado: "borrador" | "enviado", enviar = estado === "enviado") {
+  /** Guarda el pedido (borrador o realizado); se le manda al proveedor a mano, con el PDF. */
+  function guardar(estado: "borrador" | "enviado") {
     setError(null);
     if (!proveedor) return setError("Elegí el mayorista");
-    if (!tieneWhatsapp) return setError("Cargá el WhatsApp del proveedor para poder hacerle el pedido");
     if (filas.some((x) => x.mal)) return setError("Hay una cantidad o un precio mal escrito (marcado en rojo)");
     if (!enPedido.length) return setError("Cargá al menos un producto");
-    // En la compu WhatsApp se abre en otra pestaña con el mensaje y el link al PDF: se abre ya
-    // (con el clic) para que el navegador no la bloquee. En el celular se manda el PDF desde el pedido.
-    const ventana = enviar && !puedeCompartirArchivo() ? window.open("", "_blank") : null;
     iniciar(async () => {
       const r = await guardarPedido(pedido?.id ?? null, {
         proveedor_id: proveedor,
@@ -184,15 +162,8 @@ export function FormularioPedido({
         notas,
         items: enPedido.map((x) => ({ producto_id: x.p.id, cantidad: x.cantidad as number, precio_unitario: x.precio, aclaracion: aclaraciones[x.p.id]?.trim() || null, promo: x.promo })),
       });
-      if (r.error) {
-        ventana?.close();
-        return setError(r.error);
-      }
-      if (ventana) {
-        if (r.whatsapp) ventana.location.href = r.whatsapp;
-        else ventana.close();
-      }
-      router.push(`/stock/pedidos/${r.id}${enviar ? "?enviar=1" : ""}`);
+      if (r.error) return setError(r.error);
+      router.push(`/stock/pedidos/${r.id}`);
       router.refresh();
     });
   }
@@ -207,13 +178,12 @@ export function FormularioPedido({
               <div className="space-y-2">
                 <input autoFocus placeholder="Nombre" value={nuevoMayorista.nombre} onChange={(e) => setNuevoMayorista({ ...nuevoMayorista, nombre: e.target.value })} className="campo" />
                 <input
-                  placeholder="WhatsApp (obligatorio), ej. 2615551234"
+                  placeholder="Teléfono (opcional)"
                   inputMode="tel"
                   value={nuevoMayorista.telefono}
                   onChange={(e) => setNuevoMayorista({ ...nuevoMayorista, telefono: e.target.value })}
                   className="campo"
                 />
-                <AyudaWhatsapp valor={nuevoMayorista.telefono} />
                 <div className="flex gap-3">
                   <button type="button" onClick={agregarMayorista} disabled={pendiente} className="boton-secundario">Agregar</button>
                   <button type="button" onClick={() => setNuevoMayorista(null)} className="text-sm text-stone-600 hover:text-stone-900">Cancelar</button>
@@ -230,23 +200,6 @@ export function FormularioPedido({
                 <button type="button" onClick={() => setNuevoMayorista({ nombre: "", telefono: "" })} className="mt-1 text-xs text-stone-600 underline hover:text-stone-900">
                   + Nuevo mayorista
                 </button>
-                {proveedor && !tieneWhatsapp && (
-                  <div className="mt-2 space-y-2 rounded-md border border-amber-300 bg-amber-50 p-2">
-                    <p className="text-xs font-medium text-amber-900">Este proveedor no tiene WhatsApp: cargalo para poder pedirle.</p>
-                    <div className="flex gap-2">
-                      <input
-                        aria-label="WhatsApp del proveedor"
-                        inputMode="tel"
-                        placeholder="2615551234"
-                        value={whatsappNuevo}
-                        onChange={(e) => setWhatsappNuevo(e.target.value)}
-                        className="campo min-w-0 flex-1 py-1"
-                      />
-                      <button type="button" onClick={cargarWhatsapp} disabled={pendiente} className="boton-secundario shrink-0">Guardar</button>
-                    </div>
-                    <AyudaWhatsapp valor={whatsappNuevo} />
-                  </div>
-                )}
               </>
             )}
           </div>
@@ -427,31 +380,22 @@ export function FormularioPedido({
           <span className="font-mono font-semibold">{formatoPesos(total)}</span>
           {regalos > 0 && <span className="text-xs font-semibold text-amber-700"> · +{formatoCantidad(regalos)} de regalo</span>}
           {sinPrecio > 0 && <span className="text-xs text-amber-700"> ({sinPrecio} sin precio)</span>}
-          {proveedor && (
-            <span className={`block text-xs ${tieneWhatsapp ? "text-stone-500" : "font-medium text-amber-800"}`}>
-              {tieneWhatsapp ? "Se guarda y se abre WhatsApp con el pedido escrito: solo tocás enviar." : "Falta el WhatsApp del proveedor (cargalo arriba, al lado del mayorista)."}
-            </span>
-          )}
         </p>
         <div className="ml-auto flex flex-wrap gap-2">
           {yaEnviado ? (
-            <button type="button" onClick={() => guardar("enviado", false)} disabled={pendiente || !tieneWhatsapp} className="boton-secundario">
-              Guardar sin enviar
+            <button type="button" onClick={() => guardar("enviado")} disabled={pendiente} className="boton">
+              {pendiente ? "Guardando…" : "Guardar cambios"}
             </button>
           ) : (
-            <button type="button" onClick={() => guardar("borrador")} disabled={pendiente || !tieneWhatsapp} className="boton-secundario">
-              Guardar borrador
-            </button>
+            <>
+              <button type="button" onClick={() => guardar("borrador")} disabled={pendiente} className="boton-secundario">
+                Guardar borrador
+              </button>
+              <button type="button" onClick={() => guardar("enviado")} disabled={pendiente} className="boton">
+                {pendiente ? "Guardando…" : "Realizar pedido"}
+              </button>
+            </>
           )}
-          <button
-            type="button"
-            onClick={() => guardar("enviado")}
-            disabled={pendiente || !tieneWhatsapp}
-            className="inline-flex items-center justify-center gap-2 rounded-md bg-[#25D366] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1ebe5a] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <IconoWhatsApp className="h-5 w-5" />
-            {pendiente ? "Realizando…" : yaEnviado ? "Guardar y enviar por WhatsApp" : "Realizar pedido"}
-          </button>
         </div>
       </div>
     </div>

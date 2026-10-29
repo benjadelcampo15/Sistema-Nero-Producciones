@@ -1,0 +1,44 @@
+# Aplica las migraciones nuevas de supabase/migrations a cada base de clientes
+# cuando llegan a main (o a mano, desde Actions → Migraciones → Run workflow).
+#
+# Cada base es un secreto del repo con su dirección de conexión (pooler, puerto 5432):
+#   postgresql://postgres.<ref>:<contraseña>@aws-…pooler.supabase.com:5432/postgres
+# Si un secreto no está cargado, esa base se saltea.
+name: Migraciones
+
+on:
+  push:
+    branches: [main]
+    paths: ["supabase/migrations/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: migraciones
+  cancel-in-progress: false
+
+jobs:
+  aplicar:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - base: Nero
+            secreto: NERO_DB_URL
+          - base: Demo
+            secreto: DEMO_DB_URL
+    name: ${{ matrix.base }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Aplicar migraciones
+        env:
+          DB_URL: ${{ secrets[matrix.secreto] }}
+        run: |
+          if [ -z "$DB_URL" ]; then
+            echo "Falta el secreto ${{ matrix.secreto }}: se saltea ${{ matrix.base }}."
+            exit 0
+          fi
+          supabase db push --db-url "$DB_URL" --yes

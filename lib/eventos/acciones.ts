@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { exigirPermiso } from "@/lib/auth/sesion";
+import { exigirAdmin, exigirPermiso } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { parsearMonto } from "@/lib/formato";
 import { EMPRESAS } from "@/lib/empresas";
@@ -103,4 +103,13 @@ export async function armarPlanillaDesdeMovimientos(eventoId: string, base: unkn
     categoria: t.categoria as unknown as { nombre: string },
   }));
   return { planilla: planillaDesdeMovimientos(movimientos, actual.success ? actual.data : PLANILLA_VACIA) };
+}
+
+/** Borra el evento (solo administradores): sus movimientos quedan, sin evento. */
+export async function borrarEvento(id: string): Promise<{ error?: string }> {
+  await exigirAdmin();
+  const supabase = await crearClienteServidor();
+  const { error } = await supabase.rpc("borrar_evento", { p_id: id });
+  if (error) return { error: "No se pudo borrar el evento" };
+  redirect("/eventos");
 }

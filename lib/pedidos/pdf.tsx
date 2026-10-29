@@ -108,7 +108,7 @@ function NotaPedidoPdf({ p }: { p: Pedido }) {
   );
 }
 
-/** El pedido como archivo PDF (para mandarlo por WhatsApp o bajarlo). */
+/** El pedido como archivo PDF (para bajarlo y mandárselo al proveedor). */
 export function pdfPedido(p: Pedido) {
   return renderToBuffer(<NotaPedidoPdf p={p} />);
 }

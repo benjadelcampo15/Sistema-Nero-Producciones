@@ -7,5 +7,5 @@
 /** Nombre de la empresa en documentos, mails y páginas para terceros (en la demo: "Demo"). */
 export const NOMBRE_CLIENTE = process.env.NEXT_PUBLIC_NOMBRE_EMPRESA?.trim() || "Nero Producciones";
 
-/** Instalación de demostración: datos ficticios y nada que tenga efectos reales (ARCA, WhatsApp, mails). */
+/** Instalación de demostración: datos ficticios y nada que tenga efectos reales (ARCA, mails). */
 export const MODO_DEMO = process.env.NEXT_PUBLIC_MODO_DEMO === "1";

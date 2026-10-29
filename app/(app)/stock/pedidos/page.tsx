@@ -7,15 +7,12 @@ import { SinAcceso } from "../../sin-acceso";
 import { NavegacionStock } from "../navegacion";
 import { NuevoMayorista } from "./mayoristas/componentes";
 import { BotonRecibir } from "./boton-recibir";
-import { IconoEnviarPedido } from "./enviar-pedido";
-import { urlBase } from "@/lib/url";
-import { whatsappNacional } from "@/lib/pedidos/whatsapp";
 
 export default async function PaginaPedidos() {
   const usuario = await obtenerUsuario();
   if (!puede(usuario, "stock", "ver")) return <SinAcceso />;
   const editable = puede(usuario, "stock", "editar");
-  const [pedidos, productos, mayoristas, base] = await Promise.all([listarPedidos(), productosParaPedir(), listarMayoristas(), urlBase()]);
+  const [pedidos, productos, mayoristas] = await Promise.all([listarPedidos(), productosParaPedir(), listarMayoristas()]);
   const faltantes = productos.filter((p) => faltante(p) > 0);
   const sinStock = productos.filter((p) => p.stock <= 0 && faltante(p) === 0);
 
@@ -67,12 +64,7 @@ export default async function PaginaPedidos() {
                     <p className="text-xs text-stone-500">
                       {suyos.length} {suyos.length === 1 ? "producto" : "productos"}
                       {reponer > 0 && <span className="font-medium text-red-700"> · {reponer} para reponer</span>}
-                      {whatsappNacional(m.telefono) ? ` · ${m.telefono}` : (
-                        <>
-                          {" · "}
-                          <Link href={`/stock/pedidos/mayoristas/${m.id}#m_telefono`} className="font-medium text-amber-700 underline hover:text-amber-900">Falta WhatsApp</Link>
-                        </>
-                      )}
+                      {m.telefono && ` · ${m.telefono}`}
                     </p>
                   </div>
                   <div className="mt-auto flex gap-2">
@@ -134,12 +126,7 @@ export default async function PaginaPedidos() {
                 </td>
                 {editable && (
                   <td className="px-4 py-2">
-                    {pedidoAbierto(p.estado) && (
-                      <div className="flex items-center gap-2">
-                        <BotonRecibir id={p.id} />
-                        <IconoEnviarPedido pedido={p} urlBase={base} />
-                      </div>
-                    )}
+                    {pedidoAbierto(p.estado) && <BotonRecibir id={p.id} />}
                   </td>
                 )}
               </tr>

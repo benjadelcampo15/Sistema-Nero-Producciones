@@ -5,21 +5,14 @@ import { z } from "zod";
 import { exigirPermiso } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { crearClienteAdmin } from "@/lib/supabase/admin";
-import { urlBase } from "@/lib/url";
 import { hoy } from "@/lib/formato";
 import { bonificadasDe, descuentoDe, leerPromo } from "./tipos";
 import { obtenerPedido } from "./consultas";
-import { AYUDA_WHATSAPP, linkPdf, textoPedido, urlWhatsApp, whatsappNacional } from "./whatsapp";
 
 const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Falta la fecha");
 
-/** WhatsApp obligatorio de los mayoristas: se guarda como 10 números (área sin 0 + número sin 15). */
-const whatsapp = z
-  .string()
-  .trim()
-  .max(40)
-  .refine((v) => whatsappNacional(v) !== null, `WhatsApp inválido. ${AYUDA_WHATSAPP}`)
-  .transform((v) => whatsappNacional(v)!);
+/** Teléfono del mayorista (opcional, como se escriba). */
+const telefono = z.string().trim().max(40).optional().transform((v) => v || null);
 
 const esquemaPedido = z.object({
   proveedor_id: z.uuid("Elegí el mayorista"),
@@ -42,11 +35,8 @@ const esquemaPedido = z.object({
 });
 export type DatosPedido = z.input<typeof esquemaPedido>;
 
-/**
- * Guarda el pedido. Si queda enviado, devuelve además el link de WhatsApp al
- * proveedor con el pedido escrito (null si el proveedor no tiene número).
- */
-export async function guardarPedido(id: string | null, datos: DatosPedido): Promise<{ error?: string; id?: string; whatsapp?: string | null }> {
+/** Guarda el pedido (el envío al proveedor se hace a mano, con el PDF). */
+export async function guardarPedido(id: string | null, datos: DatosPedido): Promise<{ error?: string; id?: string }> {
   await exigirPermiso("stock", "editar");
   const r = esquemaPedido.safeParse(datos);
   if (!r.success) return { error: r.error.issues[0].message };
@@ -54,9 +44,6 @@ export async function guardarPedido(id: string | null, datos: DatosPedido): Prom
   if (new Set(items.map((i) => i.producto_id)).size !== items.length) return { error: "Hay un producto repetido" };
 
   const supabase = await crearClienteServidor();
-  // Sin WhatsApp no se puede pedir: es por donde le llega el pedido.
-  const { data: prov } = await supabase.from("proveedores").select("telefono").eq("id", pedido.proveedor_id).maybeSingle();
-  if (!whatsappNacional(prov?.telefono)) return { error: "Cargá bien el WhatsApp del proveedor para poder hacerle el pedido" };
   const { data, error } = await supabase.rpc("guardar_pedido", {
     p_id: id,
     p_pedido: { ...pedido, fecha_entrega: pedido.fecha_entrega ?? "", notas: pedido.notas ?? "" },
@@ -89,9 +76,7 @@ export async function guardarPedido(id: string | null, datos: DatosPedido): Prom
         .upsert(sinPrecio.map((i) => ({ proveedor_id: pedido.proveedor_id, producto_id: i.producto_id })), { ignoreDuplicates: true }),
   ]);
   refresh();
-  if (pedido.estado !== "enviado") return { id: data as string };
-  const [guardado, base] = await Promise.all([obtenerPedido(data as string), urlBase()]);
-  return { id: data as string, whatsapp: guardado ? urlWhatsApp(guardado.proveedor.telefono, textoPedido(guardado, { pdf: linkPdf(base, guardado) })) : null };
+  return { id: data as string };
 }
 
 const esquemaCatalogo = z
@@ -131,21 +116,9 @@ export async function guardarCatalogo(proveedorId: string, items: z.input<typeof
 const esquemaDatosMayorista = z.object({
   razon_social: z.string().trim().min(1, "Falta el nombre").max(200),
   contacto: z.string().trim().max(120).optional().transform((v) => v || null),
-  telefono: whatsapp,
+  telefono,
   email: z.union([z.email("Email inválido").trim(), z.literal("")]).optional().transform((v) => v || null),
 });
-
-/** Carga el WhatsApp de un mayorista (desde el pedido, si le faltaba). */
-export async function guardarWhatsappMayorista(id: string, telefono: string): Promise<{ error?: string }> {
-  await exigirPermiso("stock", "editar");
-  const r = whatsapp.safeParse(telefono);
-  if (!r.success) return { error: r.error.issues[0].message };
-  const supabase = await crearClienteServidor();
-  const { data } = await supabase.from("proveedores").update({ telefono: r.data }).eq("id", id).select("id");
-  if (!data?.length) return { error: "No se pudo guardar el WhatsApp" };
-  refresh();
-  return {};
-}
 
 export async function guardarDatosMayorista(id: string, datos: z.input<typeof esquemaDatosMayorista>): Promise<{ error?: string; ok?: string }> {
   await exigirPermiso("stock", "editar");
@@ -231,7 +204,7 @@ export async function borrarPedido(id: string): Promise<{ error?: string }> {
 
 const esquemaMayorista = z.object({
   razon_social: z.string().trim().min(1, "Falta el nombre del mayorista").max(200),
-  telefono: whatsapp,
+  telefono,
 });
 
 /** Alta rápida de un mayorista desde el pedido (después se completa en Proveedores). */
