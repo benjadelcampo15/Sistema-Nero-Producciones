@@ -3,9 +3,13 @@
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { crearMayorista, guardarPedido } from "@/lib/pedidos/acciones";
-import { faltante, precioSugerido, type Mayorista, type Pedido, type ProductoParaPedir } from "@/lib/pedidos/tipos";
+import { crearMayorista, guardarPedido, guardarWhatsappMayorista } from "@/lib/pedidos/acciones";
+import { bonificadasDe, describirPromo, descuentoDe, faltante, precioSugerido, promoVigente, type Mayorista, type Pedido, type ProductoParaPedir } from "@/lib/pedidos/tipos";
 import { formatoCantidad, type Deposito } from "@/lib/stock/tipos";
+import { IconoWhatsApp } from "@/components/icono-whatsapp";
+import { whatsappNacional } from "@/lib/pedidos/whatsapp";
+import { AyudaWhatsapp } from "./mayoristas/componentes";
+import { puedeCompartirArchivo } from "./enviar-pedido";
 import { formatoPesos, hoy, parsearMonto, sumar } from "@/lib/formato";
 
 const normalizar = (t: string) =>
@@ -51,6 +55,7 @@ export function FormularioPedido({
   const [notas, setNotas] = useState(pedido?.notas ?? "");
   const [cantidades, setCantidades] = useState<Record<string, string>>(() => Object.fromEntries((pedido?.items ?? []).map((i) => [i.producto.id, aTexto(i.cantidad)])));
   const [precios, setPrecios] = useState<Record<string, string>>(() => Object.fromEntries((pedido?.items ?? []).map((i) => [i.producto.id, aTexto(i.precio_unitario)])));
+  const [aclaraciones, setAclaraciones] = useState<Record<string, string>>(() => Object.fromEntries((pedido?.items ?? []).map((i) => [i.producto.id, i.aclaracion ?? ""])));
   /** ¿Está en el catálogo de un mayorista (lo que se le puede pedir)? */
   const vende = (p: ProductoParaPedir, prov = proveedor) => prov in p.catalogo;
   const tieneCatalogo = productos.some((p) => vende(p));
@@ -59,8 +64,15 @@ export function FormularioPedido({
   const [busqueda, setBusqueda] = useState("");
   const tabla = useRef<HTMLTableSectionElement>(null);
 
-  /** Precio sugerido: el del catálogo del mayorista, el último que se le pidió o el costo promedio. */
-  const sugerido = (p: ProductoParaPedir) => precioSugerido(p, proveedor);
+  /** Promo del producto: la que tenía el pedido (si es el mismo mayorista) o la vigente de su lista. */
+  const promosDelPedido = new Map((pedido && pedido.proveedor.id === proveedor ? pedido.items : []).map((i) => [i.producto.id, i.promo]));
+  const promoDe = (p: ProductoParaPedir) => (promosDelPedido.has(p.id) ? (promosDelPedido.get(p.id) ?? null) : promoVigente(p, proveedor, fecha));
+
+  /** Precio sugerido: el de la lista del mayorista (con su descuento, si tiene), el último que se le pidió o el costo promedio. */
+  const sugerido = (p: ProductoParaPedir) => {
+    const base = precioSugerido(p, proveedor);
+    return base === null ? null : Math.round(base * (1 - descuentoDe(promoDe(p))) * 100) / 100;
+  };
 
   function elegirProveedor(id: string) {
     setProveedor(id);
@@ -72,11 +84,14 @@ export function FormularioPedido({
     const precio = leerNumero(precios[p.id] ?? "", 2);
     const falta = faltante(p);
     const mal = (cantidad !== null && (Number.isNaN(cantidad) || cantidad < 0)) || (precio !== null && Number.isNaN(precio));
-    return { p, cantidad, precio, falta, mal };
+    const promo = promoDe(p);
+    const regalo = cantidad && !Number.isNaN(cantidad) ? bonificadasDe(promo, cantidad) : 0;
+    return { p, cantidad, precio, falta, mal, promo, regalo };
   });
   const enPedido = filas.filter((x) => x.cantidad !== null && !Number.isNaN(x.cantidad) && x.cantidad > 0);
   const total = sumar(enPedido.map((x) => (x.precio && !Number.isNaN(x.precio) ? x.precio * (x.cantidad as number) : 0)));
   const sinPrecio = enPedido.filter((x) => x.precio === null).length;
+  const regalos = sumar(enPedido.map((x) => x.regalo));
 
   const termino = normalizar(busqueda.trim());
   const visibles = filas
@@ -126,16 +141,39 @@ export function FormularioPedido({
     iniciar(async () => {
       const r = await crearMayorista({ razon_social: nuevoMayorista.nombre, telefono: nuevoMayorista.telefono });
       if (r.error || !r.id) return setError(r.error ?? "No se pudo agregar el mayorista");
-      setMayoristas((m) => [...m, { id: r.id!, razon_social: nuevoMayorista.nombre.trim(), telefono: nuevoMayorista.telefono.trim() || null, email: null, contacto: null }].sort((a, b) => a.razon_social.localeCompare(b.razon_social, "es")));
+      setMayoristas((m) => [...m, { id: r.id!, razon_social: nuevoMayorista.nombre.trim(), telefono: nuevoMayorista.telefono.trim(), email: null, contacto: null, token: "" }].sort((a, b) => a.razon_social.localeCompare(b.razon_social, "es")));
       setProveedor(r.id);
       setNuevoMayorista(null);
       setError(null);
     });
   }
 
-  function guardar(estado: "borrador" | "enviado") {
+  const telefonoProveedor = mayoristas.find((m) => m.id === proveedor)?.telefono ?? null;
+  // El pedido le llega al proveedor por WhatsApp: sin número no se puede pedir.
+  const tieneWhatsapp = whatsappNacional(telefonoProveedor) !== null;
+  const [whatsappNuevo, setWhatsappNuevo] = useState("");
+  const yaEnviado = Boolean(pedido && pedido.estado !== "borrador");
+
+  function cargarWhatsapp() {
     setError(null);
+    iniciar(async () => {
+      const r = await guardarWhatsappMayorista(proveedor, whatsappNuevo);
+      if (r.error) return setError(r.error);
+      setMayoristas((m) => m.map((x) => (x.id === proveedor ? { ...x, telefono: whatsappNuevo.trim() } : x)));
+      setWhatsappNuevo("");
+    });
+  }
+
+  /** enviar: guarda y abre WhatsApp con el pedido; si no, solo guarda (borrador o cambios sin reenviar). */
+  function guardar(estado: "borrador" | "enviado", enviar = estado === "enviado") {
+    setError(null);
+    if (!proveedor) return setError("Elegí el mayorista");
+    if (!tieneWhatsapp) return setError("Cargá el WhatsApp del proveedor para poder hacerle el pedido");
     if (filas.some((x) => x.mal)) return setError("Hay una cantidad o un precio mal escrito (marcado en rojo)");
+    if (!enPedido.length) return setError("Cargá al menos un producto");
+    // En la compu WhatsApp se abre en otra pestaña con el mensaje y el link al PDF: se abre ya
+    // (con el clic) para que el navegador no la bloquee. En el celular se manda el PDF desde el pedido.
+    const ventana = enviar && !puedeCompartirArchivo() ? window.open("", "_blank") : null;
     iniciar(async () => {
       const r = await guardarPedido(pedido?.id ?? null, {
         proveedor_id: proveedor,
@@ -144,10 +182,17 @@ export function FormularioPedido({
         fecha_entrega: fechaEntrega,
         estado,
         notas,
-        items: enPedido.map((x) => ({ producto_id: x.p.id, cantidad: x.cantidad as number, precio_unitario: x.precio })),
+        items: enPedido.map((x) => ({ producto_id: x.p.id, cantidad: x.cantidad as number, precio_unitario: x.precio, aclaracion: aclaraciones[x.p.id]?.trim() || null, promo: x.promo })),
       });
-      if (r.error) return setError(r.error);
-      router.push(`/stock/pedidos/${r.id}`);
+      if (r.error) {
+        ventana?.close();
+        return setError(r.error);
+      }
+      if (ventana) {
+        if (r.whatsapp) ventana.location.href = r.whatsapp;
+        else ventana.close();
+      }
+      router.push(`/stock/pedidos/${r.id}${enviar ? "?enviar=1" : ""}`);
       router.refresh();
     });
   }
@@ -161,7 +206,14 @@ export function FormularioPedido({
             {nuevoMayorista ? (
               <div className="space-y-2">
                 <input autoFocus placeholder="Nombre" value={nuevoMayorista.nombre} onChange={(e) => setNuevoMayorista({ ...nuevoMayorista, nombre: e.target.value })} className="campo" />
-                <input placeholder="Teléfono / WhatsApp (opcional)" value={nuevoMayorista.telefono} onChange={(e) => setNuevoMayorista({ ...nuevoMayorista, telefono: e.target.value })} className="campo" />
+                <input
+                  placeholder="WhatsApp (obligatorio), ej. 2615551234"
+                  inputMode="tel"
+                  value={nuevoMayorista.telefono}
+                  onChange={(e) => setNuevoMayorista({ ...nuevoMayorista, telefono: e.target.value })}
+                  className="campo"
+                />
+                <AyudaWhatsapp valor={nuevoMayorista.telefono} />
                 <div className="flex gap-3">
                   <button type="button" onClick={agregarMayorista} disabled={pendiente} className="boton-secundario">Agregar</button>
                   <button type="button" onClick={() => setNuevoMayorista(null)} className="text-sm text-stone-600 hover:text-stone-900">Cancelar</button>
@@ -178,6 +230,23 @@ export function FormularioPedido({
                 <button type="button" onClick={() => setNuevoMayorista({ nombre: "", telefono: "" })} className="mt-1 text-xs text-stone-600 underline hover:text-stone-900">
                   + Nuevo mayorista
                 </button>
+                {proveedor && !tieneWhatsapp && (
+                  <div className="mt-2 space-y-2 rounded-md border border-amber-300 bg-amber-50 p-2">
+                    <p className="text-xs font-medium text-amber-900">Este proveedor no tiene WhatsApp: cargalo para poder pedirle.</p>
+                    <div className="flex gap-2">
+                      <input
+                        aria-label="WhatsApp del proveedor"
+                        inputMode="tel"
+                        placeholder="2615551234"
+                        value={whatsappNuevo}
+                        onChange={(e) => setWhatsappNuevo(e.target.value)}
+                        className="campo min-w-0 flex-1 py-1"
+                      />
+                      <button type="button" onClick={cargarWhatsapp} disabled={pendiente} className="boton-secundario shrink-0">Guardar</button>
+                    </div>
+                    <AyudaWhatsapp valor={whatsappNuevo} />
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -258,7 +327,7 @@ export function FormularioPedido({
           className="campo"
         />
         <div className="max-h-[60vh] overflow-auto rounded-md border border-stone-200">
-          <table className="w-full min-w-[860px] text-sm">
+          <table className="w-full min-w-[1040px] text-sm">
             <thead className="sticky top-0 z-10 border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
               <tr>
                 <th className="px-3 py-2">Producto</th>
@@ -269,17 +338,18 @@ export function FormularioPedido({
                 <th className="w-28 px-3 py-2 text-right">Pedir</th>
                 <th className="w-36 px-3 py-2 text-right">Precio unit.</th>
                 <th className="px-3 py-2 text-right">Subtotal</th>
+                <th className="w-48 px-3 py-2">Aclaración</th>
               </tr>
             </thead>
             <tbody ref={tabla} className="divide-y divide-stone-100">
               {visibles.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-3 py-6 text-center text-stone-500">
+                  <td colSpan={9} className="px-3 py-6 text-center text-stone-500">
                     {filtro === "faltantes" ? "No hay faltantes." : filtro === "pedido" ? "Todavía no hay productos en el pedido." : "Ningún producto coincide."}
                   </td>
                 </tr>
               )}
-              {visibles.map(({ p, cantidad, precio, falta, mal }) => {
+              {visibles.map(({ p, cantidad, precio, falta, mal, promo, regalo }) => {
                 const detalle = depositos.map((d) => `${d.nombre}: ${formatoCantidad(p.porDeposito[d.id] ?? 0)}`).join(" · ");
                 const s = sugerido(p);
                 return (
@@ -287,6 +357,11 @@ export function FormularioPedido({
                     <td className="px-3 py-1.5">
                       <span className="font-medium">{p.nombre}</span>
                       {p.codigo && <span className="ml-1 font-mono text-xs text-stone-400">{p.codigo}</span>}
+                      {promo && (
+                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800" title={describirPromo(promo)}>
+                          {promo.replace(".", ",")}
+                        </span>
+                      )}
                     </td>
                     <td className={`whitespace-nowrap px-3 py-1.5 text-right font-mono ${p.stock <= 0 ? "text-red-700" : ""}`} title={detalle}>
                       {formatoCantidad(p.stock)} <span className="text-xs text-stone-400">{p.unidad}</span>
@@ -325,6 +400,17 @@ export function FormularioPedido({
                     </td>
                     <td className="whitespace-nowrap px-3 py-1.5 text-right font-mono">
                       {cantidad && precio && !Number.isNaN(cantidad) && !Number.isNaN(precio) ? formatoPesos(cantidad * precio) : ""}
+                      {regalo > 0 && <span className="block text-xs font-sans font-semibold text-amber-700">+{formatoCantidad(regalo)} de regalo</span>}
+                    </td>
+                    <td className="px-2 py-1">
+                      <input
+                        aria-label={`Aclaración de ${p.nombre}`}
+                        maxLength={200}
+                        value={aclaraciones[p.id] ?? ""}
+                        placeholder={cantidad ? "Ej.: mitad y mitad" : ""}
+                        onChange={(e) => setAclaraciones((x) => ({ ...x, [p.id]: e.target.value }))}
+                        className="campo py-1 text-sm"
+                      />
                     </td>
                   </tr>
                 );
@@ -339,16 +425,32 @@ export function FormularioPedido({
         <p className="text-sm">
           <span className="font-semibold">{enPedido.length}</span> {enPedido.length === 1 ? "producto" : "productos"} · total{" "}
           <span className="font-mono font-semibold">{formatoPesos(total)}</span>
+          {regalos > 0 && <span className="text-xs font-semibold text-amber-700"> · +{formatoCantidad(regalos)} de regalo</span>}
           {sinPrecio > 0 && <span className="text-xs text-amber-700"> ({sinPrecio} sin precio)</span>}
+          {proveedor && (
+            <span className={`block text-xs ${tieneWhatsapp ? "text-stone-500" : "font-medium text-amber-800"}`}>
+              {tieneWhatsapp ? "Se guarda y se abre WhatsApp con el pedido escrito: solo tocás enviar." : "Falta el WhatsApp del proveedor (cargalo arriba, al lado del mayorista)."}
+            </span>
+          )}
         </p>
         <div className="ml-auto flex flex-wrap gap-2">
-          {(!pedido || pedido.estado === "borrador") && (
-            <button type="button" onClick={() => guardar("borrador")} disabled={pendiente} className="boton-secundario">
+          {yaEnviado ? (
+            <button type="button" onClick={() => guardar("enviado", false)} disabled={pendiente || !tieneWhatsapp} className="boton-secundario">
+              Guardar sin enviar
+            </button>
+          ) : (
+            <button type="button" onClick={() => guardar("borrador")} disabled={pendiente || !tieneWhatsapp} className="boton-secundario">
               Guardar borrador
             </button>
           )}
-          <button type="button" onClick={() => guardar("enviado")} disabled={pendiente} className="boton">
-            {pendiente ? "Guardando…" : pedido?.estado === "enviado" ? "Guardar cambios" : "Guardar como enviado"}
+          <button
+            type="button"
+            onClick={() => guardar("enviado")}
+            disabled={pendiente || !tieneWhatsapp}
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-[#25D366] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1ebe5a] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <IconoWhatsApp className="h-5 w-5" />
+            {pendiente ? "Realizando…" : yaEnviado ? "Guardar y enviar por WhatsApp" : "Realizar pedido"}
           </button>
         </div>
       </div>

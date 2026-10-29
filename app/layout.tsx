@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Órbita",
+  title: "Planix",
   description: "Toda la operación de la empresa alrededor de un mismo sistema",
   robots: { index: false, follow: false },
 };

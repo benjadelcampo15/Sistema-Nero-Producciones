@@ -33,7 +33,7 @@ export default async function PaginaSalida({ params }: PageProps<"/stock/salidas
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3">
         <div className="tarjeta p-4">
           <p className="text-xs uppercase tracking-wide text-stone-500">Productos</p>
           <p className="mt-1 font-mono text-xl font-semibold">{salida.productos}</p>
@@ -45,7 +45,33 @@ export default async function PaginaSalida({ params }: PageProps<"/stock/salidas
         </div>
       </div>
 
-      <section className="tarjeta overflow-x-auto p-0">
+      {/* Celular: una fila compacta por producto. */}
+      <ul className="divide-y divide-stone-100 rounded-xl border border-stone-200 bg-white md:hidden">
+        {salida.lineas.map((l) => (
+          <li key={l.id} className="flex items-center justify-between gap-3 px-4 py-3">
+            <div className="min-w-0">
+              <p className="font-medium leading-tight">{l.producto.nombre}</p>
+              {conteo && (
+                <p className="text-xs text-stone-500">
+                  Había {l.stock_inicial !== null ? formatoCantidad(l.stock_inicial) : "—"} · quedó {l.stock_contado !== null ? formatoCantidad(l.stock_contado) : "—"}
+                </p>
+              )}
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="font-mono font-semibold text-red-700">
+                −{formatoCantidad(l.cantidad)} <span className="text-xs font-normal text-stone-400">{l.producto.unidad}</span>
+              </p>
+              <p className="font-mono text-xs text-stone-500">{l.costo_unitario !== null ? formatoPesos(l.costo_unitario * l.cantidad) : "sin costo"}</p>
+            </div>
+          </li>
+        ))}
+        <li className="flex justify-between px-4 py-3 font-semibold">
+          <span>Total</span>
+          <span className="font-mono">{formatoPesos(salida.costoTotal)}</span>
+        </li>
+      </ul>
+
+      <section className="tarjeta hidden overflow-x-auto p-0 md:block">
         <table className="w-full min-w-[640px] text-sm">
           <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
             <tr>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import Link from "next/link";
 import { registrarMovimiento } from "@/lib/stock/acciones";
 import { NOMBRE_TIPO_STOCK, TIPOS_MOVIMIENTO_STOCK, type Deposito, type FilaStock, type Producto, type TipoMovimientoStock } from "@/lib/stock/tipos";
 import { FormularioSalida } from "./formulario-salida";
@@ -48,7 +49,17 @@ export function FormularioMovimiento({
           <h2 className="font-semibold">Registrar movimiento</h2>
           {selectorTipo}
         </div>
-        <FormularioSalida stock={stock} depositos={depositos} eventos={eventos} />
+        {/* En el celular, la salida por conteo tiene su propia pantalla pensada para el teléfono. */}
+        <Link href="/stock/conteo" className="flex items-center justify-between rounded-xl border border-stone-900 bg-stone-900 px-4 py-4 text-white md:hidden">
+          <span>
+            <span className="block font-semibold">Contar lo que quedó</span>
+            <span className="text-sm text-stone-300">Elegí la barra y cargá producto por producto</span>
+          </span>
+          <span aria-hidden className="text-xl">→</span>
+        </Link>
+        <div className="hidden md:block">
+          <FormularioSalida stock={stock} depositos={depositos} eventos={eventos} />
+        </div>
       </section>
     );
   }

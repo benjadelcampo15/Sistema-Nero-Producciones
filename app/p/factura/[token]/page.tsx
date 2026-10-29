@@ -7,7 +7,7 @@ import { datosEmisor } from "@/lib/facturar/emisor";
 import { qrSvg, urlQrArca } from "@/lib/facturar/qr";
 import { nombreTipoCbte, numeroComprobante } from "@/lib/facturar/tipos";
 import { ComprobanteVista } from "@/components/comprobante-vista";
-import { BotonImprimir } from "@/app/(impresion)/imprimir/factura/[id]/boton-imprimir";
+import { BotonImprimir } from "@/components/boton-imprimir";
 
 export const metadata: Metadata = {
   title: "Factura · Nero Producciones",

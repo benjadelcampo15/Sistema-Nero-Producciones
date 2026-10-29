@@ -25,6 +25,8 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
+  // Los PDF de pedidos se arman en el servidor con @react-pdf (se usa tal cual, sin empaquetar).
+  serverExternalPackages: ["@react-pdf/renderer"],
   experimental: {
     // Facturas de hasta 10 MB (se suben de a una).
     serverActions: { bodySizeLimit: "11mb" },

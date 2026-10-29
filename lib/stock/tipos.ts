@@ -32,6 +32,7 @@ export type MovimientoStock = {
   transferencia_id: string | null;
   factura_id: string | null;
   salida_id: string | null;
+  pedido_id: string | null;
   producto: { id: string; nombre: string; unidad: string };
   deposito: { id: string; nombre: string };
   evento: { id: string; nombre: string } | null;

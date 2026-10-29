@@ -54,7 +54,7 @@ export async function listarMovimientos(filtros: { deposito?: string; producto?:
   let consulta = supabase
     .from("movimientos_stock")
     .select(
-      "id, tipo, cantidad, costo_unitario, fecha, creado_en, motivo, transferencia_id, factura_id, salida_id, producto:productos(id, nombre, unidad), deposito:depositos(id, nombre), evento:eventos(id, nombre)",
+      "id, tipo, cantidad, costo_unitario, fecha, creado_en, motivo, transferencia_id, factura_id, salida_id, pedido_id, producto:productos(id, nombre, unidad), deposito:depositos(id, nombre), evento:eventos(id, nombre)",
     )
     .order("fecha", { ascending: false })
     .order("creado_en", { ascending: false })

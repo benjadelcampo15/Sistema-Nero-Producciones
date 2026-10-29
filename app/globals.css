@@ -46,3 +46,15 @@ body {
     margin: 12mm;
   }
 }
+
+/* ─── Logo de Planix: los bloques de la P se iluminan uno tras otro ──────── */
+.planix-bloque {
+  animation: planix-ola 3.5s ease-in-out infinite;
+}
+@keyframes planix-ola {
+  0%, 30%, 100% { fill: currentColor; }
+  10% { fill: #f59e0b; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .planix-bloque { animation: none; }
+}

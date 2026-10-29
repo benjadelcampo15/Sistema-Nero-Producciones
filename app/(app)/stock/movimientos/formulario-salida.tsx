@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { registrarSalida } from "@/lib/stock/acciones";
 import { costoDeSalida, formatoCantidad, r3, type Deposito, type FilaStock, type ModoSalida } from "@/lib/stock/tipos";
@@ -36,7 +37,10 @@ export function FormularioSalida({ stock, depositos, eventos }: { stock: FilaSto
   const [motivo, setMotivo] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [valores, setValores] = useState<Record<string, string>>({});
+  // Última salida registrada: se avisa arriba y el formulario queda vacío para otra.
+  const [registrada, setRegistrada] = useState<{ id: string; productos: number; costo: number } | null>(null);
   const tabla = useRef<HTMLTableSectionElement>(null);
+  const arriba = useRef<HTMLDivElement>(null);
 
   // Productos con stock en el depósito elegido.
   const disponibles = useMemo(
@@ -85,13 +89,31 @@ export function FormularioSalida({ stock, depositos, eventos }: { stock: FilaSto
     const lineas = filas.filter((x) => x.valor !== null).map((x) => ({ producto_id: x.f.producto.id, valor: x.valor as number }));
     iniciar(async () => {
       const r = await registrarSalida({ deposito_id: deposito, fecha, evento_id: evento, modo, motivo, lineas });
-      if (r.error) return setError(r.error);
-      router.push(`/stock/salidas/${r.id}`);
+      if (r.error || !r.id) return setError(r.error ?? "No se pudo registrar la salida");
+      setRegistrada({ id: r.id, productos: cargadas.length, costo: costoTotal });
+      setValores({});
+      setMotivo("");
+      setEvento("");
+      setBusqueda("");
+      setFecha(hoy());
+      // Trae el stock actualizado (lo que había ahora es lo que quedó).
+      router.refresh();
+      arriba.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
   return (
-    <div className="tarjeta space-y-4">
+    <div ref={arriba} className="tarjeta scroll-mt-4 space-y-4">
+      {registrada && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
+          <p>
+            <span className="font-semibold">Salida registrada</span> · {registrada.productos} {registrada.productos === 1 ? "producto" : "productos"} ·{" "}
+            <span className="font-mono">{formatoPesos(registrada.costo)}</span> ·{" "}
+            <Link href={`/stock/salidas/${registrada.id}`} className="font-medium underline">ver detalle</Link>
+          </p>
+          <button type="button" onClick={() => setRegistrada(null)} aria-label="Cerrar aviso" className="px-1 text-green-800 hover:text-green-950">×</button>
+        </div>
+      )}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <label htmlFor="salida_deposito" className="etiqueta">Depósito / barra</label>

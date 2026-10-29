@@ -1,17 +1,21 @@
 import Link from "next/link";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
 import { listarMayoristas, listarPedidos, productosParaPedir } from "@/lib/pedidos/consultas";
-import { ESTADO_PEDIDO, faltante, totalPedido } from "@/lib/pedidos/tipos";
+import { ESTADO_PEDIDO, faltante, pedidoAbierto, totalPedido } from "@/lib/pedidos/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { SinAcceso } from "../../sin-acceso";
 import { NavegacionStock } from "../navegacion";
 import { NuevoMayorista } from "./mayoristas/componentes";
+import { BotonRecibir } from "./boton-recibir";
+import { IconoEnviarPedido } from "./enviar-pedido";
+import { urlBase } from "@/lib/url";
+import { whatsappNacional } from "@/lib/pedidos/whatsapp";
 
 export default async function PaginaPedidos() {
   const usuario = await obtenerUsuario();
   if (!puede(usuario, "stock", "ver")) return <SinAcceso />;
   const editable = puede(usuario, "stock", "editar");
-  const [pedidos, productos, mayoristas] = await Promise.all([listarPedidos(), productosParaPedir(), listarMayoristas()]);
+  const [pedidos, productos, mayoristas, base] = await Promise.all([listarPedidos(), productosParaPedir(), listarMayoristas(), urlBase()]);
   const faltantes = productos.filter((p) => faltante(p) > 0);
   const sinStock = productos.filter((p) => p.stock <= 0 && faltante(p) === 0);
 
@@ -63,7 +67,12 @@ export default async function PaginaPedidos() {
                     <p className="text-xs text-stone-500">
                       {suyos.length} {suyos.length === 1 ? "producto" : "productos"}
                       {reponer > 0 && <span className="font-medium text-red-700"> · {reponer} para reponer</span>}
-                      {m.telefono && ` · ${m.telefono}`}
+                      {whatsappNacional(m.telefono) ? ` · ${m.telefono}` : (
+                        <>
+                          {" · "}
+                          <Link href={`/stock/pedidos/mayoristas/${m.id}#m_telefono`} className="font-medium text-amber-700 underline hover:text-amber-900">Falta WhatsApp</Link>
+                        </>
+                      )}
                     </p>
                   </div>
                   <div className="mt-auto flex gap-2">
@@ -90,12 +99,13 @@ export default async function PaginaPedidos() {
               <th className="px-4 py-3 text-right">Productos</th>
               <th className="px-4 py-3 text-right">Total</th>
               <th className="px-4 py-3">Estado</th>
+              {editable && <th className="px-4 py-3" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100">
             {pedidos.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-stone-500">Todavía no hay pedidos.</td>
+                <td colSpan={9} className="px-4 py-10 text-center text-stone-500">Todavía no hay pedidos.</td>
               </tr>
             )}
             {pedidos.map((p) => (
@@ -120,7 +130,18 @@ export default async function PaginaPedidos() {
                 <td className="whitespace-nowrap px-4 py-2 text-right font-mono">{formatoPesos(totalPedido(p.items))}</td>
                 <td className="px-4 py-2">
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ESTADO_PEDIDO[p.estado].clase}`}>{ESTADO_PEDIDO[p.estado].nombre}</span>
+                  {p.estado === "recibido" && p.recibido_en && <span className="block text-xs text-stone-500">el {formatoFecha(p.recibido_en)}</span>}
                 </td>
+                {editable && (
+                  <td className="px-4 py-2">
+                    {pedidoAbierto(p.estado) && (
+                      <div className="flex items-center gap-2">
+                        <BotonRecibir id={p.id} />
+                        <IconoEnviarPedido pedido={p} urlBase={base} />
+                      </div>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
