@@ -13,7 +13,8 @@
     "totp": "node --env-file=.env.local scripts/totp.mts",
     "importar": "node --env-file=.env.local scripts/importar-planilla.mts",
     "ia:modelos": "node --env-file=.env.local scripts/ia-modelos.mts",
-    "importar-objetivos-ruta": "node --env-file=.env.local scripts/importar-objetivos-ruta.mts"
+    "importar-objetivos-ruta": "node --env-file=.env.local scripts/importar-objetivos-ruta.mts",
+    "demo:datos": "node --env-file=.env.demo scripts/demo-datos.mts"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.9.0",

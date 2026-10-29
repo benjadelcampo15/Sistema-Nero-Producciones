@@ -4,6 +4,7 @@ import { listarCuentas, movimientosEntre, saldosAFecha, totalSaldos } from "@/li
 import type { MovimientoCaja } from "@/lib/bancos/tipos";
 import { formatoFecha, formatoPesos, hoy, proximosMeses, sumar } from "@/lib/formato";
 import { SinAcceso } from "../sin-acceso";
+import { NOMBRE_EMPRESA } from "@/lib/empresas";
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const fechaValida = (v: unknown) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
@@ -48,7 +49,7 @@ export default async function PaginaCashflow({ searchParams }: PageProps<"/cashf
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Cashflow</h1>
-        <p className="text-sm text-stone-500">Arranca del saldo bancario cargado y suma los ingresos y egresos de Nero y de Ruta de ahí en adelante, mes a mes, con el saldo a cada fecha.</p>
+        <p className="text-sm text-stone-500">Arranca del saldo bancario cargado y suma los ingresos y egresos de {NOMBRE_EMPRESA.nero} y de {NOMBRE_EMPRESA.ruta} de ahí en adelante, mes a mes, con el saldo a cada fecha.</p>
       </div>
 
       {cargas.length === 0 && (

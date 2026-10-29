@@ -3,9 +3,10 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { formularioPublico } from "@/lib/empleados/consultas";
 import { FormularioAlta } from "./formulario";
+import { NOMBRE_CLIENTE } from "@/lib/cliente";
 
 export const metadata: Metadata = {
-  title: "Datos del personal · Nero Producciones",
+  title: `Datos del personal · ${NOMBRE_CLIENTE}`,
   robots: { index: false, follow: false },
   referrer: "no-referrer",
 };

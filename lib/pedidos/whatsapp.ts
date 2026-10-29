@@ -1,5 +1,6 @@
 import { formatoFecha } from "@/lib/formato";
 import type { Pedido } from "./tipos";
+import { NOMBRE_CLIENTE } from "@/lib/cliente";
 
 /** Link de la página del proveedor, abierto en ese pedido (para confirmarlo). */
 export const linkProveedor = (urlBase: string, p: Pick<Pedido, "numero" | "proveedor">) => `${urlBase}/p/proveedor/${p.proveedor.token}#pedido-${p.numero}`;
@@ -10,7 +11,7 @@ export const linkPdf = (urlBase: string, p: Pick<Pedido, "numero" | "proveedor">
 /** Mensaje corto que acompaña el pedido; con `pdf` (cuando no va el archivo adjunto) suma el link al PDF. */
 export function textoPedido(p: Pedido, links: { pdf?: string } = {}) {
   const entrega = `${p.deposito.nombre}${p.fecha_entrega ? ` el ${formatoFecha(p.fecha_entrega)}` : ""}`;
-  return [`Hola! Te paso el pedido N° ${p.numero} de Nero Producciones (entrega en ${entrega}).`, ...(links.pdf ? [`PDF: ${links.pdf}`] : [])].join("\n");
+  return [`Hola! Te paso el pedido N° ${p.numero} de ${NOMBRE_CLIENTE} (entrega en ${entrega}).`, ...(links.pdf ? [`PDF: ${links.pdf}`] : [])].join("\n");
 }
 /** Cómo se carga el WhatsApp de un proveedor (se muestra en los formularios). */
 export const AYUDA_WHATSAPP = "Código de área sin el 0 + número sin el 15, todo junto: 10 números. Ej.: 2615551234 (Mendoza) o 1155551234 (Buenos Aires).";

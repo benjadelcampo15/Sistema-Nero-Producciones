@@ -3,6 +3,7 @@ import { aniosRuta, resumenAnioRuta } from "@/lib/objetivos/ruta-consultas";
 import { MESES } from "@/lib/objetivos/tipos";
 import { formatoPesos, hoy } from "@/lib/formato";
 import { AlternarEmpresa } from "@/components/empresa";
+import { NOMBRE_EMPRESA } from "@/lib/empresas";
 
 /** Objetivos de Ruta: un año, mes a mes (histórico de la planilla hasta septiembre 2026, automático desde octubre). */
 export async function AnioRuta({ anio }: { anio: number }) {
@@ -58,7 +59,7 @@ export async function AnioRuta({ anio }: { anio: number }) {
         <div className="tarjeta">
           <p className="text-xs uppercase tracking-wide text-stone-500">Rentabilidad variable (desde octubre)</p>
           <p className={`mt-1 font-mono text-xl font-semibold ${variable < 0 ? "text-red-700" : ""}`}>{formatoPesos(variable)}</p>
-          <p className="text-xs text-stone-500">Balance de los eventos de Ruta</p>
+          <p className="text-xs text-stone-500">Balance de los eventos de {NOMBRE_EMPRESA.ruta}</p>
         </div>
         <div className="tarjeta">
           <p className="text-xs uppercase tracking-wide text-stone-500">Caja estructura (desde octubre)</p>

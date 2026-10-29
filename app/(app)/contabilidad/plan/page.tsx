@@ -3,6 +3,7 @@ import { listarCuentasContables } from "@/lib/contabilidad/consultas";
 import { SinAcceso } from "../../sin-acceso";
 import { EncabezadoContabilidad } from "../encabezado";
 import { FilaCuenta, FormularioCuentaContable } from "./controles";
+import { NOMBRE_EMPRESA } from "@/lib/empresas";
 
 export default async function PaginaPlanDeCuentas() {
   const usuario = await obtenerUsuario();
@@ -14,7 +15,7 @@ export default async function PaginaPlanDeCuentas() {
     <div className="space-y-6">
       <EncabezadoContabilidad actual="/contabilidad/plan" />
       <p className="text-sm text-stone-500">
-        El plan es el mismo para Nero y para Ruta. El código arma la jerarquía y el primer número define el tipo: 1 activo, 2 pasivo, 3 patrimonio neto, 4 ingresos, 5
+        El plan es el mismo para {NOMBRE_EMPRESA.nero} y para {NOMBRE_EMPRESA.ruta}. El código arma la jerarquía y el primer número define el tipo: 1 activo, 2 pasivo, 3 patrimonio neto, 4 ingresos, 5
         egresos. Los rubros agrupan; los asientos van a las cuentas imputables. Las cuentas no se borran: se desactivan.
       </p>
 

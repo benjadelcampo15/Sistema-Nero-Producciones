@@ -8,9 +8,10 @@ import { estadoVisible, numeroPresupuesto } from "@/lib/presupuestos/tipos";
 import { formatoFecha, hoy } from "@/lib/formato";
 import { PresupuestoVista } from "@/components/presupuesto-vista";
 import { AccionesCliente } from "./acciones-cliente";
+import { NOMBRE_CLIENTE } from "@/lib/cliente";
 
 export const metadata: Metadata = {
-  title: "Presupuesto · Nero Producciones",
+  title: `Presupuesto · ${NOMBRE_CLIENTE}`,
   robots: { index: false, follow: false },
   referrer: "no-referrer",
 };

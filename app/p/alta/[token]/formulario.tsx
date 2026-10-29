@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { enviarFormularioPersonal } from "@/lib/empleados/acciones";
 import { CamposPersona } from "@/components/campos-persona";
+import { NOMBRE_CLIENTE } from "@/lib/cliente";
 
 export function FormularioAlta({ token }: { token: string }) {
   const [estado, accion, enviando] = useActionState(enviarFormularioPersonal.bind(null, token), {});
@@ -21,7 +22,7 @@ export function FormularioAlta({ token }: { token: string }) {
     <form action={accion} className="tarjeta space-y-4">
       <div>
         <h1 className="text-xl font-semibold">Datos del personal</h1>
-        <p className="text-sm text-stone-600">Completá tus datos para trabajar en los eventos de Nero Producciones. Los usamos para tu seguro y tus pagos.</p>
+        <p className="text-sm text-stone-600">Completá tus datos para trabajar en los eventos de {NOMBRE_CLIENTE}. Los usamos para tu seguro y tus pagos.</p>
       </div>
       {/* Campo trampa para robots: las personas no lo ven. */}
       <input type="text" name="sitio_web" tabIndex={-1} autoComplete="off" aria-hidden="true" className="hidden" />

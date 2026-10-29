@@ -12,6 +12,7 @@ import {
 import { formatoPesos } from "@/lib/formato";
 import { EtiquetaEmpresa } from "@/components/empresa";
 import { EditorRuta } from "./editor-ruta";
+import { NOMBRE_EMPRESA } from "@/lib/empresas";
 
 /** Un mes de los objetivos de Ruta: foto de la planilla (histórico) o cálculo automático. */
 export async function MesRuta({ anio, mes, editable }: { anio: number; mes: number; editable: boolean }) {
@@ -50,7 +51,7 @@ export async function MesRuta({ anio, mes, editable }: { anio: number; mes: numb
     return (
       <div className="space-y-4">
         {encabezado}
-        <p className="tarjeta text-center text-sm text-stone-500">No hay datos de este mes en la planilla de Ruta.</p>
+        <p className="tarjeta text-center text-sm text-stone-500">No hay datos de este mes en la planilla de {NOMBRE_EMPRESA.ruta}.</p>
       </div>
     );
   }

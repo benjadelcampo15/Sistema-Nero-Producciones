@@ -1,5 +1,6 @@
 import "server-only";
 import { configuracionArca, type Entorno } from "@/lib/arca/config";
+import { NOMBRE_CLIENTE } from "@/lib/cliente";
 
 export type DatosEmisor = {
   razonSocial: string;
@@ -20,7 +21,7 @@ export function datosEmisor(entorno: Entorno): DatosEmisor {
   if (entorno === "homologacion") {
     return {
       razonSocial: "COMPROBANTE DE PRUEBA",
-      nombreFantasia: "Nero Producciones",
+      nombreFantasia: NOMBRE_CLIENTE,
       cuit,
       domicilio: null,
       condicionIva: "IVA Responsable Inscripto",
@@ -30,7 +31,7 @@ export function datosEmisor(entorno: Entorno): DatosEmisor {
   }
   return {
     razonSocial: process.env.EMISOR_RAZON_SOCIAL ?? "IDEAS CON DESTINO SRL",
-    nombreFantasia: process.env.EMISOR_NOMBRE_FANTASIA ?? "Nero Producciones",
+    nombreFantasia: process.env.EMISOR_NOMBRE_FANTASIA ?? NOMBRE_CLIENTE,
     cuit,
     domicilio: process.env.EMISOR_DOMICILIO ?? null,
     condicionIva: process.env.EMISOR_CONDICION_IVA ?? "IVA Responsable Inscripto",

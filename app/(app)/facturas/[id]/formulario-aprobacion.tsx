@@ -17,6 +17,7 @@ import type { Deposito, Producto } from "@/lib/stock/tipos";
 import { SeccionStock, type ItemFactura } from "./seccion-stock";
 import { CampoEmpresa } from "@/components/empresa";
 import { leerEmpresa } from "@/lib/empresas";
+import { NOMBRE_CLIENTE } from "@/lib/cliente";
 
 type DatosIA = {
   emitida_por_nero?: boolean;
@@ -109,7 +110,7 @@ export function FormularioAprobacion({
               }`}
             >
               <input type="radio" name="tipo" value={t} checked={tipo === t} onChange={() => setTipo(t)} className="sr-only" />
-              {t === "ingreso" ? "Ingreso (la emitió Nero)" : "Egreso (la recibió Nero)"}
+              {t === "ingreso" ? `Ingreso (la emitió ${NOMBRE_CLIENTE})` : `Egreso (la recibió ${NOMBRE_CLIENTE})`}
             </label>
           ))}
         </div>

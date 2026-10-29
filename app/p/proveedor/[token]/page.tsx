@@ -5,9 +5,10 @@ import { connection } from "next/server";
 import { portalProveedor } from "@/lib/pedidos/consultas";
 import type { Pedido } from "@/lib/pedidos/tipos";
 import { PedidoProveedor } from "./pedido-proveedor";
+import { NOMBRE_CLIENTE } from "@/lib/cliente";
 
 export const metadata: Metadata = {
-  title: "Pedidos · Nero Producciones",
+  title: `Pedidos · ${NOMBRE_CLIENTE}`,
   robots: { index: false, follow: false },
   referrer: "no-referrer",
 };
@@ -38,7 +39,7 @@ async function Contenido({ params }: { params: Promise<{ token: string }> }) {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <header>
-        <p className="text-xs uppercase tracking-widest text-stone-500">Nero Producciones</p>
+        <p className="text-xs uppercase tracking-widest text-stone-500">{NOMBRE_CLIENTE}</p>
         <h1 className="text-2xl font-semibold">Pedidos para {proveedor.razon_social}</h1>
         <p className="text-sm text-stone-500">Revisá cada pedido, bajá el PDF y confirmanos qué mandás y cuándo.</p>
       </header>

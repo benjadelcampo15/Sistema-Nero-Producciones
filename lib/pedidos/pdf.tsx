@@ -3,6 +3,7 @@ import { Document, Page, StyleSheet, Text, View, renderToBuffer } from "@react-p
 import { formatoCantidad } from "@/lib/stock/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { describirPromo, totalPedido, type Pedido } from "./tipos";
+import { NOMBRE_CLIENTE } from "@/lib/cliente";
 
 const e = StyleSheet.create({
   pagina: { padding: 36, fontSize: 10, fontFamily: "Helvetica", color: "#1c1917" },
@@ -28,7 +29,7 @@ const e = StyleSheet.create({
 });
 
 function NotaPedidoPdf({ p }: { p: Pedido }) {
-  const empresa = process.env.EMISOR_NOMBRE_FANTASIA ?? "Nero Producciones";
+  const empresa = process.env.EMISOR_NOMBRE_FANTASIA ?? NOMBRE_CLIENTE;
   const razonSocial = process.env.EMISOR_RAZON_SOCIAL ?? "IDEAS CON DESTINO SRL";
   const domicilio = process.env.EMISOR_DOMICILIO ?? null;
   const conPrecios = p.items.some((i) => i.precio_unitario !== null);
@@ -112,5 +113,5 @@ export function pdfPedido(p: Pedido) {
   return renderToBuffer(<NotaPedidoPdf p={p} />);
 }
 
-/** Nombre del archivo: "Pedido 6 - Nero Producciones.pdf". */
-export const nombrePdfPedido = (p: Pick<Pedido, "numero">) => `Pedido ${p.numero} - ${process.env.EMISOR_NOMBRE_FANTASIA ?? "Nero Producciones"}.pdf`;
+/** Nombre del archivo: "Pedido 6 - Nombre de la empresa.pdf". */
+export const nombrePdfPedido = (p: Pick<Pedido, "numero">) => `Pedido ${p.numero} - ${process.env.EMISOR_NOMBRE_FANTASIA ?? NOMBRE_CLIENTE}.pdf`;

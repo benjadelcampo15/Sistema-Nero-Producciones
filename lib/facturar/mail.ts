@@ -5,6 +5,7 @@ import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { urlBase } from "@/lib/url";
 import { datosEmisor } from "./emisor";
 import { nombreTipoCbte, numeroComprobante } from "./tipos";
+import { NOMBRE_CLIENTE } from "@/lib/cliente";
 
 /** Manda al cliente el link a su factura y deja registrado a quién y cuándo. Tira error si no se pudo. */
 export async function mandarFacturaPorMail(id: string, para: string) {
@@ -20,7 +21,7 @@ export async function mandarFacturaPorMail(id: string, para: string) {
   const url = `${await urlBase()}/p/factura/${c.token}`;
   const titulo = `${nombreTipoCbte(c.tipo_cbte)} ${numeroComprobante(c)}`;
   const prueba = c.entorno === "homologacion";
-  const remitente = prueba ? (emisor.nombreFantasia ?? "Nero Producciones") : emisor.razonSocial;
+  const remitente = prueba ? (emisor.nombreFantasia ?? NOMBRE_CLIENTE) : emisor.razonSocial;
   const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#1c1917">
   <p style="font-size:20px;font-weight:900;letter-spacing:6px;margin:0">NERO</p>
   <p style="font-size:11px;letter-spacing:3px;color:#78716c;margin:0 0 24px">PRODUCCIONES</p>

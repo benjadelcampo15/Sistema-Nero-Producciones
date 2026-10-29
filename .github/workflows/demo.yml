@@ -1,0 +1,29 @@
+# Demo de Planix: todas las noches vuelve a cargar los datos ficticios (así
+# queda impecable aunque alguien la haya tocado) y, de paso, la mantiene activa
+# para que Supabase no la pause. También se puede correr a mano desde GitHub
+# (Actions → "Reiniciar demo" → Run workflow).
+#
+# Secretos (GitHub → Settings → Secrets and variables → Actions):
+#   DEMO_SUPABASE_URL, DEMO_SUPABASE_SECRET_KEY, DEMO_DB_PASSWORD
+name: Reiniciar demo
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # 04:00 en Argentina
+  workflow_dispatch:
+
+jobs:
+  reiniciar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - name: Cargar los datos de la demo
+        run: node scripts/demo-datos.mts
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.DEMO_SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.DEMO_SUPABASE_SECRET_KEY }}
+          DEMO_DB_PASSWORD: ${{ secrets.DEMO_DB_PASSWORD }}

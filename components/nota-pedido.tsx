@@ -2,10 +2,11 @@ import type { Pedido } from "@/lib/pedidos/tipos";
 import { describirPromo, totalPedido } from "@/lib/pedidos/tipos";
 import { formatoCantidad } from "@/lib/stock/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
+import { NOMBRE_CLIENTE } from "@/lib/cliente";
 
 /** Nota de pedido en hoja A4 (para el PDF): la usan la app y la página del proveedor. */
 export function NotaPedido({ p }: { p: Pedido }) {
-  const empresa = process.env.EMISOR_NOMBRE_FANTASIA ?? "Nero Producciones";
+  const empresa = process.env.EMISOR_NOMBRE_FANTASIA ?? NOMBRE_CLIENTE;
   const razonSocial = process.env.EMISOR_RAZON_SOCIAL ?? "IDEAS CON DESTINO SRL";
   const domicilio = process.env.EMISOR_DOMICILIO ?? null;
   // Los precios van solo si se cargaron (si no, es una lista de cantidades).

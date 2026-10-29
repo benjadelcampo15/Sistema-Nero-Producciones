@@ -7,6 +7,7 @@ import { cambiarActivoPersonaRuta, cerrarMesRuta, crearPersonaRuta, guardarMesRu
 import { MESES } from "@/lib/objetivos/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { CampoMonto } from "@/components/campo-monto";
+import { NOMBRE_EMPRESA } from "@/lib/empresas";
 
 type Persona = { id: string; nombre: string; activo: boolean };
 type TipoPersona = "cliente" | "colaborador";
@@ -443,12 +444,12 @@ export function EditorRuta({
         </Seccion>
 
         <Seccion
-          titulo="Rentabilidad variable · eventos de Ruta"
-          ayuda={`Resultado del balance de cada evento de Ruta con fecha en ${MESES[mes - 1].toLowerCase()} (ingresos − egresos de sus movimientos). ${cerrado ? "Balances al cierre del mes." : "Se actualiza sola mientras el mes está abierto."}`}
+          titulo={`Rentabilidad variable · eventos de ${NOMBRE_EMPRESA.ruta}`}
+          ayuda={`Resultado del balance de cada evento de ${NOMBRE_EMPRESA.ruta} con fecha en ${MESES[mes - 1].toLowerCase()} (ingresos − egresos de sus movimientos). ${cerrado ? "Balances al cierre del mes." : "Se actualiza sola mientras el mes está abierto."}`}
         >
           {eventos.length === 0 ? (
             <p className="px-3 py-2 text-sm text-stone-500">
-              No hay eventos de Ruta este mes. Se cargan en <Link href="/eventos?empresa=ruta" className="underline">Eventos → Ruta</Link>.
+              No hay eventos de {NOMBRE_EMPRESA.ruta} este mes. Se cargan en <Link href="/eventos?empresa=ruta" className="underline">Eventos → {NOMBRE_EMPRESA.ruta}</Link>.
             </p>
           ) : (
             <table className="w-full text-sm">

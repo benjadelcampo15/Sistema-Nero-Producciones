@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Pedido } from "@/lib/pedidos/tipos";
 import { linkPdf, textoPedido, urlWhatsApp } from "@/lib/pedidos/whatsapp";
 import { IconoWhatsApp } from "@/components/icono-whatsapp";
+import { NOMBRE_CLIENTE } from "@/lib/cliente";
 
 /**
  * ¿Se puede compartir el PDF como archivo? En el celular sí (menú de compartir
@@ -37,7 +38,7 @@ function useEnvio({ pedido, urlBase }: Props) {
         setEstado("preparando");
         const r = await fetch(pdf);
         if (!r.ok) throw new Error("pdf");
-        f = new File([await r.blob()], `Pedido ${pedido.numero} - Nero Producciones.pdf`, { type: "application/pdf" });
+        f = new File([await r.blob()], `Pedido ${pedido.numero} - ${NOMBRE_CLIENTE}.pdf`, { type: "application/pdf" });
         setArchivo(f);
       }
       await navigator.share({ files: [f], text: textoPedido(pedido) });

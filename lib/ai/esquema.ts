@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { NOMBRE_CLIENTE } from "@/lib/cliente";
 
 /**
  * Datos que la IA extrae de una factura. Todos los campos son obligatorios
@@ -78,12 +79,12 @@ export function jsonSchemaFactura(categorias: string[]) {
     },
     emitida_por_nero: {
       type: "boolean",
-      description: "true si el EMISOR es Nero Producciones (es un ingreso); false si Nero la recibe (es un gasto)",
+      description: `true si el EMISOR es ${NOMBRE_CLIENTE} (es un ingreso); false si ${NOMBRE_CLIENTE} la recibe (es un gasto)`,
     },
     es_compra_mercaderia: {
       type: "boolean",
       description:
-        "true si Nero compra productos físicos que van a un depósito (bebidas, vasos, insumos, mercadería). false si son servicios (sonido, alquiler, honorarios, fletes…)",
+        `true si ${NOMBRE_CLIENTE} compra productos físicos que van a un depósito (bebidas, vasos, insumos, mercadería). false si son servicios (sonido, alquiler, honorarios, fletes…)`,
     },
     categoria_sugerida: {
       type: "string",
@@ -109,7 +110,7 @@ export function instruccionesFactura(nombresCategorias: string[]) {
   const cuitNero = process.env.NERO_CUIT?.replace(/\D/g, "");
   return [
     "Sos un asistente contable argentino. Extraé los datos de este comprobante (factura, ticket o recibo; normalmente emitido según las normas de ARCA/AFIP).",
-    `La empresa usuaria es Nero Producciones${cuitNero ? ` (CUIT ${cuitNero})` : ""}. Si Nero es el emisor, la factura es un ingreso; si Nero es el receptor, es un gasto.`,
+    `La empresa usuaria es ${NOMBRE_CLIENTE}${cuitNero ? ` (CUIT ${cuitNero})` : ""}. Si ${NOMBRE_CLIENTE} es el emisor, la factura es un ingreso; si es el receptor, es un gasto.`,
     "Reglas:",
     "- Montos como números con punto decimal (1234.56), sin separador de miles.",
     "- CUIT: solo los 11 dígitos.",

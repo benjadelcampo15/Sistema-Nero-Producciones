@@ -5,8 +5,9 @@ import { connection } from "next/server";
 import { portalProveedor } from "@/lib/pedidos/consultas";
 import { BotonImprimir } from "@/components/boton-imprimir";
 import { NotaPedido } from "@/components/nota-pedido";
+import { NOMBRE_CLIENTE } from "@/lib/cliente";
 
-export const metadata: Metadata = { title: "Pedido · Nero Producciones", robots: { index: false, follow: false }, referrer: "no-referrer" };
+export const metadata: Metadata = { title: `Pedido · ${NOMBRE_CLIENTE}`, robots: { index: false, follow: false }, referrer: "no-referrer" };
 
 /** PDF de un pedido para el proveedor (por su link, sin usuario). */
 export default function PaginaPdfProveedor({ params }: PageProps<"/p/proveedor/[token]/pedido/[numero]">) {
@@ -25,7 +26,7 @@ async function Contenido({ params }: { params: Promise<{ token: string; numero: 
   const datos = await portalProveedor(token);
   const p = datos?.pedidos.find((x) => String(x.numero) === numero);
   if (!p) notFound();
-  const nombreArchivo = `Pedido ${p.numero} - Nero Producciones`;
+  const nombreArchivo = `Pedido ${p.numero} - ${NOMBRE_CLIENTE}`;
 
   return (
     <div className="mx-auto max-w-[210mm] space-y-4 px-4 print:px-0">

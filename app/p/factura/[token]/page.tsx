@@ -8,9 +8,10 @@ import { qrSvg, urlQrArca } from "@/lib/facturar/qr";
 import { nombreTipoCbte, numeroComprobante } from "@/lib/facturar/tipos";
 import { ComprobanteVista } from "@/components/comprobante-vista";
 import { BotonImprimir } from "@/components/boton-imprimir";
+import { NOMBRE_CLIENTE } from "@/lib/cliente";
 
 export const metadata: Metadata = {
-  title: "Factura · Nero Producciones",
+  title: `Factura · ${NOMBRE_CLIENTE}`,
   robots: { index: false, follow: false },
   referrer: "no-referrer",
 };
