@@ -43,7 +43,7 @@ export async function cargarDemo(sb: SupabaseClient, url: string, CLAVE_DEMO = "
   for (const t of [
     "movimientos_stock", "salidas_stock", "pedido_items", "pedidos", "proveedor_productos", "productos",
     "extracto_lineas", "extractos", "cheques", "saldos_bancarios", "transacciones", "comprobantes_emitidos",
-    "convocados", "polizas", "planillas_evento", "presupuestos", "eventos", "clientes", "proveedores",
+    "convocados", "puestos_evento", "polizas", "planillas_evento", "presupuestos", "eventos", "clientes", "proveedores",
     "personal_envios", "personal", "asiento_lineas", "asientos",
   ]) await vaciar(t);
   await vaciar("cuentas_bancarias");
@@ -108,7 +108,7 @@ export async function cargarDemo(sb: SupabaseClient, url: string, CLAVE_DEMO = "
     { razon_social: "Distribuidora Andina", contacto: "Pablo", telefono: "2610000001", email: "pedidos@distandina.demo", cuit: "30711111119" },
     { razon_social: "Bebidas del Valle", contacto: "Carla", telefono: "2610000002", email: "ventas@delvalle.demo", cuit: "30722222225" },
   ]);
-  await insertar(
+  const personal = await insertar(
     "personal",
     [
       ["Lucía", "Gómez", "38123456"], ["Tomás", "Pereyra", "40234567"], ["Camila", "Sosa", "39345678"], ["Joaquín", "Díaz", "41456789"],
@@ -210,6 +210,20 @@ export async function cargarDemo(sb: SupabaseClient, url: string, CLAVE_DEMO = "
     const [ev] = await insertar("eventos", { nombre: e.nombre, fecha: dia(e.dias), lugar: e.lugar, estado: e.estado, empresa: e.empresa, presupuesto: redondo(e.cobro * 0.6, 100_000) });
     const pasado = e.dias < 0;
     const neto = e.cobro;
+    // El próximo evento ya tiene su personal repartido por puestos.
+    if (e.dias === 9) {
+      const puestos = await insertar("puestos_evento", [
+        { evento_id: ev.id, nombre: "Barra", color: "#dc2626", orden: 1 },
+        { evento_id: ev.id, nombre: "Seguridad", color: "#2563eb", orden: 2 },
+        { evento_id: ev.id, nombre: "Caja", color: "#16a34a", orden: 3 },
+        { evento_id: ev.id, nombre: "Producción", color: "#7c3aed", orden: 4 },
+      ]);
+      const reparto = [0, 0, 0, 1, 1, 2, 3];
+      await insertar(
+        "convocados",
+        personal.map((p, i) => ({ evento_id: ev.id, persona_id: p.id, origen: "manual", puesto_id: i < reparto.length ? puestos[reparto[i]].id : null, seguro: i < 5 ? "cubierto" : "solicitado" })),
+      );
+    }
     // Ingreso del evento (facturado con IVA); el futuro, pendiente.
     movimientos.push({
       empresa: e.empresa, tipo: "ingreso", monto: neto, fecha: dia(e.dias + (pasado ? 5 : 0)), descripcion: e.nombre, contraparte: e.cliente,

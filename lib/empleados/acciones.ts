@@ -7,7 +7,7 @@ import { exigirPermiso } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { crearClienteAdmin } from "@/lib/supabase/admin";
 import { urlBase } from "@/lib/url";
-import { CAMPOS_PERSONA, ESTADOS_SEGURO, esquemaPersona, type DatosPersona, type EstadoSeguro } from "./tipos";
+import { CAMPOS_PERSONA, COLORES_PUESTO, ESTADOS_SEGURO, colorLibre, esquemaPersona, type DatosPersona, type EstadoSeguro } from "./tipos";
 import { urlPoliza } from "./consultas";
 
 export type EstadoFormEmpleado = { error?: string; ok?: string; valores?: Record<string, string> };
@@ -117,14 +117,18 @@ export async function enviarFormularioPersonal(token: string, _previo: EstadoFor
 
 // ─── Seguros por evento ──────────────────────────────────────────────────
 
-export async function agregarConvocados(eventoId: string, personas: string[]): Promise<{ error?: string }> {
+/** Suma personas al evento, opcionalmente ya con un puesto. */
+export async function agregarConvocados(eventoId: string, personas: string[], puestoId: string | null = null): Promise<{ error?: string }> {
   await exigirPermiso("operativa", "editar");
-  if (!esUuid(eventoId) || !personas.every(esUuid)) return { error: "Datos inválidos" };
+  if (!esUuid(eventoId) || !personas.every(esUuid) || (puestoId && !esUuid(puestoId))) return { error: "Datos inválidos" };
   if (!personas.length) return {};
   const supabase = await crearClienteServidor();
   const { error } = await supabase
     .from("convocados")
-    .upsert(personas.map((persona_id) => ({ evento_id: eventoId, persona_id, origen: "manual" })), { onConflict: "evento_id,persona_id", ignoreDuplicates: true });
+    .upsert(personas.map((persona_id) => ({ evento_id: eventoId, persona_id, origen: "manual", puesto_id: puestoId })), {
+      onConflict: "evento_id,persona_id",
+      ignoreDuplicates: true,
+    });
   if (error) return { error: "No se pudieron agregar" };
   refresh();
   return {};
@@ -139,12 +143,12 @@ export async function quitarConvocado(id: string): Promise<{ error?: string }> {
   return {};
 }
 
-export async function cambiarConvocado(id: string, cambio: { seguro?: EstadoSeguro; puesto?: string; poliza_id?: string | null }): Promise<{ error?: string }> {
+export async function cambiarConvocado(id: string, cambio: { seguro?: EstadoSeguro; puesto_id?: string | null; poliza_id?: string | null }): Promise<{ error?: string }> {
   await exigirPermiso("operativa", "editar");
   if (cambio.seguro && !ESTADOS_SEGURO.some((e) => e.id === cambio.seguro)) return { error: "Estado inválido" };
-  const fila = { ...cambio, ...(cambio.puesto !== undefined ? { puesto: cambio.puesto.trim().slice(0, 80) || null } : {}) };
+  if (cambio.puesto_id && !esUuid(cambio.puesto_id)) return { error: "Puesto inválido" };
   const supabase = await crearClienteServidor();
-  const { data } = await supabase.from("convocados").update(fila).eq("id", id).select("id");
+  const { data } = await supabase.from("convocados").update(cambio).eq("id", id).select("id");
   if (!data?.length) return { error: "No se pudo actualizar" };
   refresh();
   return {};
@@ -157,6 +161,69 @@ export async function marcarTodos(eventoId: string, seguro: EstadoSeguro, poliza
   const supabase = await crearClienteServidor();
   const { error } = await supabase.from("convocados").update({ seguro, ...(seguro === "cubierto" ? { poliza_id: polizaId } : {}) }).eq("evento_id", eventoId);
   if (error) return { error: "No se pudo actualizar" };
+  refresh();
+  return {};
+}
+
+// ─── Puestos del evento ──────────────────────────────────────────────────
+
+const nombrePuesto = z.string().trim().min(1, "Falta el nombre del puesto").max(60, "Nombre muy largo");
+const colorPuesto = z.enum(COLORES_PUESTO.map((c) => c.color) as [string, ...string[]]);
+
+export async function crearPuesto(eventoId: string, nombre: string, color?: string): Promise<{ error?: string; id?: string }> {
+  await exigirPermiso("operativa", "editar");
+  const n = nombrePuesto.safeParse(nombre);
+  if (!n.success) return { error: n.error.issues[0].message };
+  if (!esUuid(eventoId) || (color && !colorPuesto.safeParse(color).success)) return { error: "Datos inválidos" };
+  const supabase = await crearClienteServidor();
+  const { data: actuales } = await supabase.from("puestos_evento").select("color, orden").eq("evento_id", eventoId);
+  const { data, error } = await supabase
+    .from("puestos_evento")
+    .insert({ evento_id: eventoId, nombre: n.data, color: color ?? colorLibre(actuales ?? []), orden: Math.max(0, ...(actuales ?? []).map((p) => p.orden)) + 1 })
+    .select("id")
+    .single();
+  if (error) return { error: error.code === "23505" ? "Ya hay un puesto con ese nombre" : "No se pudo crear el puesto" };
+  refresh();
+  return { id: data.id };
+}
+
+export async function editarPuesto(id: string, cambio: { nombre?: string; color?: string }): Promise<{ error?: string }> {
+  await exigirPermiso("operativa", "editar");
+  const fila: { nombre?: string; color?: string } = {};
+  if (cambio.nombre !== undefined) {
+    const n = nombrePuesto.safeParse(cambio.nombre);
+    if (!n.success) return { error: n.error.issues[0].message };
+    fila.nombre = n.data;
+  }
+  if (cambio.color !== undefined) {
+    if (!colorPuesto.safeParse(cambio.color).success) return { error: "Color inválido" };
+    fila.color = cambio.color;
+  }
+  const supabase = await crearClienteServidor();
+  const { data, error } = await supabase.from("puestos_evento").update(fila).eq("id", id).select("id");
+  if (error?.code === "23505") return { error: "Ya hay un puesto con ese nombre" };
+  if (!data?.length) return { error: "No se pudo guardar el puesto" };
+  refresh();
+  return {};
+}
+
+/** Borra el puesto: su gente queda en el evento, sin puesto. */
+export async function borrarPuesto(id: string): Promise<{ error?: string }> {
+  await exigirPermiso("operativa", "editar");
+  const supabase = await crearClienteServidor();
+  const { data } = await supabase.from("puestos_evento").delete().eq("id", id).select("id");
+  if (!data?.length) return { error: "No se pudo borrar el puesto" };
+  refresh();
+  return {};
+}
+
+/** Asigna un puesto (o ninguno) a varias personas del evento a la vez. */
+export async function asignarPuesto(convocados: string[], puestoId: string | null): Promise<{ error?: string }> {
+  await exigirPermiso("operativa", "editar");
+  if (!convocados.length || !convocados.every(esUuid) || (puestoId && !esUuid(puestoId))) return { error: "Datos inválidos" };
+  const supabase = await crearClienteServidor();
+  const { error } = await supabase.from("convocados").update({ puesto_id: puestoId }).in("id", convocados);
+  if (error) return { error: "No se pudo asignar el puesto" };
   refresh();
   return {};
 }

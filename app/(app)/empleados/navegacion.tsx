@@ -2,7 +2,7 @@ import Link from "next/link";
 
 const ENLACES = [
   { href: "/empleados", nombre: "Personal" },
-  { href: "/empleados/seguros", nombre: "Seguros por evento" },
+  { href: "/empleados/seguros", nombre: "Por evento" },
 ];
 
 export function NavegacionEmpleados({ actual }: { actual: string }) {

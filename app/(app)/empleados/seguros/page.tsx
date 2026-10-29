@@ -19,7 +19,7 @@ export default async function PaginaSegurosEventos() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Empleados</h1>
-        <p className="text-sm text-stone-500">Por evento: quién trabaja, el pedido del seguro y la póliza.</p>
+        <p className="text-sm text-stone-500">Por evento: quién trabaja, en qué puesto, el pedido del seguro y la póliza.</p>
       </div>
       <NavegacionEmpleados actual="/empleados/seguros" />
       {[

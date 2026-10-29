@@ -17,13 +17,13 @@ export async function GET(_request: Request, { params }: RouteContext<"/empleado
   };
   const filas = [
     ["Apellido", "Nombre", "DNI", "CUIL", "Fecha de nacimiento", "Puesto", "Domicilio", "Teléfono"],
-    ...datos.convocados.map(({ persona: p, puesto }) => [
+    ...datos.convocados.map(({ persona: p, puesto_id }) => [
       p.apellido,
       p.nombre,
       p.dni,
       p.cuil ?? "",
       p.fecha_nacimiento ? formatoFecha(p.fecha_nacimiento) : "",
-      puesto ?? "",
+      datos.puestos.find((q) => q.id === puesto_id)?.nombre ?? "",
       p.domicilio ?? "",
       p.telefono ?? "",
     ]),
