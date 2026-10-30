@@ -52,18 +52,15 @@ export default async function PaginaFichaProveedor({ params, searchParams }: Pag
         <Cifra titulo="Total aprobado" valor={formatoPesos(r?.total ?? 0)} detalle={r ? `${r.cantidad} facturas${r.ultima ? ` · última ${formatoFecha(r.ultima)}` : ""}` : "Sin facturas"} />
       </div>
 
-      {proveedor.cuit ? (
-        <SeccionCuentaCorriente
-          tipo="pago"
-          id={proveedor.id}
-          empresas={empresas}
-          empresa={empresa}
-          href={(e) => `/facturas/proveedores/${proveedor.id}?empresa=${e}#cuenta`}
-          editable={editable || puede(usuario, "financiero", "editar")}
-        />
-      ) : (
-        <p className="tarjeta p-4 text-sm text-stone-500">Cargale el CUIT para ver su cuenta corriente: se arma con sus facturas.</p>
-      )}
+      {/* Sin CUIT no se le vinculan facturas, pero se le pueden cargar deudas a mano. */}
+      <SeccionCuentaCorriente
+        tipo="pago"
+        id={proveedor.id}
+        empresas={empresas}
+        empresa={empresa}
+        href={(e) => `/facturas/proveedores/${proveedor.id}?empresa=${e}#cuenta`}
+        editable={editable || puede(usuario, "financiero", "editar")}
+      />
 
       <section className="tarjeta space-y-3">
         <h2 className="font-semibold">Datos</h2>

@@ -26,6 +26,8 @@ export type Evento = {
   estado: EstadoEvento;
   presupuesto: number | null;
   notas: string | null;
+  /** Los eventos nuevos: la planilla se refleja en Financiero. */
+  planilla_en_financiero: boolean;
 };
 
 export type Balance = { ingresos: number; egresos: number; resultado: number; movimientos: number };

@@ -34,7 +34,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 const celdaTexto =
   "w-full min-w-28 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-sm hover:border-stone-200 focus:border-stone-400 focus:bg-white focus:outline-none disabled:hover:border-transparent";
 
-export function PlanillaEvento({ eventoId, inicial, editable }: { eventoId: string; inicial: Planilla; editable: boolean }) {
+export function PlanillaEvento({ eventoId, inicial, editable, enFinanciero = false }: { eventoId: string; inicial: Planilla; editable: boolean; enFinanciero?: boolean }) {
   const [p, setP] = useState<Planilla>(inicial);
   const [sinGuardar, setSinGuardar] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
@@ -58,10 +58,11 @@ export function PlanillaEvento({ eventoId, inicial, editable }: { eventoId: stri
   const guardar = () =>
     iniciar(async () => {
       const r = await guardarPlanillaEvento(eventoId, p);
+      if (r.planilla) setP(r.planilla);
       if (r.error) setMensaje({ tipo: "error", texto: r.error });
       else {
         setSinGuardar(false);
-        setMensaje({ tipo: "ok", texto: "Planilla guardada" });
+        setMensaje({ tipo: "ok", texto: enFinanciero ? "Planilla guardada y pasada a Financiero" : "Planilla guardada" });
       }
     });
 
@@ -118,7 +119,11 @@ export function PlanillaEvento({ eventoId, inicial, editable }: { eventoId: stri
             Ver solo lo que falta pagar
           </label>
           {mensaje && <p className={`text-sm ${mensaje.tipo === "error" ? "text-red-700" : "text-green-700"}`}>{mensaje.texto}</p>}
-          <button type="button" onClick={armarDesdeMovimientos} disabled={guardando} className="boton-secundario ml-auto">Armar desde movimientos</button>
+          {enFinanciero ? (
+            <p className="ml-auto text-xs text-stone-500">Los ingresos y gastos se pasan solos a Financiero al guardar.</p>
+          ) : (
+            <button type="button" onClick={armarDesdeMovimientos} disabled={guardando} className="boton-secundario ml-auto">Armar desde movimientos</button>
+          )}
           <button type="button" onClick={() => window.print()} className="boton-secundario">Imprimir</button>
           <button type="button" onClick={guardar} disabled={guardando || !sinGuardar} className="boton">
             {guardando ? "Guardando…" : sinGuardar ? "Guardar planilla" : "Guardada"}

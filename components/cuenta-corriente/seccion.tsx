@@ -3,7 +3,8 @@ import { cuentaCorriente } from "@/lib/cuentas/consultas";
 import type { TipoCuenta } from "@/lib/cuentas/tipos";
 import { NOMBRE_EMPRESA, type Empresa } from "@/lib/empresas";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
-import { BotonAnularPago, FormularioPago } from "./formulario-pago";
+import { crearClienteAdmin } from "@/lib/supabase/admin";
+import { BotonAnularPago, BotonBorrarCargo, FormularioCargo, FormularioPago } from "./formulario-pago";
 
 /**
  * Cuenta corriente de un proveedor o cliente con una empresa: saldo, registrar
@@ -26,7 +27,14 @@ export async function SeccionCuentaCorriente({
   href: (empresa: Empresa) => string;
   editable: boolean;
 }) {
-  const cuenta = await cuentaCorriente(tipo, id, empresa);
+  const tipoMovimiento = tipo === "pago" ? "egreso" : "ingreso";
+  const [cuenta, { data: categorias }] = await Promise.all([
+    cuentaCorriente(tipo, id, empresa),
+    // Las categorías se leen con la clave secreta: quien ve proveedores o clientes puede no ver Financiero.
+    editable ? crearClienteAdmin().from("categorias").select("id, nombre").eq("tipo", tipoMovimiento).eq("activa", true).order("nombre") : Promise.resolve({ data: [] }),
+  ]);
+  const lista = (categorias ?? []) as { id: string; nombre: string }[];
+  const defecto = (lista.find((c) => c.nombre === (tipo === "pago" ? "Proveedores" : "Otros ingresos")) ?? lista[0])?.id ?? "";
   const debe = tipo === "pago" ? "Le debemos" : "Nos debe";
 
   return (
@@ -57,11 +65,14 @@ export async function SeccionCuentaCorriente({
           </p>
           <p className="mt-1 font-mono text-xl font-semibold">{formatoPesos(cuenta.saldo)}</p>
           <p className="text-xs text-stone-500">
-            {cuenta.comprobantes.filter((c) => c.pendiente > 0).length} comprobantes con saldo
+            {(() => {
+              const n = cuenta.comprobantes.filter((c) => c.pendiente > 0).length;
+              return n === 1 ? "1 pendiente" : `${n} pendientes`;
+            })()}
           </p>
         </div>
         <div className="tarjeta p-4">
-          <p className="text-xs uppercase tracking-wide text-stone-500">Facturado</p>
+          <p className="text-xs uppercase tracking-wide text-stone-500">Total (con y sin factura)</p>
           <p className="mt-1 font-mono text-xl font-semibold">{formatoPesos(cuenta.facturado)}</p>
         </div>
         <div className="tarjeta p-4">
@@ -70,7 +81,12 @@ export async function SeccionCuentaCorriente({
         </div>
       </div>
 
-      {editable && <FormularioPago key={empresa} tipo={tipo} id={id} empresa={empresa} comprobantes={cuenta.comprobantes} />}
+      {editable && (
+        <div className="space-y-3">
+          <FormularioPago key={empresa} tipo={tipo} id={id} empresa={empresa} comprobantes={cuenta.comprobantes} />
+          {lista.length > 0 && <FormularioCargo key={`cargo-${empresa}`} tipo={tipo} id={id} empresa={empresa} categorias={lista} categoriaDefecto={defecto} />}
+        </div>
+      )}
 
       <div className="tarjeta overflow-x-auto p-0">
         <table className="w-full min-w-[640px] text-sm">
@@ -88,7 +104,7 @@ export async function SeccionCuentaCorriente({
             {cuenta.extracto.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-stone-500">
-                  Sin movimientos con {NOMBRE_EMPRESA[empresa]}. {tipo === "pago" ? "Las facturas aprobadas de este proveedor aparecen acá." : "Las facturas emitidas a este cliente (con el ingreso en Financiero) aparecen acá."}
+                  Sin movimientos con {NOMBRE_EMPRESA[empresa]}. {tipo === "pago" ? "Las facturas aprobadas de este proveedor aparecen acá." : "Las facturas emitidas a este cliente (con el ingreso en Financiero) aparecen acá."} Lo que no tiene factura se carga con “Cargar deuda sin factura”.
                 </td>
               </tr>
             )}
@@ -106,7 +122,12 @@ export async function SeccionCuentaCorriente({
                 <td className="whitespace-nowrap px-4 py-2 text-right font-mono">{r.debe ? formatoPesos(r.debe) : ""}</td>
                 <td className="whitespace-nowrap px-4 py-2 text-right font-mono text-green-800">{r.haber ? formatoPesos(r.haber) : ""}</td>
                 <td className="whitespace-nowrap px-4 py-2 text-right font-mono font-semibold">{formatoPesos(r.saldo)}</td>
-                {editable && <td className="px-4 py-2 text-right">{r.pagoId && !r.anulado && <BotonAnularPago tipo={tipo} pagoId={r.pagoId} />}</td>}
+                {editable && (
+                  <td className="px-4 py-2 text-right">
+                    {r.pagoId && !r.anulado && <BotonAnularPago tipo={tipo} pagoId={r.pagoId} />}
+                    {r.cargoId && <BotonBorrarCargo tipo={tipo} cargoId={r.cargoId} />}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

@@ -7,7 +7,7 @@ import type { Empresa } from "@/lib/empresas";
 import { ESTADOS_EVENTO, type Balance, type EstadoEvento, type Evento, type EventoConBalance } from "./tipos";
 import { PLANILLA_VACIA, esquemaPlanilla, type Planilla } from "./planilla";
 
-const CAMPOS_EVENTO = "id, empresa, nombre, fecha, lugar, estado, presupuesto, notas";
+const CAMPOS_EVENTO = "id, empresa, nombre, fecha, lugar, estado, presupuesto, notas, planilla_en_financiero";
 
 type FilaBalance = { evento_id: string; ingresos: number; egresos: number; movimientos: number };
 

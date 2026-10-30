@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { anularPago, registrarPago } from "@/lib/cuentas/acciones";
+import { anularPago, borrarCargo, cargarDeuda, registrarPago } from "@/lib/cuentas/acciones";
 import type { ComprobanteCuenta, TipoCuenta } from "@/lib/cuentas/tipos";
 import type { Empresa } from "@/lib/empresas";
 import { NOMBRE_MEDIO_PAGO, type MedioPago } from "@/lib/financiero/tipos";
@@ -112,6 +112,97 @@ export function FormularioPago({ tipo, id, empresa, comprobantes }: { tipo: Tipo
         <button type="button" onClick={() => setAbierto(false)} className="text-sm text-stone-600 hover:text-stone-900">Cancelar</button>
       </div>
     </form>
+  );
+}
+
+/** Cargar una deuda sin factura (lo que se le debe al proveedor o nos debe el cliente). */
+export function FormularioCargo({ tipo, id, empresa, categorias, categoriaDefecto }: { tipo: TipoCuenta; id: string; empresa: Empresa; categorias: { id: string; nombre: string }[]; categoriaDefecto: string }) {
+  const [pendiente, iniciar] = useTransition();
+  const [abierto, setAbierto] = useState(false);
+  const [monto, setMonto] = useState("");
+  const [fecha, setFecha] = useState(hoy());
+  const [detalle, setDetalle] = useState("");
+  const [categoria, setCategoria] = useState(categoriaDefecto);
+  const [mensaje, setMensaje] = useState<{ error?: string; ok?: string }>({});
+
+  function guardar(e: React.FormEvent) {
+    e.preventDefault();
+    setMensaje({});
+    iniciar(async () => {
+      const r = await cargarDeuda({ tipo, id, empresa, fecha, monto, detalle, categoria_id: categoria });
+      setMensaje(r);
+      if (!r.error) {
+        setMonto("");
+        setDetalle("");
+        setAbierto(false);
+      }
+    });
+  }
+
+  if (!abierto) {
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" onClick={() => setAbierto(true)} className="boton-secundario">
+          + Cargar deuda sin factura
+        </button>
+        {mensaje.ok && <p className="text-sm text-green-700">{mensaje.ok}</p>}
+      </div>
+    );
+  }
+  return (
+    <form onSubmit={guardar} className="tarjeta space-y-4">
+      <div>
+        <h3 className="font-semibold">Cargar deuda sin factura</h3>
+        <p className="text-xs text-stone-500">{tipo === "pago" ? "Lo que le debemos" : "Lo que nos debe"}, aunque no haya factura. Queda pendiente en Financiero hasta que se registre el {tipo}.</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="lg:col-span-2">
+          <label htmlFor="cargo_detalle" className="etiqueta">Detalle</label>
+          <input id="cargo_detalle" required maxLength={200} value={detalle} onChange={(e) => setDetalle(e.target.value)} placeholder="Ej. Sonido fiesta del sábado" className="campo" />
+        </div>
+        <div>
+          <label htmlFor="cargo_monto" className="etiqueta">Monto</label>
+          <input id="cargo_monto" required inputMode="decimal" value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="150.000" className="campo text-right font-mono" />
+        </div>
+        <div>
+          <label htmlFor="cargo_fecha" className="etiqueta">Fecha</label>
+          <input id="cargo_fecha" type="date" required value={fecha} onChange={(e) => setFecha(e.target.value)} className="campo" />
+        </div>
+        <div className="lg:col-span-2">
+          <label htmlFor="cargo_categoria" className="etiqueta">Categoría en Financiero</label>
+          <select id="cargo_categoria" value={categoria} onChange={(e) => setCategoria(e.target.value)} className="campo">
+            {categorias.map((c) => (
+              <option key={c.id} value={c.id}>{c.nombre}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      {mensaje.error && <p className="alerta-error">{mensaje.error}</p>}
+      <div className="flex items-center gap-3">
+        <button type="submit" disabled={pendiente} className="boton">{pendiente ? "Guardando…" : "Cargar deuda"}</button>
+        <button type="button" onClick={() => setAbierto(false)} className="text-sm text-stone-600 hover:text-stone-900">Cancelar</button>
+      </div>
+    </form>
+  );
+}
+
+export function BotonBorrarCargo({ tipo, cargoId }: { tipo: TipoCuenta; cargoId: string }) {
+  const [pendiente, iniciar] = useTransition();
+  return (
+    <button
+      type="button"
+      disabled={pendiente}
+      onClick={() => {
+        if (!window.confirm("¿Borrar esta deuda? También se borra de Financiero.")) return;
+        iniciar(async () => {
+          const r = await borrarCargo(tipo, cargoId);
+          if (r.error) window.alert(r.error);
+        });
+      }}
+      className="text-xs text-red-700 hover:underline disabled:opacity-50"
+    >
+      {pendiente ? "Borrando…" : "Borrar"}
+    </button>
   );
 }
 

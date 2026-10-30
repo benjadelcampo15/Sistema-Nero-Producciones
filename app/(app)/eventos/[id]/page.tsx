@@ -77,7 +77,7 @@ export default async function PaginaEvento({ params, searchParams }: PageProps<"
       </nav>
 
       {planilla ? (
-        <PlanillaEvento key={evento.id} eventoId={evento.id} inicial={planilla} editable={editaEvento} />
+        <PlanillaEvento key={evento.id} eventoId={evento.id} inicial={planilla} editable={editaEvento} enFinanciero={evento.planilla_en_financiero} />
       ) : (
       <>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

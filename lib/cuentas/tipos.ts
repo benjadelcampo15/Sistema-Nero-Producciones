@@ -20,6 +20,8 @@ export type ComprobanteCuenta = {
   pendiente: number;
   /** Movimientos pendientes del comprobante (el original y lo que quedó de dividirlo). */
   pendientes: string[];
+  /** Cargo a mano (sin factura) sin nada pagado: se puede borrar. */
+  borrable: boolean;
 };
 
 /** Un pago o cobro registrado desde la cuenta corriente (o pagado directo en Financiero). */
@@ -33,6 +35,6 @@ export type PagoCuenta = {
 };
 
 /** Renglón del extracto: debe (facturado) o haber (pagado), con el saldo acumulado. */
-export type RenglonCuenta = { fecha: string | null; detalle: string; href: string | null; debe: number; haber: number; saldo: number; pagoId: string | null; anulado?: boolean };
+export type RenglonCuenta = { fecha: string | null; detalle: string; href: string | null; debe: number; haber: number; saldo: number; pagoId: string | null; cargoId?: string | null; anulado?: boolean };
 
 export type CuentaCorriente = { comprobantes: ComprobanteCuenta[]; pagos: PagoCuenta[]; extracto: RenglonCuenta[]; saldo: number; facturado: number; pagado: number };

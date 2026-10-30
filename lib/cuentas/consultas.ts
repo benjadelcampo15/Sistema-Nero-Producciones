@@ -11,6 +11,9 @@ type Movimiento = {
   id: string;
   monto: number;
   fecha: string | null;
+  descripcion: string;
+  proveedor_id: string | null;
+  cliente_id: string | null;
   estado: "real" | "pendiente" | "proyectado";
   factura_id: string | null;
   parte_de: string | null;
@@ -63,14 +66,16 @@ export async function cuentaCorriente(tipo: TipoCuenta, id: string, empresa: Emp
       const familia = movimientos.filter((m) => m.id === r.id || m.parte_de === r.id);
       const pendientes = familia.filter((m) => m.estado === "pendiente");
       const d = datos.get(r.id);
+      const manual = Boolean(r.proveedor_id || r.cliente_id);
       return {
         id: r.id,
         fecha: d?.fecha ?? r.fecha,
-        nombre: d?.nombre ?? r.notas ?? "Comprobante",
+        nombre: d?.nombre ?? (manual ? `${r.descripcion} · sin factura` : r.descripcion),
         href: d?.href ?? null,
         total: sumar(familia.map((m) => m.monto)),
         pendiente: sumar(pendientes.map((m) => m.monto)),
         pendientes: pendientes.map((m) => m.id),
+        borrable: manual && familia.length === 1 && r.estado === "pendiente",
       };
     })
     .sort((a, b) => (a.fecha ?? "").localeCompare(b.fecha ?? ""));
@@ -90,7 +95,7 @@ export async function cuentaCorriente(tipo: TipoCuenta, id: string, empresa: Emp
   listaPagos.sort((a, b) => a.fecha.localeCompare(b.fecha));
 
   const extracto: RenglonCuenta[] = [
-    ...comprobantes.map((c) => ({ fecha: c.fecha, detalle: c.nombre, href: c.href, debe: c.total, haber: 0, saldo: 0, pagoId: null })),
+    ...comprobantes.map((c) => ({ fecha: c.fecha, detalle: c.nombre, href: c.href, debe: c.total, haber: 0, saldo: 0, pagoId: null, cargoId: c.borrable ? c.id : null })),
     ...listaPagos.map((p) => ({
       fecha: p.fecha,
       detalle: `${tipo === "pago" ? "Pago" : "Cobro"}${p.notas ? ` · ${p.notas}` : ""}`,
@@ -143,6 +148,15 @@ export async function saldosPendientes(tipo: TipoCuenta, empresa: Empresa) {
     const { data } = await admin.from("comprobantes_emitidos").select("transaccion_id, cliente_id").not("transaccion_id", "is", null).not("cliente_id", "is", null).limit(20000);
     for (const c of data ?? []) duenio.set(c.transaccion_id as string, c.cliente_id as string);
   }
+
+  // Cargos a mano (sin factura).
+  const { data: cargos } = await admin
+    .from("transacciones")
+    .select(`id, ${tipo === "pago" ? "proveedor_id" : "cliente_id"}`)
+    .not(tipo === "pago" ? "proveedor_id" : "cliente_id", "is", null)
+    .eq("empresa", empresa)
+    .limit(20000);
+  for (const c of (cargos ?? []) as unknown as Record<string, string>[]) duenio.set(c.id, c[tipo === "pago" ? "proveedor_id" : "cliente_id"]);
 
   const { data: pendientes } = await admin
     .from("transacciones")

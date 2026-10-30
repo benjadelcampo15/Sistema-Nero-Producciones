@@ -52,6 +52,41 @@ export async function registrarPago(datos: z.input<typeof esquemaPago>): Promise
   return { ok: tipo === "pago" ? "Pago registrado: ya está en Financiero" : "Cobro registrado: ya está en Financiero" };
 }
 
+const esquemaCargo = z.object({
+  tipo: z.enum(["pago", "cobro"]),
+  id: z.uuid(),
+  empresa: z.enum(EMPRESAS),
+  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Falta la fecha"),
+  monto: z.string(),
+  detalle: z.string().trim().min(1, "Escribí qué es (ej. Sonido evento del sábado)").max(200),
+  categoria_id: z.uuid("Elegí la categoría"),
+});
+
+/** Carga una deuda sin factura en la cuenta corriente: queda pendiente en Financiero. */
+export async function cargarDeuda(datos: z.input<typeof esquemaCargo>): Promise<{ error?: string; ok?: string }> {
+  const r = esquemaCargo.safeParse(datos);
+  if (!r.success) return { error: r.error.issues[0].message };
+  await exigirPermisoPagos(r.data.tipo);
+  const monto = parsearMonto(r.data.monto);
+  if (monto === null || monto <= 0) return { error: "Monto inválido. Ejemplo: 150.000" };
+  const supabase = await crearClienteServidor();
+  const { error } = await supabase.rpc("cargar_cuenta", { p_cargo: { ...r.data, monto } });
+  if (error) return { error: error.message.includes("permiso") ? error.message : "No se pudo cargar la deuda" };
+  refresh();
+  return { ok: "Deuda cargada: ya está en Financiero como pendiente" };
+}
+
+/** Borra un cargo a mano que todavía no tiene pagos. */
+export async function borrarCargo(tipo: TipoCuenta, transaccionId: string): Promise<{ error?: string }> {
+  await exigirPermisoPagos(tipo);
+  if (!/^[0-9a-f-]{36}$/i.test(transaccionId)) return { error: "Cargo inválido" };
+  const supabase = await crearClienteServidor();
+  const { error } = await supabase.rpc("borrar_cargo", { p_transaccion_id: transaccionId });
+  if (error) return { error: /pagos|permiso/.test(error.message) ? error.message : "No se pudo borrar" };
+  refresh();
+  return {};
+}
+
 /** Anula un pago: lo que cubría vuelve a quedar pendiente (también en Financiero). */
 export async function anularPago(tipo: TipoCuenta, pagoId: string): Promise<{ error?: string }> {
   await exigirPermisoPagos(tipo);

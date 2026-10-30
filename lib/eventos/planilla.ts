@@ -16,7 +16,11 @@ export const TIPOS_FACTURA = [
 const monto = z.number().min(-1e13).max(1e13);
 const texto = (max: number) => z.string().max(max).default("");
 
+/** Id del renglón (lo pone el servidor al guardar): lo vincula con su movimiento de Financiero. */
+const idRenglon = z.string().max(40).optional();
+
 const esquemaIngreso = z.object({
+  id: idRenglon,
   detalle: texto(200),
   neto: monto,
   // IVA débito (lo que se factura con IVA) y bruto (lo que entra).
@@ -27,6 +31,7 @@ const esquemaIngreso = z.object({
 });
 
 const esquemaGasto = z.object({
+  id: idRenglon,
   sector: texto(60),
   detalle: texto(200),
   neto: monto,
