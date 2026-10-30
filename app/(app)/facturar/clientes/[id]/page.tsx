@@ -10,9 +10,11 @@ import { EtiquetaEmpresa } from "@/components/empresa";
 import { SinAcceso } from "../../../sin-acceso";
 import { BotonBorrarCliente } from "../../borrar";
 import { BotonEstadoCliente, FormularioCliente } from "../formulario-cliente";
+import { SeccionCuentaCorriente } from "@/components/cuenta-corriente/seccion";
+import { EMPRESAS, NOMBRE_EMPRESA, leerEmpresa } from "@/lib/empresas";
 
 /** Ficha del cliente: sus datos, lo facturado y sus comprobantes. */
-export default async function PaginaFichaCliente({ params }: PageProps<"/facturar/clientes/[id]">) {
+export default async function PaginaFichaCliente({ params, searchParams }: PageProps<"/facturar/clientes/[id]">) {
   const usuario = await obtenerUsuario();
   if (!puede(usuario, "facturar", "ver")) return <SinAcceso />;
   const editable = puede(usuario, "facturar", "editar");
@@ -20,15 +22,19 @@ export default async function PaginaFichaCliente({ params }: PageProps<"/factura
   const [cliente, resumen, comprobantes] = await Promise.all([obtenerCliente(id), resumenFacturacionPorCliente(), listarComprobantes({ cliente: id })]);
   if (!cliente) notFound();
   const r = resumen.get(id);
+  // Las empresas con las que trabaja; la cuenta corriente se ve de a una.
+  const empresas = cliente.empresa ? [cliente.empresa] : EMPRESAS;
+  const empresa = cliente.empresa ?? leerEmpresa((await searchParams).empresa);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <Link href="/facturar" className="text-sm text-stone-500 hover:text-stone-900">← Clientes</Link>
+          <Link href={`/facturar?empresa=${empresa}`} className="text-sm text-stone-500 hover:text-stone-900">← Clientes</Link>
           <h1 className="mt-1 text-2xl font-semibold">{cliente.razon_social}</h1>
           <p className="text-sm text-stone-500">
-            <span className="font-mono">{formatoDocumento(cliente.doc_tipo, cliente.doc_nro)}</span> · {CONDICIONES_IVA.find((x) => x.id === cliente.condicion_iva)?.nombre}
+            <span className="font-mono">{formatoDocumento(cliente.doc_tipo, cliente.doc_nro)}</span> · {CONDICIONES_IVA.find((x) => x.id === cliente.condicion_iva)?.nombre} ·{" "}
+            {cliente.empresa ? NOMBRE_EMPRESA[cliente.empresa] : `${NOMBRE_EMPRESA.nero} y ${NOMBRE_EMPRESA.ruta}`}
             {!cliente.activo && <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-xs text-red-800">Desactivado</span>}
           </p>
         </div>
@@ -46,6 +52,15 @@ export default async function PaginaFichaCliente({ params }: PageProps<"/factura
         <Cifra titulo="Este año" valor={formatoPesos(r?.anio ?? 0)} />
         <Cifra titulo="Total facturado" valor={formatoPesos(r?.total ?? 0)} detalle={r ? `${r.cantidad} comprobantes · última ${formatoFecha(r.ultima)}` : "Sin facturas"} />
       </div>
+
+      <SeccionCuentaCorriente
+        tipo="cobro"
+        id={cliente.id}
+        empresas={empresas}
+        empresa={empresa}
+        href={(e) => `/facturar/clientes/${cliente.id}?empresa=${e}#cuenta`}
+        editable={editable || puede(usuario, "financiero", "editar")}
+      />
 
       <section className="tarjeta space-y-3">
         <h2 className="font-semibold">Datos</h2>

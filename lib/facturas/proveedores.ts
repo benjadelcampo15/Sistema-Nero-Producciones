@@ -28,6 +28,8 @@ const esquema = z.object({
   email: z.union([z.email("Email inválido").trim(), z.literal("")]).optional().transform((v) => v || null),
   alias_cbu: opcional(60),
   notas: opcional(1000),
+  // Sin el campo (otros formularios) no se toca; "" = las dos empresas.
+  empresa: z.enum(["", "nero", "ruta"]).optional().transform((v) => (v === undefined ? undefined : v || null)),
 });
 
 export async function guardarProveedor(id: string | null, _previo: EstadoProveedor, formData: FormData): Promise<EstadoProveedor> {

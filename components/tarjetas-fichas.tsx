@@ -16,6 +16,8 @@ export type Ficha = {
   total: number;
   cantidad: number;
   ultima: string | null;
+  /** Saldo pendiente de la cuenta corriente con la empresa elegida. */
+  saldo?: number;
 };
 
 const COLORES = ["bg-sky-100 text-sky-800", "bg-amber-100 text-amber-800", "bg-violet-100 text-violet-800", "bg-emerald-100 text-emerald-800", "bg-rose-100 text-rose-800", "bg-stone-200 text-stone-700"];
@@ -36,9 +38,13 @@ const normalizar = (t: string) =>
 type Rutas = {
   /** Ficha: se le agrega "/<id>". */
   ficha: string;
+  /** Se agrega al link de la ficha (ej. "?empresa=ruta"). */
+  consulta?: string;
   /** Botón principal; "{id}" se reemplaza por el id. */
   accion?: { texto: string; href: string };
   agregar?: { texto: string; href: string };
+  /** "Le debemos" o "Nos debe": se muestra si hay saldo. */
+  saldo?: string;
 };
 
 /** Grilla de tarjetas compactas con buscador (por nombre o CUIT), como Clientes y Proveedores. */
@@ -90,8 +96,15 @@ export function TarjetasFichas({ fichas: clientes, mes, editable, rutas }: { fic
               </p>
             </div>
 
+            {rutas.saldo && (c.saldo ?? 0) > 0 && (
+              <Link href={`${rutas.ficha}/${c.id}${rutas.consulta ?? ""}#cuenta`} className="-mt-1 flex items-center justify-between rounded-lg bg-amber-50 px-3 py-1.5 text-sm text-amber-900 hover:bg-amber-100">
+                <span>{rutas.saldo}</span>
+                <span className="font-mono font-semibold">{formatoPesos(c.saldo ?? 0)}</span>
+              </Link>
+            )}
+
             <div className="flex gap-2">
-              <Link href={`${rutas.ficha}/${c.id}`} className="boton-secundario flex-1 py-1.5 text-center text-sm">Ver ficha</Link>
+              <Link href={`${rutas.ficha}/${c.id}${rutas.consulta ?? ""}`} className="boton-secundario flex-1 py-1.5 text-center text-sm">Ver ficha</Link>
               {editable && c.activo && rutas.accion && (
                 <Link href={rutas.accion.href.replace("{id}", c.id)} className="boton flex-1 py-1.5 text-center text-sm">{rutas.accion.texto}</Link>
               )}

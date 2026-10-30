@@ -3,6 +3,7 @@ import Link from "next/link";
 const ENLACES = [
   { href: "/facturas", nombre: "Proveedores" },
   { href: "/facturas/lista", nombre: "Facturas" },
+  { href: "/facturas/cuentas", nombre: "Cuentas corrientes" },
 ];
 
 export function NavegacionFacturas({ actual }: { actual: string }) {

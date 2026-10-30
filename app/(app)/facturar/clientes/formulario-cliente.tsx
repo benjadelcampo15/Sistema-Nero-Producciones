@@ -4,6 +4,8 @@ import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cambiarEstadoCliente, guardarCliente, type EstadoCliente } from "@/lib/clientes/acciones";
 import { CONDICIONES_IVA, TIPOS_DOC } from "@/lib/facturar/tipos";
+import type { Empresa } from "@/lib/empresas";
+import { CampoEmpresaFicha } from "@/components/cuenta-corriente/campo-empresa";
 
 export type ClienteEditable = {
   id: string;
@@ -15,6 +17,7 @@ export type ClienteEditable = {
   telefono: string | null;
   domicilio: string | null;
   notas: string | null;
+  empresa?: Empresa | null;
 };
 
 /** Alta (sin cliente) o edición de un cliente. */
@@ -70,10 +73,11 @@ export function FormularioCliente({ cliente }: { cliente?: ClienteEditable }) {
           <label className="etiqueta">Domicilio</label>
           <input name="domicilio" maxLength={200} defaultValue={v("domicilio", cliente?.domicilio ?? "")} className="campo" />
         </div>
-        <div className="lg:col-span-2">
+        <div>
           <label className="etiqueta">Notas</label>
           <input name="notas" maxLength={1000} defaultValue={v("notas", cliente?.notas ?? "")} className="campo" />
         </div>
+        <CampoEmpresaFicha id={`empresa-${cliente?.id ?? "nuevo"}`} defecto={v("empresa", cliente?.empresa ?? "")} />
       </div>
       {estado.error && <p className="alerta-error">{estado.error}</p>}
       {estado.ok && <p className="text-sm text-green-700">{estado.ok}</p>}

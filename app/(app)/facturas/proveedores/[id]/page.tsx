@@ -7,9 +7,11 @@ import { formatoDocumento } from "@/lib/cuit";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { SinAcceso } from "../../../sin-acceso";
 import { BotonBorrarProveedor, FormularioProveedor } from "../formulario-proveedor";
+import { SeccionCuentaCorriente } from "@/components/cuenta-corriente/seccion";
+import { EMPRESAS, NOMBRE_EMPRESA, leerEmpresa } from "@/lib/empresas";
 
 /** Ficha del proveedor: sus datos, lo facturado y sus facturas. */
-export default async function PaginaFichaProveedor({ params }: PageProps<"/facturas/proveedores/[id]">) {
+export default async function PaginaFichaProveedor({ params, searchParams }: PageProps<"/facturas/proveedores/[id]">) {
   const usuario = await obtenerUsuario();
   if (!puede(usuario, "facturas", "ver")) return <SinAcceso />;
   const editable = puede(usuario, "facturas", "editar");
@@ -18,16 +20,22 @@ export default async function PaginaFichaProveedor({ params }: PageProps<"/factu
   if (!proveedor) notFound();
   const [resumen, facturas] = await Promise.all([resumenFacturasPorProveedor(), proveedor.cuit ? facturasDeCuit(proveedor.cuit) : Promise.resolve([])]);
   const r = proveedor.cuit ? resumen.get(proveedor.cuit) : undefined;
+  // Las empresas con las que trabaja; la cuenta corriente se ve de a una.
+  const empresas = proveedor.empresa ? [proveedor.empresa] : EMPRESAS;
+  const pedida = (await searchParams).empresa;
+  const empresa = proveedor.empresa ?? leerEmpresa(pedida);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <Link href="/facturas" className="text-sm text-stone-500 hover:text-stone-900">← Proveedores</Link>
+          <Link href={`/facturas?empresa=${empresa}`} className="text-sm text-stone-500 hover:text-stone-900">← Proveedores</Link>
           <h1 className="mt-1 text-2xl font-semibold">{proveedor.razon_social}</h1>
           <p className="text-sm text-stone-500">
             <span className="font-mono">{proveedor.cuit ? formatoDocumento(80, proveedor.cuit) : "Sin CUIT"}</span>
             {proveedor.alias_cbu && <span className="font-mono"> · Alias {proveedor.alias_cbu}</span>}
+            {" · "}
+            {proveedor.empresa ? NOMBRE_EMPRESA[proveedor.empresa] : `${NOMBRE_EMPRESA.nero} y ${NOMBRE_EMPRESA.ruta}`}
           </p>
         </div>
         {editable && (
@@ -43,6 +51,19 @@ export default async function PaginaFichaProveedor({ params }: PageProps<"/factu
         <Cifra titulo="Este año" valor={formatoPesos(r?.anio ?? 0)} />
         <Cifra titulo="Total aprobado" valor={formatoPesos(r?.total ?? 0)} detalle={r ? `${r.cantidad} facturas${r.ultima ? ` · última ${formatoFecha(r.ultima)}` : ""}` : "Sin facturas"} />
       </div>
+
+      {proveedor.cuit ? (
+        <SeccionCuentaCorriente
+          tipo="pago"
+          id={proveedor.id}
+          empresas={empresas}
+          empresa={empresa}
+          href={(e) => `/facturas/proveedores/${proveedor.id}?empresa=${e}#cuenta`}
+          editable={editable || puede(usuario, "financiero", "editar")}
+        />
+      ) : (
+        <p className="tarjeta p-4 text-sm text-stone-500">Cargale el CUIT para ver su cuenta corriente: se arma con sus facturas.</p>
+      )}
 
       <section className="tarjeta space-y-3">
         <h2 className="font-semibold">Datos</h2>

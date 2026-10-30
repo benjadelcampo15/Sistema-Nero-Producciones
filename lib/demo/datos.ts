@@ -43,7 +43,7 @@ export async function cargarDemo(sb: SupabaseClient, url: string, clave = CLAVE_
   // ─── 1. Vaciar la base de la demo ────────────────────────────────────────────
   for (const t of [
     "movimientos_stock", "salidas_stock", "pedido_items", "pedidos", "proveedor_productos", "productos",
-    "extracto_lineas", "extractos", "cheques", "saldos_bancarios", "transacciones", "comprobantes_emitidos",
+    "extracto_lineas", "extractos", "cheques", "saldos_bancarios", "pago_aplicaciones", "comprobantes_emitidos", "transacciones", "pagos_cuenta", "facturas",
     "convocados", "puestos_evento", "polizas", "planillas_evento", "presupuestos", "eventos", "clientes", "proveedores",
     "personal_envios", "personal", "asiento_lineas", "asientos",
   ]) await vaciar(t);
@@ -108,7 +108,7 @@ export async function cargarDemo(sb: SupabaseClient, url: string, clave = CLAVE_
     "id, razon_social",
   );
   const [andina, delValle] = await insertar("proveedores", [
-    { razon_social: "Distribuidora Andina", contacto: "Pablo", telefono: "2610000001", email: "pedidos@distandina.demo", cuit: "30711111119" },
+    { razon_social: "Distribuidora Andina", contacto: "Pablo", telefono: "2610000001", email: "pedidos@distandina.demo", cuit: "30711111119", empresa: "nero" },
     { razon_social: "Bebidas del Valle", contacto: "Carla", telefono: "2610000002", email: "ventas@delvalle.demo", cuit: "30722222225" },
   ]);
   const personal = await insertar(
@@ -278,6 +278,45 @@ export async function cargarDemo(sb: SupabaseClient, url: string, clave = CLAVE_
   chequesFilas.push({ tipo: "recibido", estado: "pendiente", electronico: true, numero: "45879123", banco: "Banco Nación", monto: 6_000_000, fecha_emision: dia(-4), fecha_pago: dia(12), contraparte: "Club Social Mendoza", empresa: "nero" });
   await insertar("transacciones", movimientos);
   await insertar("cheques", chequesFilas);
+
+  // ─── Cuentas corrientes: facturas de proveedores y a clientes sin pagar ────
+  const cuitAndina = "30711111119";
+  const facturasProveedor = [
+    { numero: "00004512", dias: -40, total: 2_350_000 },
+    { numero: "00004598", dias: -18, total: 1_480_000 },
+    { numero: "00004650", dias: -5, total: 960_000 },
+  ];
+  for (const fp of facturasProveedor) {
+    const [fa] = await insertar("facturas", {
+      archivo_path: `demo/andina-${fp.numero}.pdf`, archivo_nombre: `Factura ${fp.numero}.pdf`, archivo_tipo: "application/pdf", estado: "aprobada",
+      tipo_comprobante: "Factura A", punto_venta: "0003", numero: fp.numero, fecha_emision: dia(fp.dias), cuit_emisor: cuitAndina,
+      razon_social_emisor: "Distribuidora Andina", total: fp.total, iva: redondo((fp.total * 0.21) / 1.21, 1), neto: redondo(fp.total / 1.21, 1), empresa: "nero",
+    });
+    await insertar("transacciones", {
+      empresa: "nero", tipo: "egreso", monto: fp.total, fecha: dia(fp.dias), descripcion: "Bebidas para la barra", contraparte: "Distribuidora Andina",
+      categoria_id: categoria("egreso", "Proveedores"), medio_pago: "transferencia", estado: "pendiente", facturado: true, iva: redondo((fp.total * 0.21) / 1.21, 1), factura_id: fa.id,
+    });
+  }
+  const club = clientes.find((x) => x.razon_social === "Club Social Mendoza")!;
+  const bodega = clientes.find((x) => x.razon_social === "Bodega Los Álamos S.A.")!;
+  const facturasCliente = [
+    { cliente: club, nro: 231, dias: -25, total: 8_500_000, doc: "30698765431", cond: 4 },
+    { cliente: club, nro: 236, dias: -3, total: 4_200_000, doc: "30698765431", cond: 4 },
+    { cliente: bodega, nro: 228, dias: -30, total: 6_050_000, doc: "30712345671", cond: 1 },
+  ];
+  for (const fc of facturasCliente) {
+    const [trx] = await insertar("transacciones", {
+      empresa: "nero", tipo: "ingreso", monto: fc.total, fecha: dia(fc.dias), descripcion: "Producción integral del evento", contraparte: fc.cliente.razon_social,
+      categoria_id: categoria("ingreso", "Eventos"), medio_pago: "transferencia", estado: "pendiente", facturado: true, iva: redondo((fc.total * 0.21) / 1.21, 1),
+    });
+    await insertar("comprobantes_emitidos", {
+      entorno: "produccion", estado: "emitido", tipo_cbte: fc.cond === 1 ? 1 : 6, punto_venta: 2, numero: fc.nro, fecha: dia(fc.dias), concepto: 2,
+      fecha_servicio_desde: dia(fc.dias), fecha_servicio_hasta: dia(fc.dias), fecha_vto_pago: dia(fc.dias + 15), doc_tipo: 80, doc_nro: fc.doc,
+      receptor_nombre: fc.cliente.razon_social, condicion_iva_receptor: fc.cond, items: [{ descripcion: "Producción integral del evento", cantidad: 1, precio: fc.total }],
+      neto: redondo(fc.total / 1.21, 1), iva: redondo((fc.total * 0.21) / 1.21, 1), total: fc.total, cae: `7643${fc.nro}112233`, cae_vto: dia(fc.dias + 10),
+      empresa: "nero", cliente_id: fc.cliente.id, transaccion_id: trx.id, token: `demo-${fc.nro}-${Math.round(azar() * 1e9)}`,
+    });
+  }
 
 
   return `${clientes.length} clientes · ${productos.length} productos · ${eventos.length} eventos · ${movimientos.length} movimientos · ${chequesFilas.length} cheques`;

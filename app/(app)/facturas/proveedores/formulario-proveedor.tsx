@@ -3,6 +3,8 @@
 import { useActionState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { borrarProveedor, guardarProveedor, type EstadoProveedor } from "@/lib/facturas/proveedores";
+import type { Empresa } from "@/lib/empresas";
+import { CampoEmpresaFicha } from "@/components/cuenta-corriente/campo-empresa";
 
 export type Proveedor = {
   id: string;
@@ -14,6 +16,7 @@ export type Proveedor = {
   alias_cbu: string | null;
   notas: string | null;
   activo: boolean;
+  empresa: Empresa | null;
 };
 
 /** Alta (sin proveedor) o edición de un proveedor. */
@@ -54,10 +57,11 @@ export function FormularioProveedor({ proveedor }: { proveedor?: Proveedor }) {
           <label htmlFor={id("email")} className="etiqueta">Email</label>
           <input id={id("email")} name="email" type="email" maxLength={120} defaultValue={v("email")} className="campo" />
         </div>
-        <div className="lg:col-span-4">
+        <div className="lg:col-span-3">
           <label htmlFor={id("notas")} className="etiqueta">Notas</label>
           <input id={id("notas")} name="notas" maxLength={1000} defaultValue={v("notas")} className="campo" />
         </div>
+        <CampoEmpresaFicha id={id("empresa")} defecto={estado.valores?.empresa ?? proveedor?.empresa ?? ""} />
       </div>
       {estado.error && <p className="alerta-error">{estado.error}</p>}
       {estado.ok && <p className="text-sm text-green-700">{estado.ok}</p>}

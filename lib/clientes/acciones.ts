@@ -27,6 +27,8 @@ const esquema = z.object({
   telefono: textoOpcional(40),
   domicilio: textoOpcional(200),
   notas: textoOpcional(1000),
+  // Sin el campo (otros formularios) no se toca; "" = las dos empresas.
+  empresa: z.enum(["", "nero", "ruta"]).optional().transform((v) => (v === undefined ? undefined : v || null)),
 });
 
 async function exigirEdicion() {

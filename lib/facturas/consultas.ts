@@ -1,4 +1,5 @@
 import "server-only";
+import type { Empresa } from "@/lib/empresas";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { crearClienteAdmin } from "@/lib/supabase/admin";
 import { hoy, sumar } from "@/lib/formato";
@@ -70,9 +71,11 @@ export type ProveedorFicha = {
   alias_cbu: string | null;
   notas: string | null;
   activo: boolean;
+  /** null: trabaja con las dos empresas. */
+  empresa: Empresa | null;
 };
 
-const CAMPOS_PROVEEDOR = "id, cuit, razon_social, contacto, telefono, email, alias_cbu, notas, activo";
+const CAMPOS_PROVEEDOR = "id, cuit, razon_social, contacto, telefono, email, alias_cbu, notas, activo, empresa";
 
 export async function listarProveedores() {
   const supabase = await crearClienteServidor();
@@ -89,10 +92,12 @@ export async function obtenerProveedor(id: string) {
 
 export type ResumenProveedor = { cantidad: number; total: number; ultima: string | null; mes: { cantidad: number; total: number }; anio: number };
 
-/** Facturas aprobadas por CUIT del emisor: en total, en el mes y en el año actuales (por fecha de emisión). */
-export async function resumenFacturasPorProveedor() {
+/** Facturas aprobadas por CUIT del emisor (de una empresa o de las dos): en total, en el mes y en el año actuales (por fecha de emisión). */
+export async function resumenFacturasPorProveedor(empresa?: Empresa) {
   const supabase = await crearClienteServidor();
-  const { data } = await supabase.from("facturas").select("cuit_emisor, total, fecha_emision").eq("estado", "aprobada").limit(20000);
+  let consulta = supabase.from("facturas").select("cuit_emisor, total, fecha_emision").eq("estado", "aprobada").limit(20000);
+  if (empresa) consulta = consulta.eq("empresa", empresa);
+  const { data } = await consulta;
   const mes = hoy().slice(0, 7);
   const anio = hoy().slice(0, 4);
   const resumen = new Map<string, ResumenProveedor>();
