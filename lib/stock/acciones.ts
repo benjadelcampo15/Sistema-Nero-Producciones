@@ -314,19 +314,23 @@ async function tieneStock(depositoId: string) {
 }
 
 /**
- * Elimina movimientos de stock ya hechos: el stock queda como si no se hubieran hecho.
+ * Elimina movimientos de stock ya hechos: el stock queda como si no se hubieran hecho, pero
+ * siguen en el historial marcados como eliminados, con el motivo (obligatorio).
  * - "movimiento": uno suelto o un producto de una entrada / salida (una transferencia se borra entera).
  * - "entrada" / "salida": la entrada o salida de varios productos completa.
- * La base no deja borrar si algún producto quedaría con stock negativo. Queda en la auditoría.
+ * La base no deja eliminar si algún producto quedaría con stock negativo.
  */
-export async function eliminarMovimientoStock(que: "movimiento" | "entrada" | "salida", id: string): Promise<{ error?: string }> {
+export async function eliminarMovimientoStock(que: "movimiento" | "entrada" | "salida", id: string, motivo: string): Promise<{ error?: string }> {
   await exigirPermiso("stock", "editar");
   if (!z.uuid().safeParse(id).success) return { error: "Movimiento inválido" };
   const funcion = { movimiento: "eliminar_movimiento_stock", entrada: "eliminar_entrada_stock", salida: "eliminar_salida_stock" }[que];
   if (!funcion) return { error: "Movimiento inválido" };
+  const texto = String(motivo ?? "").trim();
+  if (!texto) return { error: "Escribí el motivo de la eliminación" };
+  if (texto.length > 200) return { error: "El motivo puede tener hasta 200 caracteres" };
 
   const supabase = await crearClienteServidor();
-  const { error } = await supabase.rpc(funcion, { p_id: id });
+  const { error } = await supabase.rpc(funcion, { p_id: id, p_motivo: texto });
   // P0001: los avisos de la base (stock negativo, ya eliminado, sin permiso) se muestran tal cual.
   if (error) return { error: error.code === "P0001" ? error.message : "No se pudo eliminar" };
   refresh();

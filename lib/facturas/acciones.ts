@@ -346,7 +346,7 @@ export async function borrarFactura(id: string): Promise<{ error?: string }> {
   if (errorMovimiento) return { error: "No se pudo anular el movimiento de Financiero" };
 
   // 2) Se borra la factura (lo que la referenciaba queda sin referencia).
-  const { data: entradas } = await admin.from("movimientos_stock").select("producto_id, deposito_id, cantidad").eq("factura_id", id).eq("tipo", "entrada");
+  const { data: entradas } = await admin.from("movimientos_stock").select("producto_id, deposito_id, cantidad").eq("factura_id", id).eq("tipo", "entrada").is("eliminado_en", null);
   const { error } = await admin.from("facturas").delete().eq("id", id);
   if (error) return { error: "No se pudo borrar la factura" };
   await admin.storage.from("facturas").remove([f.archivo_path]);

@@ -34,6 +34,9 @@ export type MovimientoStock = {
   salida_id: string | null;
   entrada_id: string | null;
   pedido_id: string | null;
+  /** Si se eliminó: cuándo y por qué. Lo eliminado sigue en el historial pero no cuenta para el stock. */
+  eliminado_en: string | null;
+  motivo_eliminacion: string | null;
   producto: { id: string; nombre: string; unidad: string };
   deposito: { id: string; nombre: string };
   evento: { id: string; nombre: string } | null;
@@ -70,6 +73,9 @@ export type ResumenSalida = {
   creado_en: string;
   modo: ModoSalida;
   motivo: string | null;
+  /** Si se eliminó: cuándo y por qué. Lo eliminado sigue en el historial pero no cuenta para el stock. */
+  eliminado_en: string | null;
+  motivo_eliminacion: string | null;
   deposito: { id: string; nombre: string };
   evento: { id: string; nombre: string } | null;
   productos: number;
@@ -85,6 +91,9 @@ export type LineaSalida = {
   costo_unitario: number | null;
   stock_inicial: number | null;
   stock_contado: number | null;
+  /** Si se eliminó: cuándo y por qué. Lo eliminado sigue en el historial pero no cuenta para el stock. */
+  eliminado_en: string | null;
+  motivo_eliminacion: string | null;
 };
 
 /** Una entrada de varios productos, resumida para el historial. */
@@ -93,6 +102,9 @@ export type ResumenEntrada = {
   fecha: string;
   creado_en: string;
   motivo: string | null;
+  /** Si se eliminó: cuándo y por qué. Lo eliminado sigue en el historial pero no cuenta para el stock. */
+  eliminado_en: string | null;
+  motivo_eliminacion: string | null;
   deposito: { id: string; nombre: string };
   evento: { id: string; nombre: string } | null;
   productos: number;
@@ -106,4 +118,7 @@ export type LineaEntrada = {
   producto: { id: string; nombre: string; unidad: string };
   cantidad: number;
   costo_unitario: number | null;
+  /** Si se eliminó: cuándo y por qué. Lo eliminado sigue en el historial pero no cuenta para el stock. */
+  eliminado_en: string | null;
+  motivo_eliminacion: string | null;
 };

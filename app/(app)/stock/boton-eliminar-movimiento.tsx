@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { eliminarMovimientoStock } from "@/lib/stock/acciones";
 
 /**
- * Elimina un movimiento de stock (o una entrada / salida completa) después de confirmar.
- * Con `volverA`, al terminar vuelve a esa página (ej.: desde el detalle de una salida borrada).
+ * Elimina un movimiento de stock (o una entrada / salida completa) pidiendo el motivo.
+ * Lo eliminado sigue en el historial, marcado, y deja de contar para el stock.
+ * Con `volverA`, al terminar vuelve a esa página.
  */
 export function BotonEliminarMovimiento({
   que,
@@ -26,20 +27,25 @@ export function BotonEliminarMovimiento({
   const router = useRouter();
   const [pendiente, iniciar] = useTransition();
 
+  function eliminar() {
+    let motivo: string | null = "";
+    // Se vuelve a pedir mientras quede vacío; Cancelar no elimina nada.
+    while (motivo !== null && !motivo.trim()) {
+      motivo = window.prompt(
+        `${confirmacion}\n\nEl stock queda como si no se hubiera hecho, y en el historial se ve como eliminado.\n\nMotivo de la eliminación (obligatorio):`,
+      );
+    }
+    if (motivo === null) return;
+    const texto = motivo.trim().slice(0, 200);
+    iniciar(async () => {
+      const r = await eliminarMovimientoStock(que, id, texto);
+      if (r.error) return window.alert(r.error);
+      if (volverA) router.push(volverA);
+    });
+  }
+
   return (
-    <button
-      type="button"
-      disabled={pendiente}
-      className={className}
-      onClick={() => {
-        if (!window.confirm(`${confirmacion}\n\nEl stock queda como si no se hubiera hecho. Queda registrado en la auditoría.`)) return;
-        iniciar(async () => {
-          const r = await eliminarMovimientoStock(que, id);
-          if (r.error) return window.alert(r.error);
-          if (volverA) router.push(volverA);
-        });
-      }}
-    >
+    <button type="button" disabled={pendiente} className={className} onClick={eliminar}>
       {pendiente ? "Eliminando…" : texto}
     </button>
   );

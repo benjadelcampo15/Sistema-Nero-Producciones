@@ -12,6 +12,13 @@ export function formatoFecha(fecha: string) {
   return `${dia}/${mes}/${anio}`;
 }
 
+/** Un instante (timestamp) como "31/10/2026 16:05", en hora de Argentina. */
+export function formatoFechaHora(instante: string) {
+  return new Intl.DateTimeFormat("es-AR", { timeZone: ZONA, day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
+    .format(new Date(instante))
+    .replace(",", "");
+}
+
 /** Fecha de hoy en Argentina como "YYYY-MM-DD". */
 export function hoy() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: ZONA }).format(new Date());

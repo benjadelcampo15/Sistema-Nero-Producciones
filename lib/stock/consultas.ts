@@ -54,7 +54,7 @@ export async function listarMovimientos(filtros: { deposito?: string; producto?:
   let consulta = supabase
     .from("movimientos_stock")
     .select(
-      "id, tipo, cantidad, costo_unitario, fecha, creado_en, motivo, transferencia_id, factura_id, salida_id, entrada_id, pedido_id, producto:productos(id, nombre, unidad), deposito:depositos(id, nombre), evento:eventos(id, nombre)",
+      "id, tipo, cantidad, costo_unitario, fecha, creado_en, motivo, transferencia_id, factura_id, salida_id, entrada_id, pedido_id, eliminado_en, motivo_eliminacion, producto:productos(id, nombre, unidad), deposito:depositos(id, nombre), evento:eventos(id, nombre)",
     )
     .order("fecha", { ascending: false })
     .order("creado_en", { ascending: false })
@@ -72,13 +72,18 @@ export async function listarMovimientos(filtros: { deposito?: string; producto?:
 }
 
 type FilaSalida = Omit<ResumenSalida, "productos" | "costoTotal" | "sinCosto"> & {
-  lineas: { cantidad: number | string; costo_unitario: number | string | null }[];
+  lineas: { cantidad: number | string; costo_unitario: number | string | null; eliminado_en: string | null }[];
 };
 
-const CAMPOS_SALIDA = "id, fecha, creado_en, modo, motivo, deposito:depositos(id, nombre), evento:eventos(id, nombre)";
+const CAMPOS_SALIDA = "id, fecha, creado_en, modo, motivo, eliminado_en, motivo_eliminacion, deposito:depositos(id, nombre), evento:eventos(id, nombre)";
+
+/** Los productos que cuentan: los vigentes, o todos si la salida / entrada entera está eliminada (para ver qué tenía). */
+const lineasQueCuentan = <L extends { eliminado_en: string | null }>(eliminada: string | null, lineas: L[]) =>
+  eliminada ? lineas : lineas.filter((l) => !l.eliminado_en);
 
 function resumir(s: FilaSalida): ResumenSalida {
-  const { lineas, ...resto } = s;
+  const { lineas: todas, ...resto } = s;
+  const lineas = lineasQueCuentan(s.eliminado_en, todas);
   const conCosto = lineas.filter((l) => l.costo_unitario !== null);
   return {
     ...resto,
@@ -93,7 +98,7 @@ export async function listarSalidas(filtros: { deposito?: string } = {}) {
   const supabase = await crearClienteServidor();
   let consulta = supabase
     .from("salidas_stock")
-    .select(`${CAMPOS_SALIDA}, lineas:movimientos_stock(cantidad, costo_unitario)`)
+    .select(`${CAMPOS_SALIDA}, lineas:movimientos_stock(cantidad, costo_unitario, eliminado_en)`)
     .order("fecha", { ascending: false })
     .order("creado_en", { ascending: false })
     .limit(200);
@@ -108,7 +113,7 @@ export async function obtenerSalida(id: string) {
   const supabase = await crearClienteServidor();
   const { data } = await supabase
     .from("salidas_stock")
-    .select(`${CAMPOS_SALIDA}, lineas:movimientos_stock(id, cantidad, costo_unitario, stock_inicial, stock_contado, producto:productos(id, nombre, unidad))`)
+    .select(`${CAMPOS_SALIDA}, lineas:movimientos_stock(id, cantidad, costo_unitario, stock_inicial, stock_contado, eliminado_en, motivo_eliminacion, producto:productos(id, nombre, unidad))`)
     .eq("id", id)
     .maybeSingle();
   if (!data) return null;
@@ -125,13 +130,14 @@ export async function obtenerSalida(id: string) {
   return { ...resumir(fila as FilaSalida), lineas };
 }
 type FilaEntrada = Omit<ResumenEntrada, "productos" | "costoTotal" | "sinCosto"> & {
-  lineas: { cantidad: number | string; costo_unitario: number | string | null }[];
+  lineas: { cantidad: number | string; costo_unitario: number | string | null; eliminado_en: string | null }[];
 };
 
-const CAMPOS_ENTRADA = "id, fecha, creado_en, motivo, deposito:depositos(id, nombre), evento:eventos(id, nombre)";
+const CAMPOS_ENTRADA = "id, fecha, creado_en, motivo, eliminado_en, motivo_eliminacion, deposito:depositos(id, nombre), evento:eventos(id, nombre)";
 
 function resumirEntrada(e: FilaEntrada): ResumenEntrada {
-  const { lineas, ...resto } = e;
+  const { lineas: todas, ...resto } = e;
+  const lineas = lineasQueCuentan(e.eliminado_en, todas);
   const conCosto = lineas.filter((l) => l.costo_unitario !== null);
   return {
     ...resto,
@@ -146,7 +152,7 @@ export async function listarEntradas(filtros: { deposito?: string } = {}) {
   const supabase = await crearClienteServidor();
   let consulta = supabase
     .from("entradas_stock")
-    .select(`${CAMPOS_ENTRADA}, lineas:movimientos_stock(cantidad, costo_unitario)`)
+    .select(`${CAMPOS_ENTRADA}, lineas:movimientos_stock(cantidad, costo_unitario, eliminado_en)`)
     .order("fecha", { ascending: false })
     .order("creado_en", { ascending: false })
     .limit(200);
@@ -161,7 +167,7 @@ export async function obtenerEntrada(id: string) {
   const supabase = await crearClienteServidor();
   const { data } = await supabase
     .from("entradas_stock")
-    .select(`${CAMPOS_ENTRADA}, lineas:movimientos_stock(id, cantidad, costo_unitario, producto:productos(id, nombre, unidad))`)
+    .select(`${CAMPOS_ENTRADA}, lineas:movimientos_stock(id, cantidad, costo_unitario, eliminado_en, motivo_eliminacion, producto:productos(id, nombre, unidad))`)
     .eq("id", id)
     .maybeSingle();
   if (!data) return null;

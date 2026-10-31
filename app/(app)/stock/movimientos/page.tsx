@@ -8,6 +8,7 @@ import { SinAcceso } from "../../sin-acceso";
 import { NavegacionStock } from "../navegacion";
 import { FormularioMovimiento } from "./formulario-movimiento";
 import { BotonEliminarMovimiento } from "../boton-eliminar-movimiento";
+import { EtiquetaEliminado, NotaEliminado } from "../nota-eliminado";
 import type { MovimientoStock } from "@/lib/stock/tipos";
 
 /** Texto de confirmación para borrar un movimiento suelto (o un producto de una entrada / salida). */
@@ -61,10 +62,9 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
   ]
     .sort((a, b) => b.clave.localeCompare(a.clave))
     .filter(({ movimiento: m, salida: s }) => {
-      // Las entradas agrupadas solo aparecen sin búsqueda.
       if (!termino) return true;
       const texto = m
-        ? [m.producto.nombre, m.deposito.nombre, m.motivo, m.evento?.nombre, m.transferencia_id ? "transferencia" : ETIQUETA[m.tipo].texto, m.salida_id ? "salida por conteo" : "", formatoFecha(m.fecha)]
+        ? [m.producto.nombre, m.deposito.nombre, m.motivo, m.evento?.nombre, m.transferencia_id ? "transferencia" : ETIQUETA[m.tipo].texto, m.salida_id ? "salida por conteo" : "", formatoFecha(m.fecha), m.eliminado_en ? `eliminado ${m.motivo_eliminacion ?? ""}` : ""]
         : [s!.deposito.nombre, s!.motivo, s!.evento?.nombre, "salida por conteo", formatoFecha(s!.fecha)];
       return normalizar(texto.filter(Boolean).join(" ")).includes(termino);
     });
@@ -132,15 +132,16 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
           {historial.length === 0 && <p className="tarjeta p-6 text-center text-sm text-stone-500">{termino ? `Ningún movimiento coincide con “${busqueda}”.` : "No hay movimientos."}</p>}
           {historial.map(({ movimiento: m, salida: s, entrada: e }) =>
             e ? (
-              <Link key={e.id} href={`/stock/entradas/${e.id}`} className="block rounded-xl border border-stone-200 bg-white p-3 shadow-sm active:bg-stone-50">
+              <Link key={e.id} href={`/stock/entradas/${e.id}`} className={`block rounded-xl border p-3 shadow-sm active:bg-stone-50 ${e.eliminado_en ? "border-stone-200 bg-stone-50 opacity-75" : "border-stone-200 bg-white"}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ETIQUETA.entrada.clase}`}>Entrada</span>
+                    {e.eliminado_en && <EtiquetaEliminado />}
                     <p className="mt-1 font-medium">
                       {e.productos} {e.productos === 1 ? "producto" : "productos"} · {e.deposito.nombre}
                     </p>
                   </div>
-                  <p className="shrink-0 text-right font-mono font-semibold">{formatoPesos(e.costoTotal)}</p>
+                  <p className={`shrink-0 text-right font-mono font-semibold ${e.eliminado_en ? "line-through" : ""}`}>{formatoPesos(e.costoTotal)}</p>
                 </div>
                 <p className="mt-1 text-xs text-stone-500">
                   {formatoFecha(e.fecha)}
@@ -148,17 +149,19 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
                   {e.sinCosto > 0 && <span className="text-amber-700"> · {e.sinCosto} sin costo</span>}
                   <span className="font-medium text-stone-900 underline"> · ver detalle</span>
                 </p>
+                {e.eliminado_en && <NotaEliminado en={e.eliminado_en} motivo={e.motivo_eliminacion} />}
               </Link>
             ) : s ? (
-              <Link key={s.id} href={`/stock/salidas/${s.id}`} className="block rounded-xl border border-stone-200 bg-white p-3 shadow-sm active:bg-stone-50">
+              <Link key={s.id} href={`/stock/salidas/${s.id}`} className={`block rounded-xl border p-3 shadow-sm active:bg-stone-50 ${s.eliminado_en ? "border-stone-200 bg-stone-50 opacity-75" : "border-stone-200 bg-white"}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ETIQUETA.salida.clase}`}>{s.modo === "conteo" ? "Salida por conteo" : "Salida"}</span>
+                    {s.eliminado_en && <EtiquetaEliminado />}
                     <p className="mt-1 font-medium">
                       {s.productos} {s.productos === 1 ? "producto" : "productos"} · {s.deposito.nombre}
                     </p>
                   </div>
-                  <p className="shrink-0 text-right font-mono font-semibold">{formatoPesos(s.costoTotal)}</p>
+                  <p className={`shrink-0 text-right font-mono font-semibold ${s.eliminado_en ? "line-through" : ""}`}>{formatoPesos(s.costoTotal)}</p>
                 </div>
                 <p className="mt-1 text-xs text-stone-500">
                   {formatoFecha(s.fecha)}
@@ -166,16 +169,18 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
                   {s.sinCosto > 0 && <span className="text-amber-700"> · {s.sinCosto} sin costo</span>}
                   <span className="font-medium text-stone-900 underline"> · ver detalle</span>
                 </p>
+                {s.eliminado_en && <NotaEliminado en={s.eliminado_en} motivo={s.motivo_eliminacion} />}
               </Link>
             ) : (
               m && (
-                <div key={m.id} className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
+                <div key={m.id} className={`rounded-xl border border-stone-200 p-3 shadow-sm ${m.eliminado_en ? "bg-stone-50 opacity-75" : "bg-white"}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ETIQUETA[m.tipo].clase}`}>{m.transferencia_id ? "Transferencia" : ETIQUETA[m.tipo].texto}</span>
+                      {m.eliminado_en && <EtiquetaEliminado />}
                       <p className="mt-1 font-medium leading-tight">{m.producto.nombre}</p>
                     </div>
-                    <p className={`shrink-0 text-right font-mono text-lg font-semibold ${m.cantidad > 0 ? "text-green-700" : "text-red-700"}`}>
+                    <p className={`shrink-0 text-right font-mono text-lg font-semibold ${m.eliminado_en ? "text-stone-400 line-through" : m.cantidad > 0 ? "text-green-700" : "text-red-700"}`}>
                       {m.cantidad > 0 ? "+" : "−"}
                       {formatoCantidad(Math.abs(m.cantidad))}
                       <span className="block text-xs font-normal text-stone-400">{m.producto.unidad}</span>
@@ -195,7 +200,8 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
                       {m.pedido_id && <Link href={`/stock/pedidos/${m.pedido_id}`} className="ml-1 underline">ver pedido</Link>}
                     </p>
                   )}
-                  {editable && (
+                  {m.eliminado_en && <NotaEliminado en={m.eliminado_en} motivo={m.motivo_eliminacion} />}
+                  {editable && !m.eliminado_en && (
                     <div className="mt-2 flex justify-end border-t border-stone-100 pt-2">
                       <BotonEliminarMovimiento que="movimiento" id={m.id} confirmacion={confirmarBorrado(m)} />
                     </div>
@@ -229,16 +235,17 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
               )}
               {historial.map(({ movimiento: m, salida: s, entrada: e }) =>
                 e ? (
-                  <tr key={e.id} className="hover:bg-stone-50">
+                  <tr key={e.id} className={e.eliminado_en ? "bg-stone-50 text-stone-400" : "hover:bg-stone-50"}>
                     <td className="whitespace-nowrap px-4 py-3 text-stone-600">{formatoFecha(e.fecha)}</td>
                     <td className="px-4 py-3">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ETIQUETA.entrada.clase}`}>Entrada</span>
+                      {e.eliminado_en && <EtiquetaEliminado />}
                     </td>
                     <td className="px-4 py-3 font-medium">{e.productos} {e.productos === 1 ? "producto" : "productos"}</td>
                     <td className="px-4 py-3 text-stone-600">{e.deposito.nombre}</td>
                     <td className="px-4 py-3 text-right text-stone-400">—</td>
                     <td className="px-4 py-3 text-right text-stone-400">—</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right font-mono font-medium">
+                    <td className={`whitespace-nowrap px-4 py-3 text-right font-mono font-medium ${e.eliminado_en ? "line-through" : ""}`}>
                       {formatoPesos(e.costoTotal)}
                       {e.sinCosto > 0 && <span className="block text-xs font-normal text-amber-700">{e.sinCosto} sin costo</span>}
                     </td>
@@ -246,28 +253,30 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
                       {e.motivo}
                       {e.evento && <span className="ml-1">({e.evento.nombre})</span>}
                       <Link href={`/stock/entradas/${e.id}`} className="ml-1 font-medium text-stone-900 underline">ver detalle</Link>
+                      {e.eliminado_en && <NotaEliminado en={e.eliminado_en} motivo={e.motivo_eliminacion} />}
                     </td>
                     {editable && (
                       <td className="px-4 py-3 text-right">
-                        <BotonEliminarMovimiento
+                        {!e.eliminado_en && <BotonEliminarMovimiento
                           que="entrada"
                           id={e.id}
                           confirmacion={`¿Eliminar la entrada completa del ${formatoFecha(e.fecha)} en ${e.deposito.nombre} (${e.productos} ${e.productos === 1 ? "producto" : "productos"})?`}
-                        />
+                        />}
                       </td>
                     )}
                   </tr>
                 ) : s ? (
-                  <tr key={s.id} className="hover:bg-stone-50">
+                  <tr key={s.id} className={s.eliminado_en ? "bg-stone-50 text-stone-400" : "hover:bg-stone-50"}>
                     <td className="whitespace-nowrap px-4 py-3 text-stone-600">{formatoFecha(s.fecha)}</td>
                     <td className="px-4 py-3">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ETIQUETA.salida.clase}`}>{s.modo === "conteo" ? "Salida por conteo" : "Salida"}</span>
+                      {s.eliminado_en && <EtiquetaEliminado />}
                     </td>
                     <td className="px-4 py-3 font-medium">{s.productos} {s.productos === 1 ? "producto" : "productos"}</td>
                     <td className="px-4 py-3 text-stone-600">{s.deposito.nombre}</td>
                     <td className="px-4 py-3 text-right text-stone-400">—</td>
                     <td className="px-4 py-3 text-right text-stone-400">—</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right font-mono font-medium">
+                    <td className={`whitespace-nowrap px-4 py-3 text-right font-mono font-medium ${s.eliminado_en ? "line-through" : ""}`}>
                       {formatoPesos(s.costoTotal)}
                       {s.sinCosto > 0 && <span className="block text-xs font-normal text-amber-700">{s.sinCosto} sin costo</span>}
                     </td>
@@ -275,28 +284,30 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
                       {s.motivo}
                       {s.evento && <span className="ml-1">({s.evento.nombre})</span>}
                       <Link href={`/stock/salidas/${s.id}`} className="ml-1 font-medium text-stone-900 underline">ver detalle</Link>
+                      {s.eliminado_en && <NotaEliminado en={s.eliminado_en} motivo={s.motivo_eliminacion} />}
                     </td>
                     {editable && (
                       <td className="px-4 py-3 text-right">
-                        <BotonEliminarMovimiento
+                        {!s.eliminado_en && <BotonEliminarMovimiento
                           que="salida"
                           id={s.id}
                           confirmacion={`¿Eliminar la salida completa del ${formatoFecha(s.fecha)} en ${s.deposito.nombre} (${s.productos} ${s.productos === 1 ? "producto" : "productos"})?`}
-                        />
+                        />}
                       </td>
                     )}
                   </tr>
                 ) : m && (
-                <tr key={m.id} className="hover:bg-stone-50">
+                <tr key={m.id} className={m.eliminado_en ? "bg-stone-50 text-stone-400" : "hover:bg-stone-50"}>
                   <td className="whitespace-nowrap px-4 py-3 text-stone-600">{formatoFecha(m.fecha)}</td>
                   <td className="px-4 py-3">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ETIQUETA[m.tipo].clase}`}>
                       {m.transferencia_id ? "Transferencia" : ETIQUETA[m.tipo].texto}
                     </span>
+                    {m.eliminado_en && <EtiquetaEliminado />}
                   </td>
                   <td className="px-4 py-3 font-medium">{m.producto.nombre}</td>
                   <td className="px-4 py-3 text-stone-600">{m.deposito.nombre}</td>
-                  <td className={`whitespace-nowrap px-4 py-3 text-right font-mono font-medium ${m.cantidad > 0 ? "text-green-700" : "text-red-700"}`}>
+                  <td className={`whitespace-nowrap px-4 py-3 text-right font-mono font-medium ${m.eliminado_en ? "text-stone-400 line-through" : m.cantidad > 0 ? "text-green-700" : "text-red-700"}`}>
                     {m.cantidad > 0 ? "+" : "−"}
                     {formatoCantidad(Math.abs(m.cantidad))} <span className="text-xs text-stone-400">{m.producto.unidad}</span>
                   </td>
@@ -333,10 +344,11 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
                         ver pedido
                       </Link>
                     )}
+                    {m.eliminado_en && <NotaEliminado en={m.eliminado_en} motivo={m.motivo_eliminacion} />}
                   </td>
                   {editable && (
                     <td className="px-4 py-3 text-right">
-                      <BotonEliminarMovimiento que="movimiento" id={m.id} confirmacion={confirmarBorrado(m)} />
+                      {!m.eliminado_en && <BotonEliminarMovimiento que="movimiento" id={m.id} confirmacion={confirmarBorrado(m)} />}
                     </td>
                   )}
                 </tr>
