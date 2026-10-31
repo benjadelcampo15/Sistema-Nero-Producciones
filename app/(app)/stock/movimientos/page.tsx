@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
-import { listarDepositos, listarMovimientos, listarProductos, listarSalidas, obtenerStock } from "@/lib/stock/consultas";
+import { listarDepositos, listarEntradas, listarMovimientos, listarProductos, listarSalidas, obtenerStock } from "@/lib/stock/consultas";
 import { obtenerEventosResumidos } from "@/lib/financiero/consultas";
 import { formatoCantidad } from "@/lib/stock/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
@@ -31,23 +31,26 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
   const busqueda = typeof q === "string" ? q.trim().slice(0, 100) : "";
   const termino = normalizar(busqueda);
 
-  // Sin filtro de producto ni búsqueda, las salidas de varios productos se ven agrupadas (una fila por salida).
-  // Al buscar se ven producto por producto, así se encuentra cualquier producto de una salida.
+  // Sin filtro de producto ni búsqueda, las salidas y entradas de varios productos se ven agrupadas (una fila por cada una).
+  // Al buscar se ven producto por producto, así se encuentra cualquier producto de una salida o entrada.
   const agrupar = !filtroProducto && !termino;
-  const [productos, depositos, movimientos, eventos, stock, salidas] = await Promise.all([
+  const [productos, depositos, movimientos, eventos, stock, salidas, entradas] = await Promise.all([
     listarProductos(),
     listarDepositos(),
     listarMovimientos({ producto: filtroProducto, deposito: filtroDeposito, sinSalidas: agrupar }),
     editable ? obtenerEventosResumidos() : [],
     editable ? obtenerStock() : [],
     agrupar ? listarSalidas({ deposito: filtroDeposito }) : [],
+    agrupar ? listarEntradas({ deposito: filtroDeposito }) : [],
   ]);
   const historial = [
-    ...movimientos.map((m) => ({ clave: m.fecha + m.creado_en, movimiento: m, salida: null })),
-    ...salidas.map((s) => ({ clave: s.fecha + s.creado_en, movimiento: null, salida: s })),
+    ...movimientos.map((m) => ({ clave: m.fecha + m.creado_en, movimiento: m, salida: null, entrada: null })),
+    ...salidas.map((s) => ({ clave: s.fecha + s.creado_en, movimiento: null, salida: s, entrada: null })),
+    ...entradas.map((e) => ({ clave: e.fecha + e.creado_en, movimiento: null, salida: null, entrada: e })),
   ]
     .sort((a, b) => b.clave.localeCompare(a.clave))
     .filter(({ movimiento: m, salida: s }) => {
+      // Las entradas agrupadas solo aparecen sin búsqueda.
       if (!termino) return true;
       const texto = m
         ? [m.producto.nombre, m.deposito.nombre, m.motivo, m.evento?.nombre, m.transferencia_id ? "transferencia" : ETIQUETA[m.tipo].texto, m.salida_id ? "salida por conteo" : "", formatoFecha(m.fecha)]
@@ -116,8 +119,26 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
         {/* Celular: una tarjeta por movimiento. */}
         <div className="space-y-2 md:hidden">
           {historial.length === 0 && <p className="tarjeta p-6 text-center text-sm text-stone-500">{termino ? `Ningún movimiento coincide con “${busqueda}”.` : "No hay movimientos."}</p>}
-          {historial.map(({ movimiento: m, salida: s }) =>
-            s ? (
+          {historial.map(({ movimiento: m, salida: s, entrada: e }) =>
+            e ? (
+              <Link key={e.id} href={`/stock/entradas/${e.id}`} className="block rounded-xl border border-stone-200 bg-white p-3 shadow-sm active:bg-stone-50">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ETIQUETA.entrada.clase}`}>Entrada</span>
+                    <p className="mt-1 font-medium">
+                      {e.productos} {e.productos === 1 ? "producto" : "productos"} · {e.deposito.nombre}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-right font-mono font-semibold">{formatoPesos(e.costoTotal)}</p>
+                </div>
+                <p className="mt-1 text-xs text-stone-500">
+                  {formatoFecha(e.fecha)}
+                  {e.motivo && ` · ${e.motivo}`}
+                  {e.sinCosto > 0 && <span className="text-amber-700"> · {e.sinCosto} sin costo</span>}
+                  <span className="font-medium text-stone-900 underline"> · ver detalle</span>
+                </p>
+              </Link>
+            ) : s ? (
               <Link key={s.id} href={`/stock/salidas/${s.id}`} className="block rounded-xl border border-stone-200 bg-white p-3 shadow-sm active:bg-stone-50">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -153,12 +174,13 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
                     {formatoFecha(m.fecha)} · {m.deposito.nombre}
                     {m.costo_unitario !== null && ` · ${formatoPesos(Math.abs(m.cantidad) * m.costo_unitario)}`}
                   </p>
-                  {(m.motivo || m.evento || m.factura_id || m.salida_id || m.pedido_id) && (
+                  {(m.motivo || m.evento || m.factura_id || m.salida_id || m.entrada_id || m.pedido_id) && (
                     <p className="mt-1 text-xs text-stone-600">
                       {m.motivo}
                       {m.evento && <Link href={`/eventos/${m.evento.id}`} className="ml-1 underline">({m.evento.nombre})</Link>}
                       {m.factura_id && <Link href={`/facturas/${m.factura_id}`} className="ml-1 underline">ver factura</Link>}
                       {m.salida_id && <Link href={`/stock/salidas/${m.salida_id}`} className="ml-1 underline">ver salida</Link>}
+                      {m.entrada_id && <Link href={`/stock/entradas/${m.entrada_id}`} className="ml-1 underline">ver entrada</Link>}
                       {m.pedido_id && <Link href={`/stock/pedidos/${m.pedido_id}`} className="ml-1 underline">ver pedido</Link>}
                     </p>
                   )}
@@ -188,8 +210,28 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
                   <td colSpan={8} className="px-4 py-10 text-center text-stone-500">{termino ? `Ningún movimiento coincide con “${busqueda}”.` : "No hay movimientos."}</td>
                 </tr>
               )}
-              {historial.map(({ movimiento: m, salida: s }) =>
-                s ? (
+              {historial.map(({ movimiento: m, salida: s, entrada: e }) =>
+                e ? (
+                  <tr key={e.id} className="hover:bg-stone-50">
+                    <td className="whitespace-nowrap px-4 py-3 text-stone-600">{formatoFecha(e.fecha)}</td>
+                    <td className="px-4 py-3">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ETIQUETA.entrada.clase}`}>Entrada</span>
+                    </td>
+                    <td className="px-4 py-3 font-medium">{e.productos} {e.productos === 1 ? "producto" : "productos"}</td>
+                    <td className="px-4 py-3 text-stone-600">{e.deposito.nombre}</td>
+                    <td className="px-4 py-3 text-right text-stone-400">—</td>
+                    <td className="px-4 py-3 text-right text-stone-400">—</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right font-mono font-medium">
+                      {formatoPesos(e.costoTotal)}
+                      {e.sinCosto > 0 && <span className="block text-xs font-normal text-amber-700">{e.sinCosto} sin costo</span>}
+                    </td>
+                    <td className="px-4 py-3 text-stone-600">
+                      {e.motivo}
+                      {e.evento && <span className="ml-1">({e.evento.nombre})</span>}
+                      <Link href={`/stock/entradas/${e.id}`} className="ml-1 font-medium text-stone-900 underline">ver detalle</Link>
+                    </td>
+                  </tr>
+                ) : s ? (
                   <tr key={s.id} className="hover:bg-stone-50">
                     <td className="whitespace-nowrap px-4 py-3 text-stone-600">{formatoFecha(s.fecha)}</td>
                     <td className="px-4 py-3">
@@ -244,6 +286,11 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
                     {m.salida_id && (
                       <Link href={`/stock/salidas/${m.salida_id}`} className="ml-1 underline">
                         ver salida
+                      </Link>
+                    )}
+                    {m.entrada_id && (
+                      <Link href={`/stock/entradas/${m.entrada_id}`} className="ml-1 underline">
+                        ver entrada
                       </Link>
                     )}
                     {m.pedido_id && (

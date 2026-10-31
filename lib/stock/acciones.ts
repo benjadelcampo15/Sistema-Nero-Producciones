@@ -6,7 +6,7 @@ import { z } from "zod";
 import { exigirPermiso } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { parsearMonto } from "@/lib/formato";
-import { obtenerStock } from "./consultas";
+import { listarProductos, obtenerStock } from "./consultas";
 import { UNIDADES, costoDeSalida, r3 } from "./tipos";
 
 export type EstadoStock = { error?: string; ok?: string; valores?: Record<string, string> };
@@ -173,6 +173,52 @@ export async function registrarSalida(datos: DatosSalida): Promise<{ error?: str
     p_lineas: lineas,
   });
   if (error) return { error: "No se pudo registrar la salida" };
+  refresh();
+  return { id: data as string };
+}
+
+const esquemaEntrada = z.object({
+  deposito_id: z.uuid("Elegí el depósito"),
+  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Falta la fecha"),
+  evento_id: z.union([z.uuid(), z.literal("")]).optional(),
+  motivo: z.string().trim().max(200).optional(),
+  lineas: z
+    .array(
+      z.object({
+        producto_id: z.uuid(),
+        cantidad: z.number().positive("Las cantidades tienen que ser mayores a cero").max(1e9),
+        costo_unitario: z.number().min(0, "El costo no puede ser negativo").max(1e12).nullable(),
+      }),
+    )
+    .max(2000),
+});
+export type DatosEntrada = z.input<typeof esquemaEntrada>;
+
+/** Entrada de varios productos juntos (ej.: llega la mercadería de un proveedor), cada uno con su costo. */
+export async function registrarEntrada(datos: DatosEntrada): Promise<{ error?: string; id?: string }> {
+  await exigirPermiso("stock", "editar");
+  const r = esquemaEntrada.safeParse(datos);
+  if (!r.success) return { error: r.error.issues[0].message };
+  const d = r.data;
+  if (!d.lineas.length) return { error: "Cargá al menos un producto" };
+  if (new Set(d.lineas.map((l) => l.producto_id)).size !== d.lineas.length) return { error: "Hay un producto repetido" };
+
+  const activos = new Set((await listarProductos()).map((p) => p.id));
+  if (d.lineas.some((l) => !activos.has(l.producto_id))) return { error: "Hay un producto que no existe o está desactivado" };
+
+  const lineas = d.lineas.map((l) => ({
+    producto_id: l.producto_id,
+    cantidad: r3(l.cantidad),
+    costo_unitario: l.costo_unitario === null ? null : Math.round(l.costo_unitario * 100) / 100,
+  }));
+  if (lineas.some((l) => l.cantidad <= 0)) return { error: "Hay una cantidad demasiado chica" };
+
+  const supabase = await crearClienteServidor();
+  const { data, error } = await supabase.rpc("registrar_entrada_stock", {
+    p_entrada: { fecha: d.fecha, deposito_id: d.deposito_id, evento_id: d.evento_id ?? "", motivo: d.motivo ?? "" },
+    p_lineas: lineas,
+  });
+  if (error) return { error: "No se pudo registrar la entrada" };
   refresh();
   return { id: data as string };
 }

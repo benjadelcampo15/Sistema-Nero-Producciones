@@ -5,6 +5,7 @@ import Link from "next/link";
 import { registrarMovimiento } from "@/lib/stock/acciones";
 import { NOMBRE_TIPO_STOCK, TIPOS_MOVIMIENTO_STOCK, type Deposito, type FilaStock, type Producto, type TipoMovimientoStock } from "@/lib/stock/tipos";
 import { FormularioSalida } from "./formulario-salida";
+import { FormularioEntrada } from "./formulario-entrada";
 import type { EventoResumido } from "@/lib/financiero/tipos";
 import { hoy } from "@/lib/formato";
 
@@ -60,6 +61,19 @@ export function FormularioMovimiento({
         <div className="hidden md:block">
           <FormularioSalida stock={stock} depositos={depositos} eventos={eventos} />
         </div>
+      </section>
+    );
+  }
+
+  // La entrada también es de varios productos juntos (ej.: llega mercadería de un proveedor).
+  if (tipo === "entrada") {
+    return (
+      <section className="space-y-4">
+        <div className="tarjeta space-y-4">
+          <h2 className="font-semibold">Registrar movimiento</h2>
+          {selectorTipo}
+        </div>
+        <FormularioEntrada stock={stock} depositos={depositos} productoInicial={productoInicial} />
       </section>
     );
   }
@@ -123,7 +137,7 @@ export function FormularioMovimiento({
             <input id="fecha" name="fecha" type="date" required defaultValue={v("fecha", hoy())} className="campo" />
           </div>
         )}
-        {(tipo === "entrada" || tipo === "ajuste") && (
+        {tipo === "ajuste" && (
           <div>
             <label htmlFor="costo_unitario" className="etiqueta">
               Costo unitario ($) <span className="font-normal text-stone-400">(opcional)</span>

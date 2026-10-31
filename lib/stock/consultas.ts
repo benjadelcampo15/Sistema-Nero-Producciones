@@ -1,7 +1,7 @@
 import "server-only";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { sumar } from "@/lib/formato";
-import type { Deposito, FilaStock, LineaSalida, MovimientoStock, Producto, ResumenSalida } from "./tipos";
+import type { Deposito, FilaStock, LineaEntrada, LineaSalida, MovimientoStock, Producto, ResumenEntrada, ResumenSalida } from "./tipos";
 
 const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 
@@ -48,20 +48,20 @@ export async function obtenerStock(): Promise<FilaStock[]> {
   });
 }
 
-/** Movimientos sueltos; con sinSalidas, los de una salida de varios productos no (se listan agrupados aparte). */
+/** Movimientos sueltos; con sinSalidas, los de una salida o entrada de varios productos no (se listan agrupados aparte). */
 export async function listarMovimientos(filtros: { deposito?: string; producto?: string; sinSalidas?: boolean } = {}) {
   const supabase = await crearClienteServidor();
   let consulta = supabase
     .from("movimientos_stock")
     .select(
-      "id, tipo, cantidad, costo_unitario, fecha, creado_en, motivo, transferencia_id, factura_id, salida_id, pedido_id, producto:productos(id, nombre, unidad), deposito:depositos(id, nombre), evento:eventos(id, nombre)",
+      "id, tipo, cantidad, costo_unitario, fecha, creado_en, motivo, transferencia_id, factura_id, salida_id, entrada_id, pedido_id, producto:productos(id, nombre, unidad), deposito:depositos(id, nombre), evento:eventos(id, nombre)",
     )
     .order("fecha", { ascending: false })
     .order("creado_en", { ascending: false })
     .limit(500);
   if (filtros.deposito) consulta = consulta.eq("deposito_id", filtros.deposito);
   if (filtros.producto) consulta = consulta.eq("producto_id", filtros.producto);
-  if (filtros.sinSalidas) consulta = consulta.is("salida_id", null);
+  if (filtros.sinSalidas) consulta = consulta.is("salida_id", null).is("entrada_id", null);
   const { data, error } = await consulta;
   if (error) throw new Error(`No se pudieron leer los movimientos: ${error.message}`);
   return ((data ?? []) as unknown as MovimientoStock[]).map((m) => ({
@@ -123,4 +123,51 @@ export async function obtenerSalida(id: string) {
     }))
     .sort((a, b) => a.producto.nombre.localeCompare(b.producto.nombre, "es"));
   return { ...resumir(fila as FilaSalida), lineas };
+}
+type FilaEntrada = Omit<ResumenEntrada, "productos" | "costoTotal" | "sinCosto"> & {
+  lineas: { cantidad: number | string; costo_unitario: number | string | null }[];
+};
+
+const CAMPOS_ENTRADA = "id, fecha, creado_en, motivo, deposito:depositos(id, nombre), evento:eventos(id, nombre)";
+
+function resumirEntrada(e: FilaEntrada): ResumenEntrada {
+  const { lineas, ...resto } = e;
+  const conCosto = lineas.filter((l) => l.costo_unitario !== null);
+  return {
+    ...resto,
+    productos: lineas.length,
+    costoTotal: sumar(conCosto.map((l) => Number(l.cantidad) * Number(l.costo_unitario))),
+    sinCosto: lineas.length - conCosto.length,
+  };
+}
+
+/** Entradas de varios productos, de la más reciente a la más vieja. */
+export async function listarEntradas(filtros: { deposito?: string } = {}) {
+  const supabase = await crearClienteServidor();
+  let consulta = supabase
+    .from("entradas_stock")
+    .select(`${CAMPOS_ENTRADA}, lineas:movimientos_stock(cantidad, costo_unitario)`)
+    .order("fecha", { ascending: false })
+    .order("creado_en", { ascending: false })
+    .limit(200);
+  if (filtros.deposito) consulta = consulta.eq("deposito_id", filtros.deposito);
+  const { data, error } = await consulta;
+  if (error) throw new Error(`No se pudieron leer las entradas: ${error.message}`);
+  return ((data ?? []) as unknown as FilaEntrada[]).map(resumirEntrada);
+}
+
+export async function obtenerEntrada(id: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const supabase = await crearClienteServidor();
+  const { data } = await supabase
+    .from("entradas_stock")
+    .select(`${CAMPOS_ENTRADA}, lineas:movimientos_stock(id, cantidad, costo_unitario, producto:productos(id, nombre, unidad))`)
+    .eq("id", id)
+    .maybeSingle();
+  if (!data) return null;
+  const fila = data as unknown as Omit<FilaEntrada, "lineas"> & { lineas: LineaEntrada[] };
+  const lineas: LineaEntrada[] = fila.lineas
+    .map((l) => ({ ...l, cantidad: Number(l.cantidad), costo_unitario: n(l.costo_unitario) }))
+    .sort((a, b) => a.producto.nombre.localeCompare(b.producto.nombre, "es"));
+  return { ...resumirEntrada(fila as FilaEntrada), lineas };
 }

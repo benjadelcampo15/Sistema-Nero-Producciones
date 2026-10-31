@@ -32,6 +32,7 @@ export type MovimientoStock = {
   transferencia_id: string | null;
   factura_id: string | null;
   salida_id: string | null;
+  entrada_id: string | null;
   pedido_id: string | null;
   producto: { id: string; nombre: string; unidad: string };
   deposito: { id: string; nombre: string };
@@ -84,4 +85,25 @@ export type LineaSalida = {
   costo_unitario: number | null;
   stock_inicial: number | null;
   stock_contado: number | null;
+};
+
+/** Una entrada de varios productos, resumida para el historial. */
+export type ResumenEntrada = {
+  id: string;
+  fecha: string;
+  creado_en: string;
+  motivo: string | null;
+  deposito: { id: string; nombre: string };
+  evento: { id: string; nombre: string } | null;
+  productos: number;
+  /** Suma de cantidad × costo de los productos con costo. */
+  costoTotal: number;
+  sinCosto: number;
+};
+
+export type LineaEntrada = {
+  id: string;
+  producto: { id: string; nombre: string; unidad: string };
+  cantidad: number;
+  costo_unitario: number | null;
 };
