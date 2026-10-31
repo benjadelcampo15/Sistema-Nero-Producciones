@@ -6,6 +6,7 @@ import type { Transaccion } from "@/lib/financiero/tipos";
 import type { Empresa } from "@/lib/empresas";
 import { ESTADOS_EVENTO, type Balance, type EstadoEvento, type Evento, type EventoConBalance } from "./tipos";
 import { PLANILLA_VACIA, esquemaPlanilla, type Planilla } from "./planilla";
+import type { Caja } from "./cajas";
 
 const CAMPOS_EVENTO = "id, empresa, nombre, fecha, lugar, estado, presupuesto, notas, planilla_en_financiero";
 
@@ -94,4 +95,41 @@ export async function obtenerPlanillaEvento(eventoId: string): Promise<Planilla>
   const { data } = await supabase.from("planillas_evento").select("datos").eq("evento_id", eventoId).maybeSingle();
   const datos = esquemaPlanilla.safeParse(data?.datos ?? {});
   return datos.success ? datos.data : PLANILLA_VACIA;
+}
+
+/** Las cajas del evento, en el orden en que se crearon. */
+export async function cajasDeEvento(eventoId: string): Promise<Caja[]> {
+  const supabase = await crearClienteServidor();
+  const { data } = await supabase
+    .from("cajas_evento")
+    .select("id, nombre, responsable, monto_inicial, monto_fudo, efectivo_final, billetes, fudo_posnet, posnet_cierre, notas, cerrada_en, orden")
+    .eq("evento_id", eventoId)
+    .order("orden");
+  const numero = (v: unknown) => (v === null ? null : Number(v));
+  return (data ?? []).map((c) => ({
+    ...c,
+    monto_inicial: Number(c.monto_inicial),
+    monto_fudo: numero(c.monto_fudo),
+    efectivo_final: numero(c.efectivo_final),
+    fudo_posnet: numero(c.fudo_posnet),
+    posnet_cierre: numero(c.posnet_cierre),
+  })) as Caja[];
+}
+
+/**
+ * Los eventos "de hoy": el día del evento y el siguiente (un evento del 31
+ * sigue en "Hoy" el 1 y sale el 2). Los cancelados no.
+ */
+export async function eventosDeHoy(hoy: string): Promise<Evento[]> {
+  const ayer = new Date(`${hoy}T12:00:00Z`);
+  ayer.setUTCDate(ayer.getUTCDate() - 1);
+  const supabase = await crearClienteServidor();
+  const { data } = await supabase
+    .from("eventos")
+    .select(CAMPOS_EVENTO)
+    .gte("fecha", ayer.toISOString().slice(0, 10))
+    .lte("fecha", hoy)
+    .neq("estado", "cancelado")
+    .order("fecha");
+  return ((data ?? []) as Evento[]).map(aEvento);
 }

@@ -44,7 +44,7 @@ export async function cargarDemo(sb: SupabaseClient, url: string, clave = CLAVE_
   for (const t of [
     "movimientos_stock", "salidas_stock", "pedido_items", "pedidos", "proveedor_productos", "productos",
     "extracto_lineas", "extractos", "cheques", "saldos_bancarios", "pago_aplicaciones", "comprobantes_emitidos", "transacciones", "pagos_cuenta", "facturas",
-    "convocados", "puestos_evento", "polizas", "planillas_evento", "presupuestos", "eventos", "clientes", "proveedores",
+    "convocados", "puestos_evento", "cajas_evento", "polizas", "planillas_evento", "presupuestos", "eventos", "clientes", "proveedores",
     "personal_envios", "personal", "asiento_lineas", "asientos",
   ]) await vaciar(t);
   await vaciar("cuentas_bancarias");
@@ -204,6 +204,7 @@ export async function cargarDemo(sb: SupabaseClient, url: string, clave = CLAVE_
     { nombre: "Lanzamiento Cerveza Andina", dias: -33, lugar: "Galpón Godoy Cruz", estado: "cerrado", empresa: "ruta", cobro: 12_800_000, cliente: "Cervecería Andina S.R.L." },
     { nombre: "Fiesta Bodega Los Álamos", dias: -19, lugar: "Bodega Los Álamos", estado: "cerrado", empresa: "nero", cobro: 24_000_000, cliente: "Bodega Los Álamos S.A." },
     { nombre: "Corporativo Banco del Oeste", dias: -6, lugar: "Hotel Plaza", estado: "cerrado", empresa: "ruta", cobro: 9_600_000, cliente: "Banco del Oeste S.A." },
+    { nombre: "Sunset en la terraza", dias: 0, lugar: "Terraza Arístides", estado: "planificado", empresa: "nero", cobro: 7_500_000, cliente: "Club Social Mendoza" },
     { nombre: "Festival de Primavera", dias: 9, lugar: "Parque Central", estado: "planificado", empresa: "nero", cobro: 30_000_000, cliente: "Club Social Mendoza" },
     { nombre: "Cena de fin de año Club Social", dias: 38, lugar: "Club Social Mendoza", estado: "planificado", empresa: "nero", cobro: 14_500_000, cliente: "Club Social Mendoza" },
   ];
@@ -213,6 +214,15 @@ export async function cargarDemo(sb: SupabaseClient, url: string, clave = CLAVE_
     const [ev] = await insertar("eventos", { nombre: e.nombre, fecha: dia(e.dias), lugar: e.lugar, estado: e.estado, empresa: e.empresa, presupuesto: redondo(e.cobro * 0.6, 100_000) });
     const pasado = e.dias < 0;
     const neto = e.cobro;
+    // El evento de hoy: cierre de cajas a medio hacer (una cerrada con faltante, otra abierta).
+    if (e.dias === 0) {
+      await insertar("cajas_evento", [
+        { evento_id: ev.id, nombre: "Barra 1", responsable: "Lucía Gómez", monto_inicial: 50_000, monto_fudo: 1_284_500, efectivo_final: 1_330_500, fudo_posnet: 2_215_000, posnet_cierre: 2_215_000, orden: 1, cerrada_en: new Date().toISOString(),
+          billetes: { "20000": 41, "10000": 39, "2000": 50, "1000": 20, "500": 1 } },
+        { evento_id: ev.id, nombre: "Barra 2", responsable: "Tomás Pereyra", monto_inicial: 50_000, monto_fudo: 968_000, fudo_posnet: 1_640_500, orden: 2 },
+        { evento_id: ev.id, nombre: "Entrada", responsable: "Camila Sosa", monto_inicial: 30_000, orden: 3 },
+      ]);
+    }
     // El próximo evento ya tiene su personal repartido por puestos.
     if (e.dias === 9) {
       const puestos = await insertar("puestos_evento", [

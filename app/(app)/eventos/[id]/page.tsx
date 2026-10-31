@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
-import { obtenerDetalleEvento, obtenerPlanillaEvento, type DesgloseCategoria } from "@/lib/eventos/consultas";
+import { cajasDeEvento, obtenerDetalleEvento, obtenerPlanillaEvento, type DesgloseCategoria } from "@/lib/eventos/consultas";
 import { COLOR_ESTADO_EVENTO, NOMBRE_ESTADO_EVENTO } from "@/lib/eventos/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { BarraPresupuesto } from "@/components/barra-presupuesto";
@@ -9,15 +9,17 @@ import { TablaMovimientos } from "@/components/tabla-movimientos";
 import { SinAcceso } from "../../sin-acceso";
 import { EtiquetaEmpresa } from "@/components/empresa";
 import { PlanillaEvento } from "./planilla-evento";
+import { CierreCajas } from "./cierre-cajas";
 
 export default async function PaginaEvento({ params, searchParams }: PageProps<"/eventos/[id]">) {
   const usuario = await obtenerUsuario();
   if (!puede(usuario, "eventos", "ver")) return <SinAcceso />;
 
   const { id } = await params;
-  const { vista } = await searchParams;
-  const enPlanilla = vista !== "movimientos";
-  const [detalle, planilla] = await Promise.all([obtenerDetalleEvento(id), enPlanilla ? obtenerPlanillaEvento(id) : null]);
+  const { vista: parametroVista } = await searchParams;
+  const vista = parametroVista === "movimientos" || parametroVista === "cajas" ? parametroVista : "planilla";
+  const enPlanilla = vista === "planilla";
+  const [detalle, planilla, cajas] = await Promise.all([obtenerDetalleEvento(id), enPlanilla ? obtenerPlanillaEvento(id) : null, vista === "cajas" ? cajasDeEvento(id) : null]);
   if (!detalle) notFound();
   const { evento, transacciones, totales, desglose } = detalle;
 
@@ -63,12 +65,13 @@ export default async function PaginaEvento({ params, searchParams }: PageProps<"
         {[
           { clave: "planilla", nombre: "Planilla", href: `/eventos/${evento.id}` },
           { clave: "movimientos", nombre: `Movimientos (${transacciones.length})`, href: `/eventos/${evento.id}?vista=movimientos` },
+          { clave: "cajas", nombre: "Cierre de cajas", href: `/eventos/${evento.id}?vista=cajas` },
         ].map((t) => (
           <Link
             key={t.clave}
             href={t.href}
             className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
-              (t.clave === "planilla") === enPlanilla ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500 hover:text-stone-900"
+              t.clave === vista ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500 hover:text-stone-900"
             }`}
           >
             {t.nombre}
@@ -76,7 +79,9 @@ export default async function PaginaEvento({ params, searchParams }: PageProps<"
         ))}
       </nav>
 
-      {planilla ? (
+      {cajas ? (
+        <CierreCajas eventoId={evento.id} cajas={cajas} editable={editaEvento} />
+      ) : planilla ? (
         <PlanillaEvento key={evento.id} eventoId={evento.id} inicial={planilla} editable={editaEvento} enFinanciero={evento.planilla_en_financiero} />
       ) : (
       <>

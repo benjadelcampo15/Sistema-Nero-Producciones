@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
-import { leerEstado, listarEventos } from "@/lib/eventos/consultas";
+import { eventosDeHoy, leerEstado, listarEventos } from "@/lib/eventos/consultas";
 import { COLOR_ESTADO_EVENTO, ESTADOS_EVENTO, NOMBRE_ESTADO_EVENTO } from "@/lib/eventos/tipos";
-import { formatoFecha, formatoPesos } from "@/lib/formato";
+import { formatoFecha, formatoPesos, hoy } from "@/lib/formato";
 import { BarraPresupuesto } from "@/components/barra-presupuesto";
 import { SinAcceso } from "../sin-acceso";
-import { AlternarEmpresa } from "@/components/empresa";
+import { AlternarEmpresa, EtiquetaEmpresa } from "@/components/empresa";
 import { NOMBRE_EMPRESA, leerEmpresa } from "@/lib/empresas";
 
 export default async function PaginaEventos({ searchParams }: PageProps<"/eventos">) {
@@ -15,7 +15,8 @@ export default async function PaginaEventos({ searchParams }: PageProps<"/evento
   const { estado: parametro, empresa: parametroEmpresa } = await searchParams;
   const estado = leerEstado(parametro);
   const empresa = leerEmpresa(parametroEmpresa);
-  const eventos = await listarEventos(empresa, estado);
+  const fechaHoy = hoy();
+  const [eventos, deHoy] = await Promise.all([listarEventos(empresa, estado), eventosDeHoy(fechaHoy)]);
   const href = (cambios: { empresa?: string; estado?: string | null }) => {
     const p = new URLSearchParams({ empresa: cambios.empresa ?? empresa });
     const e = cambios.estado === undefined ? estado : cambios.estado;
@@ -34,6 +35,40 @@ export default async function PaginaEventos({ searchParams }: PageProps<"/evento
           <Link href={`/eventos/nuevo?empresa=${empresa}`} className="boton">+ Nuevo evento</Link>
         )}
       </div>
+
+      {/* Hoy: el evento en curso (el día del evento y el siguiente), de las dos empresas. */}
+      {deHoy.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="flex items-center gap-2 font-semibold">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-60" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-600" />
+            </span>
+            Hoy
+          </h2>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {deHoy.map((e) => (
+              <div key={e.id} className="rounded-xl border-2 border-green-600 bg-green-50 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <Link href={`/eventos/${e.id}`} className="block truncate text-lg font-semibold hover:underline">{e.nombre}</Link>
+                    <p className="text-sm text-stone-600">
+                      {e.fecha === fechaHoy ? "Hoy" : `Ayer, ${formatoFecha(e.fecha)}`}
+                      {e.lugar && ` · ${e.lugar}`}
+                    </p>
+                  </div>
+                  <EtiquetaEmpresa empresa={e.empresa} />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link href={`/eventos/${e.id}?vista=cajas`} className="boton py-1.5 text-sm">Cierre de cajas</Link>
+                  <Link href={`/eventos/${e.id}`} className="boton-secundario py-1.5 text-sm">Planilla</Link>
+                  <Link href={`/eventos/${e.id}?vista=movimientos`} className="boton-secundario py-1.5 text-sm">Movimientos</Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Links: navegan sin recargar la página. */}
       <nav className="flex flex-wrap gap-2">
