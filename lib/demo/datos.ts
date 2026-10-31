@@ -42,7 +42,7 @@ export async function cargarDemo(sb: SupabaseClient, url: string, clave = CLAVE_
 
   // ─── 1. Vaciar la base de la demo ────────────────────────────────────────────
   for (const t of [
-    "movimientos_stock", "salidas_stock", "pedido_items", "pedidos", "proveedor_productos", "productos",
+    "movimientos_stock", "salidas_stock", "entradas_stock", "pedido_items", "pedidos", "proveedor_productos", "productos",
     "extracto_lineas", "extractos", "cheques", "saldos_bancarios", "pago_aplicaciones", "comprobantes_emitidos", "transacciones", "pagos_cuenta", "facturas",
     "convocados", "puestos_evento", "cajas_evento", "polizas", "planillas_evento", "presupuestos", "eventos", "clientes", "proveedores",
     "personal_envios", "personal", "asiento_lineas", "asientos",

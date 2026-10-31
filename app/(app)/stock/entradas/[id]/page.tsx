@@ -5,29 +5,43 @@ import { obtenerEntrada } from "@/lib/stock/consultas";
 import { formatoCantidad } from "@/lib/stock/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { SinAcceso } from "../../../sin-acceso";
+import { BotonEliminarMovimiento } from "../../boton-eliminar-movimiento";
 
 export default async function PaginaEntrada({ params }: PageProps<"/stock/entradas/[id]">) {
   const usuario = await obtenerUsuario();
   if (!puede(usuario, "stock", "ver")) return <SinAcceso />;
+  const editable = puede(usuario, "stock", "editar");
   const { id } = await params;
   const entrada = await obtenerEntrada(id);
   if (!entrada) notFound();
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/stock/movimientos" className="text-sm text-stone-500 hover:text-stone-900">← Movimientos de stock</Link>
-        <h1 className="mt-1 text-2xl font-semibold">Entrada · {entrada.deposito.nombre}</h1>
-        <p className="text-sm text-stone-500">
-          {formatoFecha(entrada.fecha)}
-          {entrada.evento && (
-            <>
-              {" · "}
-              <Link href={`/eventos/${entrada.evento.id}`} className="underline">{entrada.evento.nombre}</Link>
-            </>
-          )}
-          {entrada.motivo && ` · ${entrada.motivo}`}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <Link href="/stock/movimientos" className="text-sm text-stone-500 hover:text-stone-900">← Movimientos de stock</Link>
+          <h1 className="mt-1 text-2xl font-semibold">Entrada · {entrada.deposito.nombre}</h1>
+          <p className="text-sm text-stone-500">
+            {formatoFecha(entrada.fecha)}
+            {entrada.evento && (
+              <>
+                {" · "}
+                <Link href={`/eventos/${entrada.evento.id}`} className="underline">{entrada.evento.nombre}</Link>
+              </>
+            )}
+            {entrada.motivo && ` · ${entrada.motivo}`}
+          </p>
+        </div>
+        {editable && (
+          <BotonEliminarMovimiento
+            que="entrada"
+            id={entrada.id}
+            volverA="/stock/movimientos"
+            texto="Eliminar entrada"
+            confirmacion={`¿Eliminar la entrada completa (${entrada.productos} ${entrada.productos === 1 ? "producto" : "productos"})?`}
+            className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+          />
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -55,6 +69,7 @@ export default async function PaginaEntrada({ params }: PageProps<"/stock/entrad
                 +{formatoCantidad(l.cantidad)} <span className="text-xs font-normal text-stone-400">{l.producto.unidad}</span>
               </p>
               <p className="font-mono text-xs text-stone-500">{l.costo_unitario !== null ? formatoPesos(l.costo_unitario * l.cantidad) : "sin costo"}</p>
+              {editable && <BotonEliminarMovimiento que="movimiento" id={l.id} volverA={entrada.lineas.length === 1 ? "/stock/movimientos" : undefined} confirmacion={`¿Eliminar ${l.producto.nombre} de esta entrada?${entrada.lineas.length === 1 ? " Es el único producto: se borra la entrada completa." : ""}`} />}
             </div>
           </li>
         ))}
@@ -72,6 +87,7 @@ export default async function PaginaEntrada({ params }: PageProps<"/stock/entrad
               <th className="px-4 py-3 text-right">Entró</th>
               <th className="px-4 py-3 text-right">Costo unit.</th>
               <th className="px-4 py-3 text-right">Costo</th>
+              {editable && <th className="px-4 py-3"><span className="sr-only">Acciones</span></th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100">
@@ -83,6 +99,7 @@ export default async function PaginaEntrada({ params }: PageProps<"/stock/entrad
                 </td>
                 <td className="whitespace-nowrap px-4 py-2 text-right font-mono text-stone-600">{l.costo_unitario !== null ? formatoPesos(l.costo_unitario) : "—"}</td>
                 <td className="whitespace-nowrap px-4 py-2 text-right font-mono">{l.costo_unitario !== null ? formatoPesos(l.costo_unitario * l.cantidad) : "sin costo"}</td>
+                {editable && <td className="px-4 py-2 text-right"><BotonEliminarMovimiento que="movimiento" id={l.id} volverA={entrada.lineas.length === 1 ? "/stock/movimientos" : undefined} confirmacion={`¿Eliminar ${l.producto.nombre} de esta entrada?${entrada.lineas.length === 1 ? " Es el único producto: se borra la entrada completa." : ""}`} /></td>}
               </tr>
             ))}
           </tbody>
@@ -90,6 +107,7 @@ export default async function PaginaEntrada({ params }: PageProps<"/stock/entrad
             <tr>
               <td className="px-4 py-3" colSpan={3}>Total</td>
               <td className="px-4 py-3 text-right font-mono">{formatoPesos(entrada.costoTotal)}</td>
+              {editable && <td />}
             </tr>
           </tfoot>
         </table>

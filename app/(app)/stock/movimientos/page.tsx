@@ -7,6 +7,17 @@ import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { SinAcceso } from "../../sin-acceso";
 import { NavegacionStock } from "../navegacion";
 import { FormularioMovimiento } from "./formulario-movimiento";
+import { BotonEliminarMovimiento } from "../boton-eliminar-movimiento";
+import type { MovimientoStock } from "@/lib/stock/tipos";
+
+/** Texto de confirmación para borrar un movimiento suelto (o un producto de una entrada / salida). */
+function confirmarBorrado(m: MovimientoStock) {
+  const cantidad = `${formatoCantidad(Math.abs(m.cantidad))} ${m.producto.unidad}`;
+  if (m.transferencia_id) return `¿Eliminar la transferencia de ${cantidad} de ${m.producto.nombre}? Se borran las dos partes (origen y destino).`;
+  const tipo = { entrada: "la entrada", salida: "la salida", ajuste: "el ajuste" }[m.tipo];
+  const grupo = m.entrada_id ? " Solo se borra este producto de la entrada." : m.salida_id ? " Solo se borra este producto de la salida." : "";
+  return `¿Eliminar ${tipo} de ${cantidad} de ${m.producto.nombre} (${m.deposito.nombre}, ${formatoFecha(m.fecha)})?${grupo}`;
+}
 
 const normalizar = (t: string) =>
   t
@@ -184,6 +195,11 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
                       {m.pedido_id && <Link href={`/stock/pedidos/${m.pedido_id}`} className="ml-1 underline">ver pedido</Link>}
                     </p>
                   )}
+                  {editable && (
+                    <div className="mt-2 flex justify-end border-t border-stone-100 pt-2">
+                      <BotonEliminarMovimiento que="movimiento" id={m.id} confirmacion={confirmarBorrado(m)} />
+                    </div>
+                  )}
                 </div>
               )
             ),
@@ -202,12 +218,13 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
                 <th className="px-4 py-3 text-right">Costo unit.</th>
                 <th className="px-4 py-3 text-right">Costo total</th>
                 <th className="px-4 py-3">Detalle</th>
+                {editable && <th className="px-4 py-3"><span className="sr-only">Acciones</span></th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
               {historial.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-stone-500">{termino ? `Ningún movimiento coincide con “${busqueda}”.` : "No hay movimientos."}</td>
+                  <td colSpan={editable ? 9 : 8} className="px-4 py-10 text-center text-stone-500">{termino ? `Ningún movimiento coincide con “${busqueda}”.` : "No hay movimientos."}</td>
                 </tr>
               )}
               {historial.map(({ movimiento: m, salida: s, entrada: e }) =>
@@ -230,6 +247,15 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
                       {e.evento && <span className="ml-1">({e.evento.nombre})</span>}
                       <Link href={`/stock/entradas/${e.id}`} className="ml-1 font-medium text-stone-900 underline">ver detalle</Link>
                     </td>
+                    {editable && (
+                      <td className="px-4 py-3 text-right">
+                        <BotonEliminarMovimiento
+                          que="entrada"
+                          id={e.id}
+                          confirmacion={`¿Eliminar la entrada completa del ${formatoFecha(e.fecha)} en ${e.deposito.nombre} (${e.productos} ${e.productos === 1 ? "producto" : "productos"})?`}
+                        />
+                      </td>
+                    )}
                   </tr>
                 ) : s ? (
                   <tr key={s.id} className="hover:bg-stone-50">
@@ -250,6 +276,15 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
                       {s.evento && <span className="ml-1">({s.evento.nombre})</span>}
                       <Link href={`/stock/salidas/${s.id}`} className="ml-1 font-medium text-stone-900 underline">ver detalle</Link>
                     </td>
+                    {editable && (
+                      <td className="px-4 py-3 text-right">
+                        <BotonEliminarMovimiento
+                          que="salida"
+                          id={s.id}
+                          confirmacion={`¿Eliminar la salida completa del ${formatoFecha(s.fecha)} en ${s.deposito.nombre} (${s.productos} ${s.productos === 1 ? "producto" : "productos"})?`}
+                        />
+                      </td>
+                    )}
                   </tr>
                 ) : m && (
                 <tr key={m.id} className="hover:bg-stone-50">
@@ -299,6 +334,11 @@ export default async function PaginaMovimientosStock({ searchParams }: PageProps
                       </Link>
                     )}
                   </td>
+                  {editable && (
+                    <td className="px-4 py-3 text-right">
+                      <BotonEliminarMovimiento que="movimiento" id={m.id} confirmacion={confirmarBorrado(m)} />
+                    </td>
+                  )}
                 </tr>
                 ),
               )}
