@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { anularPago, borrarCargo, cargarDeuda, registrarPago } from "@/lib/cuentas/acciones";
-import type { ComprobanteCuenta, TipoCuenta } from "@/lib/cuentas/tipos";
+import { anularPago, borrarCargo, cargarDeuda, editarCargo, registrarPago } from "@/lib/cuentas/acciones";
+import type { CargoEditable, ComprobanteCuenta, TipoCuenta } from "@/lib/cuentas/tipos";
 import type { Empresa } from "@/lib/empresas";
 import { NOMBRE_MEDIO_PAGO, type MedioPago } from "@/lib/financiero/tipos";
 import { formatoFecha, formatoPesos, hoy, parsearMonto, sumar } from "@/lib/formato";
@@ -115,10 +115,27 @@ export function FormularioPago({ tipo, id, empresa, comprobantes }: { tipo: Tipo
   );
 }
 
-/** Cargar una deuda sin factura (lo que se le debe al proveedor o nos debe el cliente). */
-export function FormularioCargo({ tipo, id, empresa, categorias, categoriaDefecto }: { tipo: TipoCuenta; id: string; empresa: Empresa; categorias: { id: string; nombre: string }[]; categoriaDefecto: string }) {
+type Categorias = { id: string; nombre: string }[];
+
+/** Nuevo movimiento de la cuenta: una deuda nueva (lo que se le debe al proveedor o nos debe el cliente). */
+export function FormularioCargo({
+  tipo,
+  id,
+  empresa,
+  categorias,
+  categoriaDefecto,
+  alTerminar,
+}: {
+  tipo: TipoCuenta;
+  id: string;
+  empresa: Empresa;
+  categorias: Categorias;
+  categoriaDefecto: string;
+  /** Si viene, el formulario ya está abierto y esto lo cierra (al guardar o cancelar). */
+  alTerminar?: () => void;
+}) {
   const [pendiente, iniciar] = useTransition();
-  const [abierto, setAbierto] = useState(false);
+  const [abierto, setAbierto] = useState(Boolean(alTerminar));
   const [monto, setMonto] = useState("");
   const [fecha, setFecha] = useState(hoy());
   const [detalle, setDetalle] = useState("");
@@ -135,6 +152,7 @@ export function FormularioCargo({ tipo, id, empresa, categorias, categoriaDefect
         setMonto("");
         setDetalle("");
         setAbierto(false);
+        alTerminar?.();
       }
     });
   }
@@ -143,7 +161,7 @@ export function FormularioCargo({ tipo, id, empresa, categorias, categoriaDefect
     return (
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" onClick={() => setAbierto(true)} className="boton-secundario">
-          + Cargar deuda sin factura
+          + Movimiento
         </button>
         {mensaje.ok && <p className="text-sm text-green-700">{mensaje.ok}</p>}
       </div>
@@ -152,8 +170,8 @@ export function FormularioCargo({ tipo, id, empresa, categorias, categoriaDefect
   return (
     <form onSubmit={guardar} className="tarjeta space-y-4">
       <div>
-        <h3 className="font-semibold">Cargar deuda sin factura</h3>
-        <p className="text-xs text-stone-500">{tipo === "pago" ? "Lo que le debemos" : "Lo que nos debe"}, aunque no haya factura. Queda pendiente en Financiero hasta que se registre el {tipo}.</p>
+        <h3 className="font-semibold">Nuevo movimiento</h3>
+        <p className="text-xs text-stone-500">Una deuda nueva: {tipo === "pago" ? "lo que le debemos" : "lo que nos debe"}, aunque no haya factura. Queda pendiente en Financiero hasta que se registre el {tipo}.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="lg:col-span-2">
@@ -179,30 +197,97 @@ export function FormularioCargo({ tipo, id, empresa, categorias, categoriaDefect
       </div>
       {mensaje.error && <p className="alerta-error">{mensaje.error}</p>}
       <div className="flex items-center gap-3">
-        <button type="submit" disabled={pendiente} className="boton">{pendiente ? "Guardando…" : "Cargar deuda"}</button>
-        <button type="button" onClick={() => setAbierto(false)} className="text-sm text-stone-600 hover:text-stone-900">Cancelar</button>
+        <button type="submit" disabled={pendiente} className="boton">{pendiente ? "Guardando…" : "Guardar movimiento"}</button>
+        <button
+          type="button"
+          onClick={() => {
+            setAbierto(false);
+            alTerminar?.();
+          }}
+          className="text-sm text-stone-600 hover:text-stone-900"
+        >
+          Cancelar
+        </button>
       </div>
     </form>
   );
 }
 
-export function BotonBorrarCargo({ tipo, cargoId }: { tipo: TipoCuenta; cargoId: string }) {
+/** Editar y borrar un movimiento a mano. Con pagos no se borra y solo se cambian el detalle y la categoría. */
+export function AccionesCargo({ tipo, cargo, categorias }: { tipo: TipoCuenta; cargo: CargoEditable; categorias: Categorias }) {
   const [pendiente, iniciar] = useTransition();
+  const [editando, setEditando] = useState(false);
+  const [detalle, setDetalle] = useState(cargo.detalle);
+  const [monto, setMonto] = useState(String(cargo.monto).replace(".", ","));
+  const [fecha, setFecha] = useState(cargo.fecha ?? hoy());
+  const [categoria, setCategoria] = useState(cargo.categoria_id);
+  const [error, setError] = useState<string | null>(null);
+
+  function guardar(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    iniciar(async () => {
+      const r = await editarCargo(tipo, cargo.id, { detalle, monto, fecha, categoria_id: categoria });
+      if (r.error) setError(r.error);
+      else setEditando(false);
+    });
+  }
+
   return (
-    <button
-      type="button"
-      disabled={pendiente}
-      onClick={() => {
-        if (!window.confirm("¿Borrar esta deuda? También se borra de Financiero.")) return;
-        iniciar(async () => {
-          const r = await borrarCargo(tipo, cargoId);
-          if (r.error) window.alert(r.error);
-        });
-      }}
-      className="text-xs text-red-700 hover:underline disabled:opacity-50"
-    >
-      {pendiente ? "Borrando…" : "Borrar"}
-    </button>
+    <span className="inline-flex gap-3">
+      <button type="button" onClick={() => setEditando(true)} className="text-xs font-medium text-stone-700 hover:underline">Editar</button>
+      {!cargo.conPagos && (
+        <button
+          type="button"
+          disabled={pendiente}
+          onClick={() => {
+            if (!window.confirm("¿Borrar este movimiento? También se borra de Financiero.")) return;
+            iniciar(async () => {
+              const r = await borrarCargo(tipo, cargo.id);
+              if (r.error) window.alert(r.error);
+            });
+          }}
+          className="text-xs text-red-700 hover:underline disabled:opacity-50"
+        >
+          {pendiente ? "Borrando…" : "Borrar"}
+        </button>
+      )}
+      {editando && (
+        <span className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 text-left">
+          <form onSubmit={guardar} className="tarjeta w-full max-w-lg space-y-3 bg-white">
+            <h3 className="font-semibold">Editar movimiento</h3>
+            {cargo.conPagos && <p className="text-xs text-amber-800">Ya tiene pagos: para cambiar el monto o la fecha, primero anulalos.</p>}
+            <div>
+              <label htmlFor={`editar_detalle_${cargo.id}`} className="etiqueta">Detalle</label>
+              <input id={`editar_detalle_${cargo.id}`} required maxLength={200} value={detalle} onChange={(e) => setDetalle(e.target.value)} className="campo" />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor={`editar_monto_${cargo.id}`} className="etiqueta">Monto</label>
+                <input id={`editar_monto_${cargo.id}`} required disabled={cargo.conPagos} inputMode="decimal" value={monto} onChange={(e) => setMonto(e.target.value)} className="campo text-right font-mono disabled:bg-stone-100" />
+              </div>
+              <div>
+                <label htmlFor={`editar_fecha_${cargo.id}`} className="etiqueta">Fecha</label>
+                <input id={`editar_fecha_${cargo.id}`} type="date" required disabled={cargo.conPagos} value={fecha} onChange={(e) => setFecha(e.target.value)} className="campo disabled:bg-stone-100" />
+              </div>
+            </div>
+            <div>
+              <label htmlFor={`editar_categoria_${cargo.id}`} className="etiqueta">Categoría en Financiero</label>
+              <select id={`editar_categoria_${cargo.id}`} value={categoria} onChange={(e) => setCategoria(e.target.value)} className="campo">
+                {categorias.map((c) => (
+                  <option key={c.id} value={c.id}>{c.nombre}</option>
+                ))}
+              </select>
+            </div>
+            {error && <p className="alerta-error">{error}</p>}
+            <div className="flex items-center gap-3">
+              <button type="submit" disabled={pendiente} className="boton">{pendiente ? "Guardando…" : "Guardar cambios"}</button>
+              <button type="button" onClick={() => setEditando(false)} className="text-sm text-stone-600 hover:text-stone-900">Cancelar</button>
+            </div>
+          </form>
+        </span>
+      )}
+    </span>
   );
 }
 

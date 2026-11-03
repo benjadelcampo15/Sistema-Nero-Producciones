@@ -1,10 +1,9 @@
 import Link from "next/link";
-import { cuentaCorriente } from "@/lib/cuentas/consultas";
+import { categoriasDeCuenta, cuentaCorriente } from "@/lib/cuentas/consultas";
 import type { TipoCuenta } from "@/lib/cuentas/tipos";
 import { NOMBRE_EMPRESA, type Empresa } from "@/lib/empresas";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
-import { crearClienteAdmin } from "@/lib/supabase/admin";
-import { BotonAnularPago, BotonBorrarCargo, FormularioCargo, FormularioPago } from "./formulario-pago";
+import { AccionesCargo, BotonAnularPago, FormularioCargo, FormularioPago } from "./formulario-pago";
 
 /**
  * Cuenta corriente de un proveedor o cliente con una empresa: saldo, registrar
@@ -27,14 +26,7 @@ export async function SeccionCuentaCorriente({
   href: (empresa: Empresa) => string;
   editable: boolean;
 }) {
-  const tipoMovimiento = tipo === "pago" ? "egreso" : "ingreso";
-  const [cuenta, { data: categorias }] = await Promise.all([
-    cuentaCorriente(tipo, id, empresa),
-    // Las categorías se leen con la clave secreta: quien ve proveedores o clientes puede no ver Financiero.
-    editable ? crearClienteAdmin().from("categorias").select("id, nombre").eq("tipo", tipoMovimiento).eq("activa", true).order("nombre") : Promise.resolve({ data: [] }),
-  ]);
-  const lista = (categorias ?? []) as { id: string; nombre: string }[];
-  const defecto = (lista.find((c) => c.nombre === (tipo === "pago" ? "Proveedores" : "Otros ingresos")) ?? lista[0])?.id ?? "";
+  const [cuenta, { lista, defecto }] = await Promise.all([cuentaCorriente(tipo, id, empresa), editable ? categoriasDeCuenta(tipo) : { lista: [], defecto: "" }]);
   const debe = tipo === "pago" ? "Le debemos" : "Nos debe";
 
   return (
@@ -104,7 +96,7 @@ export async function SeccionCuentaCorriente({
             {cuenta.extracto.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-stone-500">
-                  Sin movimientos con {NOMBRE_EMPRESA[empresa]}. {tipo === "pago" ? "Las facturas aprobadas de este proveedor aparecen acá." : "Las facturas emitidas a este cliente (con el ingreso en Financiero) aparecen acá."} Lo que no tiene factura se carga con “Cargar deuda sin factura”.
+                  Sin movimientos con {NOMBRE_EMPRESA[empresa]}. {tipo === "pago" ? "Las facturas aprobadas de este proveedor aparecen acá." : "Las facturas emitidas a este cliente (con el ingreso en Financiero) aparecen acá."} Lo que no tiene factura se carga con “+ Movimiento”.
                 </td>
               </tr>
             )}
@@ -125,7 +117,7 @@ export async function SeccionCuentaCorriente({
                 {editable && (
                   <td className="px-4 py-2 text-right">
                     {r.pagoId && !r.anulado && <BotonAnularPago tipo={tipo} pagoId={r.pagoId} />}
-                    {r.cargoId && <BotonBorrarCargo tipo={tipo} cargoId={r.cargoId} />}
+                    {r.cargo && <AccionesCargo tipo={tipo} cargo={r.cargo} categorias={lista} />}
                   </td>
                 )}
               </tr>

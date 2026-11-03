@@ -73,7 +73,24 @@ export async function cargarDeuda(datos: z.input<typeof esquemaCargo>): Promise<
   const { error } = await supabase.rpc("cargar_cuenta", { p_cargo: { ...r.data, monto } });
   if (error) return { error: error.message.includes("permiso") ? error.message : "No se pudo cargar la deuda" };
   refresh();
-  return { ok: "Deuda cargada: ya está en Financiero como pendiente" };
+  return { ok: "Movimiento cargado: ya está en Financiero como pendiente" };
+}
+
+const esquemaEdicion = esquemaCargo.pick({ fecha: true, monto: true, detalle: true, categoria_id: true });
+
+/** Edita un movimiento a mano; si ya tiene pagos, la base solo cambia el detalle y la categoría. */
+export async function editarCargo(tipo: TipoCuenta, transaccionId: string, datos: z.input<typeof esquemaEdicion>): Promise<{ error?: string }> {
+  await exigirPermisoPagos(tipo);
+  const r = esquemaEdicion.safeParse(datos);
+  if (!r.success) return { error: r.error.issues[0].message };
+  if (!/^[0-9a-f-]{36}$/i.test(transaccionId)) return { error: "Movimiento inválido" };
+  const monto = parsearMonto(r.data.monto);
+  if (monto === null || monto <= 0) return { error: "Monto inválido. Ejemplo: 150.000" };
+  const supabase = await crearClienteServidor();
+  const { error } = await supabase.rpc("editar_cargo", { p_transaccion_id: transaccionId, p_cambios: { ...r.data, monto } });
+  if (error) return { error: /existe|permiso/.test(error.message) ? error.message : "No se pudo guardar el movimiento" };
+  refresh();
+  return {};
 }
 
 /** Borra un cargo a mano que todavía no tiene pagos. */

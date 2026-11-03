@@ -12,6 +12,7 @@ type Movimiento = {
   monto: number;
   fecha: string | null;
   descripcion: string;
+  categoria_id: string;
   proveedor_id: string | null;
   cliente_id: string | null;
   estado: "real" | "pendiente" | "proyectado";
@@ -60,6 +61,14 @@ export async function cuentaCorriente(tipo: TipoCuenta, id: string, empresa: Emp
     }
   }
 
+  // Un movimiento a mano pagado entero toma la fecha del pago: la suya quedó en la imputación.
+  const pagadosEnteros = raices.filter((m) => (m.proveedor_id || m.cliente_id) && m.pago_id).map((m) => m.id);
+  const fechaOriginal = new Map<string, string | null>();
+  if (pagadosEnteros.length) {
+    const { data } = await supabase.from("pago_aplicaciones").select("transaccion_id, fecha_anterior").in("transaccion_id", pagadosEnteros);
+    for (const a of data ?? []) fechaOriginal.set(a.transaccion_id as string, a.fecha_anterior as string | null);
+  }
+
   const comprobantes: ComprobanteCuenta[] = raices
     .filter((r) => r.estado !== "proyectado")
     .map((r) => {
@@ -67,15 +76,17 @@ export async function cuentaCorriente(tipo: TipoCuenta, id: string, empresa: Emp
       const pendientes = familia.filter((m) => m.estado === "pendiente");
       const d = datos.get(r.id);
       const manual = Boolean(r.proveedor_id || r.cliente_id);
+      const fecha = d?.fecha ?? (fechaOriginal.has(r.id) ? fechaOriginal.get(r.id)! : r.fecha);
+      const total = sumar(familia.map((m) => m.monto));
       return {
         id: r.id,
-        fecha: d?.fecha ?? r.fecha,
+        fecha,
         nombre: d?.nombre ?? (manual ? `${r.descripcion} · sin factura` : r.descripcion),
         href: d?.href ?? null,
-        total: sumar(familia.map((m) => m.monto)),
+        total,
         pendiente: sumar(pendientes.map((m) => m.monto)),
         pendientes: pendientes.map((m) => m.id),
-        borrable: manual && familia.length === 1 && r.estado === "pendiente",
+        cargo: manual ? { id: r.id, detalle: r.descripcion, monto: total, fecha, categoria_id: r.categoria_id, conPagos: familia.length > 1 || r.estado !== "pendiente" } : null,
       };
     })
     .sort((a, b) => (a.fecha ?? "").localeCompare(b.fecha ?? ""));
@@ -95,7 +106,7 @@ export async function cuentaCorriente(tipo: TipoCuenta, id: string, empresa: Emp
   listaPagos.sort((a, b) => a.fecha.localeCompare(b.fecha));
 
   const extracto: RenglonCuenta[] = [
-    ...comprobantes.map((c) => ({ fecha: c.fecha, detalle: c.nombre, href: c.href, debe: c.total, haber: 0, saldo: 0, pagoId: null, cargoId: c.borrable ? c.id : null })),
+    ...comprobantes.map((c) => ({ fecha: c.fecha, detalle: c.nombre, href: c.href, debe: c.total, haber: 0, saldo: 0, pagoId: null, cargo: c.cargo })),
     ...listaPagos.map((p) => ({
       fecha: p.fecha,
       detalle: `${tipo === "pago" ? "Pago" : "Cobro"}${p.notas ? ` · ${p.notas}` : ""}`,
@@ -118,13 +129,34 @@ export async function cuentaCorriente(tipo: TipoCuenta, id: string, empresa: Emp
   return { comprobantes, pagos: listaPagos, extracto, saldo: pendiente, facturado, pagado: sumar([facturado, -pendiente]) };
 }
 
-/**
- * Saldo pendiente de cada proveedor (tipo "pago", por id) o cliente ("cobro")
- * con una empresa. Lee con la clave secreta: llamarla después de verificar el permiso.
- */
+/** Saldo pendiente de cada proveedor o cliente con una empresa (ver resumenCuentas). */
 export async function saldosPendientes(tipo: TipoCuenta, empresa: Empresa) {
+  const resumen = await resumenCuentas(tipo, empresa);
+  return new Map([...resumen].map(([id, r]) => [id, r.saldo]));
+}
+
+/** Categorías de Financiero para los movimientos de una cuenta y la que viene elegida. */
+export async function categoriasDeCuenta(tipo: TipoCuenta) {
+  // Con la clave secreta: quien ve proveedores o clientes puede no ver Financiero.
+  const { data } = await crearClienteAdmin()
+    .from("categorias")
+    .select("id, nombre")
+    .eq("tipo", tipo === "pago" ? "egreso" : "ingreso")
+    .eq("activa", true)
+    .order("nombre");
+  const lista = (data ?? []) as { id: string; nombre: string }[];
+  const defecto = (lista.find((c) => c.nombre === (tipo === "pago" ? "Proveedores" : "Otros ingresos")) ?? lista[0])?.id ?? "";
+  return { lista, defecto };
+}
+
+/**
+ * Las cuentas corrientes con una empresa: por cada proveedor (tipo "pago") o
+ * cliente ("cobro") con movimientos, su saldo pendiente. Lee con la clave
+ * secreta: llamarla después de verificar el permiso.
+ */
+export async function resumenCuentas(tipo: TipoCuenta, empresa: Empresa) {
   const admin = crearClienteAdmin();
-  const saldos = new Map<string, number>();
+  const resumen = new Map<string, { saldo: number; movimientos: number }>();
   // Movimiento raíz (el de la factura) → id de la ficha.
   const duenio = new Map<string, string>();
 
@@ -158,16 +190,18 @@ export async function saldosPendientes(tipo: TipoCuenta, empresa: Empresa) {
     .limit(20000);
   for (const c of (cargos ?? []) as unknown as Record<string, string>[]) duenio.set(c.id, c[tipo === "pago" ? "proveedor_id" : "cliente_id"]);
 
-  const { data: pendientes } = await admin
+  const { data: movimientos } = await admin
     .from("transacciones")
-    .select("id, monto, parte_de")
-    .eq("estado", "pendiente")
+    .select("id, monto, estado, parte_de")
+    .neq("estado", "proyectado")
     .eq("empresa", empresa)
     .is("eliminado_en", null)
     .limit(20000);
-  for (const m of pendientes ?? []) {
+  for (const m of movimientos ?? []) {
     const ficha = duenio.get((m.parte_de as string | null) ?? m.id);
-    if (ficha) saldos.set(ficha, sumar([saldos.get(ficha) ?? 0, Number(m.monto)]));
+    if (!ficha) continue;
+    const r = resumen.get(ficha) ?? { saldo: 0, movimientos: 0 };
+    resumen.set(ficha, { saldo: m.estado === "pendiente" ? sumar([r.saldo, Number(m.monto)]) : r.saldo, movimientos: r.movimientos + 1 });
   }
-  return saldos;
+  return resumen;
 }
