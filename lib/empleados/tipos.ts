@@ -41,6 +41,18 @@ const opcional = (max: number) =>
     .optional()
     .transform((v) => v || null);
 
+/**
+ * Teléfono argentino en 10 números (área sin 0 + número sin 15), sin nada más.
+ * Acepta +54 / +54 9 / 0 adelante, para los que ya estaban cargados así.
+ */
+export function telefonoNacional(valor: string) {
+  let n = valor.replace(/\D/g, "");
+  if (n.startsWith("549") && n.length === 13) n = n.slice(3);
+  else if (n.startsWith("54") && n.length === 12) n = n.slice(2);
+  else if (n.startsWith("0") && n.length === 11) n = n.slice(1);
+  return n;
+}
+
 /** Lo que carga el empleado (formulario público) o la productora. */
 export const esquemaPersona = z.object({
   nombre: z.string().trim().min(1, "Falta el nombre").max(80),
@@ -48,17 +60,21 @@ export const esquemaPersona = z.object({
   dni: z
     .string()
     .transform((v) => v.replace(/\D/g, ""))
-    .refine((v) => /^\d{7,8}$/.test(v), "DNI inválido (7 u 8 números)"),
+    .refine((v) => /^\d{7,8}$/.test(v), "DNI inválido: tienen que ser 7 u 8 números, sin puntos"),
   cuil: z
     .string()
     .optional()
     .transform((v) => (v ?? "").replace(/\D/g, "") || null)
-    .refine((v) => v === null || cuitValido(v), "CUIL inválido"),
+    .refine((v) => v === null || cuitValido(v), "CUIL inválido: tienen que ser 11 números correctos, como 20-12345678-9"),
   fecha_nacimiento: z
     .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha de nacimiento inválida"), z.literal("")])
     .optional()
     .transform((v) => v || null),
-  telefono: opcional(40),
+  telefono: z
+    .string()
+    .optional()
+    .transform((v) => telefonoNacional(v ?? "") || null)
+    .refine((v) => v === null || /^\d{10}$/.test(v), "Teléfono inválido: tienen que ser 10 números, con el área sin 0 y sin el 15. Ej.: 2615551234"),
   email: z.union([z.email("Email inválido").trim(), z.literal("")]).optional().transform((v) => v || null),
   domicilio: opcional(200),
   contacto_emergencia: opcional(200),

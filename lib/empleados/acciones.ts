@@ -85,9 +85,20 @@ export async function configurarFormulario(accion: "crear" | "abrir" | "cerrar" 
   return { url: `${await urlBase()}/p/alta/${token}` };
 }
 
+const YA_CARGADO = "Ya estás en la lista de personal. Si tenés que cambiar algún dato, avisale a la productora.";
+
+/** Para comparar nombres sin que importen mayúsculas, acentos ni espacios de más. */
+const nombreComparable = (nombre: string, apellido: string) =>
+  `${nombre} ${apellido}`
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
 /**
- * Lo manda el empleado desde el link público (sin usuario). Un DNI nuevo se
- * carga directo; si el DNI ya existe, queda para que la productora lo revise.
+ * Lo manda el empleado desde el link público (sin usuario). Se carga directo,
+ * salvo que ya esté en la lista: mismo DNI, o mismo nombre y apellido.
  */
 export async function enviarFormularioPersonal(token: string, _previo: EstadoFormEmpleado, formData: FormData): Promise<EstadoFormEmpleado> {
   const valores = valoresDe(formData);
@@ -103,15 +114,16 @@ export async function enviarFormularioPersonal(token: string, _previo: EstadoFor
   const datos = esquemaPersona.safeParse(valores);
   if (!datos.success) return { error: datos.error.issues[0].message, valores };
 
-  const { data: existente } = await admin.from("personal").select("id").eq("dni", datos.data.dni).maybeSingle();
-  if (existente) {
-    const { error } = await admin.from("personal_envios").insert({ persona_id: existente.id, datos: datos.data, estado: "cambios" });
-    if (error) return { error: "No se pudieron enviar los datos. Probá de nuevo.", valores };
-  } else {
-    const { data: nueva, error } = await admin.from("personal").insert(datos.data).select("id").single();
-    if (error || !nueva) return { error: "No se pudieron enviar los datos. Probá de nuevo.", valores };
-    await admin.from("personal_envios").insert({ persona_id: nueva.id, datos: datos.data, estado: "nuevo" });
-  }
+  const { data: personal, error: errorLista } = await admin.from("personal").select("dni, nombre, apellido").limit(5000);
+  if (errorLista) return { error: "No se pudieron enviar los datos. Probá de nuevo.", valores };
+  const nombre = nombreComparable(datos.data.nombre, datos.data.apellido);
+  if ((personal ?? []).some((p) => p.dni === datos.data.dni || nombreComparable(p.nombre, p.apellido) === nombre)) return { error: YA_CARGADO, valores };
+
+  const { data: nueva, error } = await admin.from("personal").insert(datos.data).select("id").single();
+  // 23505: el mismo DNI entró mientras tanto.
+  if (error?.code === "23505") return { error: YA_CARGADO, valores };
+  if (error || !nueva) return { error: "No se pudieron enviar los datos. Probá de nuevo.", valores };
+  await admin.from("personal_envios").insert({ persona_id: nueva.id, datos: datos.data, estado: "nuevo" });
   return { ok: "¡Gracias! Recibimos tus datos." };
 }
 

@@ -1,4 +1,6 @@
-import type { Persona } from "@/lib/empleados/tipos";
+import { telefonoNacional, type Persona } from "@/lib/empleados/tipos";
+
+const soloNumeros = (valor: string) => valor.replace(/\D/g, "");
 
 /** "20123456789" → "20-12345678-9" (y a medida que se escribe: "20-123…"). */
 function conGuiones(valor: string) {
@@ -24,7 +26,22 @@ export function CamposPersona({ persona, v, sufijo = "" }: { persona?: Partial<P
       </div>
       <div>
         <label htmlFor={idDe("dni")} className="etiqueta">DNI</label>
-        <input id={idDe("dni")} name="dni" required inputMode="numeric" maxLength={12} placeholder="Sin puntos" defaultValue={campo("dni")} className="campo font-mono" />
+        <input
+          id={idDe("dni")}
+          name="dni"
+          required
+          inputMode="numeric"
+          pattern="\d{7,8}"
+          title="7 u 8 números, sin puntos"
+          placeholder="12345678"
+          defaultValue={soloNumeros(campo("dni"))}
+          // Solo números: se limpia antes de limitar, para que pegar "12.345.678" no lo corte.
+          onChange={(e) => {
+            e.target.value = soloNumeros(e.target.value).slice(0, 8);
+          }}
+          className="campo font-mono"
+        />
+        <p className="mt-1 text-xs text-stone-500">Solo números, sin puntos (7 u 8).</p>
       </div>
       <div>
         <label htmlFor={idDe("cuil")} className="etiqueta">CUIL</label>
@@ -32,7 +49,8 @@ export function CamposPersona({ persona, v, sufijo = "" }: { persona?: Partial<P
           id={idDe("cuil")}
           name="cuil"
           inputMode="numeric"
-          maxLength={13}
+          pattern="\d{2}-\d{8}-\d"
+          title="11 números: los guiones se ponen solos"
           placeholder="20-12345678-9"
           defaultValue={conGuiones(campo("cuil"))}
           // Los guiones se ponen solos al escribir.
@@ -41,6 +59,7 @@ export function CamposPersona({ persona, v, sufijo = "" }: { persona?: Partial<P
           }}
           className="campo font-mono"
         />
+        <p className="mt-1 text-xs text-stone-500">11 números: los guiones se ponen solos.</p>
       </div>
       <div>
         <label htmlFor={idDe("fecha_nacimiento")} className="etiqueta">Fecha de nacimiento</label>
@@ -48,7 +67,22 @@ export function CamposPersona({ persona, v, sufijo = "" }: { persona?: Partial<P
       </div>
       <div>
         <label htmlFor={idDe("telefono")} className="etiqueta">Teléfono</label>
-        <input id={idDe("telefono")} name="telefono" type="tel" maxLength={40} autoComplete="tel" defaultValue={campo("telefono")} className="campo" />
+        <input
+          id={idDe("telefono")}
+          name="telefono"
+          type="tel"
+          inputMode="numeric"
+          pattern="\d{10}"
+          title="10 números: área sin 0 + número sin 15"
+          placeholder="2615551234"
+          defaultValue={telefonoNacional(campo("telefono"))}
+          // Solo números: se limpia antes de limitar, para que pegar "+54 9 261…" no lo corte.
+          onChange={(e) => {
+            e.target.value = telefonoNacional(e.target.value).slice(0, 10);
+          }}
+          className="campo font-mono"
+        />
+        <p className="mt-1 text-xs text-stone-500">10 números: área sin 0 y sin el 15.</p>
       </div>
       <div>
         <label htmlFor={idDe("email")} className="etiqueta">Email</label>
