@@ -24,6 +24,9 @@ type Movimiento = {
   creado_en: string;
 };
 
+/** De la fecha más vieja a la más nueva; lo que no tiene fecha va al final. */
+const porFecha = (a: string | null, b: string | null) => (a ?? "9999").localeCompare(b ?? "9999");
+
 /** Cuenta corriente de un proveedor (tipo "pago") o cliente ("cobro") con una empresa. */
 export async function cuentaCorriente(tipo: TipoCuenta, id: string, empresa: Empresa): Promise<CuentaCorriente> {
   const supabase = await crearClienteServidor();
@@ -89,7 +92,7 @@ export async function cuentaCorriente(tipo: TipoCuenta, id: string, empresa: Emp
         cargo: manual ? { id: r.id, detalle: r.descripcion, monto: total, fecha, categoria_id: r.categoria_id, conPagos: familia.length > 1 || r.estado !== "pendiente" } : null,
       };
     })
-    .sort((a, b) => (a.fecha ?? "").localeCompare(b.fecha ?? ""));
+    .sort((a, b) => porFecha(a.fecha, b.fecha));
 
   // Pagos registrados acá, más lo que se marcó pagado directo en Financiero.
   const listaPagos: PagoCuenta[] = (pagos ?? []).map((p) => ({
@@ -101,9 +104,9 @@ export async function cuentaCorriente(tipo: TipoCuenta, id: string, empresa: Emp
     anulado: p.anulado_en !== null,
   }));
   for (const m of movimientos) {
-    if (m.estado === "real" && !m.pago_id && m.fecha) listaPagos.push({ id: null, fecha: m.fecha, monto: m.monto, medio_pago: m.medio_pago, notas: "Marcado como pagado en Financiero", anulado: false });
+    if (m.estado === "real" && !m.pago_id) listaPagos.push({ id: null, fecha: m.fecha, monto: m.monto, medio_pago: m.medio_pago, notas: "Marcado como pagado en Financiero", anulado: false });
   }
-  listaPagos.sort((a, b) => a.fecha.localeCompare(b.fecha));
+  listaPagos.sort((a, b) => porFecha(a.fecha, b.fecha));
 
   const extracto: RenglonCuenta[] = [
     ...comprobantes.map((c) => ({ fecha: c.fecha, detalle: c.nombre, href: c.href, debe: c.total, haber: 0, saldo: 0, pagoId: null, cargo: c.cargo })),
@@ -117,7 +120,7 @@ export async function cuentaCorriente(tipo: TipoCuenta, id: string, empresa: Emp
       pagoId: p.id,
       anulado: p.anulado,
     })),
-  ].sort((a, b) => (a.fecha ?? "").localeCompare(b.fecha ?? "") || b.debe - a.debe);
+  ].sort((a, b) => porFecha(a.fecha, b.fecha) || b.debe - a.debe);
   let saldo = 0;
   for (const r of extracto) {
     saldo = sumar([saldo, r.debe, -r.haber]);

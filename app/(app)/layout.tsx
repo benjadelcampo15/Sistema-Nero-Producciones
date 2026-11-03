@@ -6,6 +6,7 @@ import { LogoPlanix } from "@/components/logo-planix";
 import { MODO_DEMO } from "@/lib/cliente";
 import { EnlacesMenu, type GrupoMenu } from "./enlaces-menu";
 import { BarraLateral } from "./barra-lateral";
+import { EtiquetasTablas } from "./etiquetas-tablas";
 
 const encabezado = (
   <div className="px-5 py-3 md:py-5">
@@ -37,6 +38,7 @@ export default function LayoutApp({ children }: LayoutProps<"/">) {
           </p>
         )}
         {children}
+        <EtiquetasTablas />
       </main>
     </div>
   );

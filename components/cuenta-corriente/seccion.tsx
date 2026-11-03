@@ -102,7 +102,7 @@ export async function SeccionCuentaCorriente({
             )}
             {cuenta.extracto.map((r, i) => (
               <tr key={i} className={r.anulado ? "text-stone-400 line-through" : ""}>
-                <td className="whitespace-nowrap px-4 py-2 text-stone-600">{r.fecha ? formatoFecha(r.fecha) : "—"}</td>
+                <td className="whitespace-nowrap px-4 py-2 text-stone-600">{r.fecha ? formatoFecha(r.fecha) : "Sin fecha"}</td>
                 <td className="px-4 py-2">
                   {r.href ? (
                     <Link href={r.href} className="font-medium underline decoration-stone-300 hover:decoration-stone-900">{r.detalle}</Link>

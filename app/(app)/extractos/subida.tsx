@@ -226,7 +226,7 @@ export function SubidaExtracto({ cuentas }: { cuentas: Cuenta[] }) {
           )}
 
           <div className="max-h-80 overflow-auto rounded-md border border-stone-200">
-            <table className="w-full text-sm">
+            <table className="tabla-movil w-full text-sm">
               <thead className="sticky top-0 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
                 <tr>
                   <th className="px-3 py-2">Fecha</th>

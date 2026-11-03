@@ -113,7 +113,7 @@ export function Importador({ tipo }: { tipo: "stock-movimientos" | "stock-produc
             {errores > 0 && <span className="font-medium text-red-700"> · {errores} con errores (corregilas en el Excel y volvé a subirlo)</span>}
           </p>
           <div className="max-h-96 overflow-auto rounded-md border border-stone-200">
-            <table className="w-full text-sm">
+            <table className="tabla-movil w-full text-sm">
               <thead className="sticky top-0 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
                 <tr>
                   <th className="px-3 py-2">Fila</th>

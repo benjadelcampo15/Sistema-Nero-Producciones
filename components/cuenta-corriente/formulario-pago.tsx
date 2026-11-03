@@ -97,7 +97,7 @@ export function FormularioPago({ tipo, id, empresa, comprobantes }: { tipo: Tipo
           {abiertos.map((c) => (
             <label key={c.id} className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-stone-50">
               <input type="checkbox" checked={elegidos.includes(c.id)} onChange={() => alternar(c)} />
-              <span className="w-20 shrink-0 text-stone-500">{c.fecha ? formatoFecha(c.fecha) : "—"}</span>
+              <span className="w-20 shrink-0 text-stone-500">{c.fecha ? formatoFecha(c.fecha) : "Sin fecha"}</span>
               <span className="flex-1">{c.nombre}</span>
               <span className="font-mono">{formatoPesos(c.pendiente)}</span>
             </label>
@@ -137,7 +137,7 @@ export function FormularioCargo({
   const [pendiente, iniciar] = useTransition();
   const [abierto, setAbierto] = useState(Boolean(alTerminar));
   const [monto, setMonto] = useState("");
-  const [fecha, setFecha] = useState(hoy());
+  const [fecha, setFecha] = useState("");
   const [detalle, setDetalle] = useState("");
   const [categoria, setCategoria] = useState(categoriaDefecto);
   const [mensaje, setMensaje] = useState<{ error?: string; ok?: string }>({});
@@ -183,8 +183,11 @@ export function FormularioCargo({
           <input id="cargo_monto" required inputMode="decimal" value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="150.000" className="campo text-right font-mono" />
         </div>
         <div>
-          <label htmlFor="cargo_fecha" className="etiqueta">Fecha</label>
-          <input id="cargo_fecha" type="date" required value={fecha} onChange={(e) => setFecha(e.target.value)} className="campo" />
+          <label htmlFor="cargo_fecha" className="etiqueta">
+            Fecha <span className="font-normal text-stone-400">(opcional)</span>
+          </label>
+          <input id="cargo_fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="campo" />
+          {!fecha && <p className="mt-1 text-xs text-stone-500">Sin fecha no entra al cashflow hasta que se la pongas.</p>}
         </div>
         <div className="lg:col-span-2">
           <label htmlFor="cargo_categoria" className="etiqueta">Categoría en Financiero</label>
@@ -219,7 +222,7 @@ export function AccionesCargo({ tipo, cargo, categorias }: { tipo: TipoCuenta; c
   const [editando, setEditando] = useState(false);
   const [detalle, setDetalle] = useState(cargo.detalle);
   const [monto, setMonto] = useState(String(cargo.monto).replace(".", ","));
-  const [fecha, setFecha] = useState(cargo.fecha ?? hoy());
+  const [fecha, setFecha] = useState(cargo.fecha ?? "");
   const [categoria, setCategoria] = useState(cargo.categoria_id);
   const [error, setError] = useState<string | null>(null);
 
@@ -267,8 +270,10 @@ export function AccionesCargo({ tipo, cargo, categorias }: { tipo: TipoCuenta; c
                 <input id={`editar_monto_${cargo.id}`} required disabled={cargo.conPagos} inputMode="decimal" value={monto} onChange={(e) => setMonto(e.target.value)} className="campo text-right font-mono disabled:bg-stone-100" />
               </div>
               <div>
-                <label htmlFor={`editar_fecha_${cargo.id}`} className="etiqueta">Fecha</label>
-                <input id={`editar_fecha_${cargo.id}`} type="date" required disabled={cargo.conPagos} value={fecha} onChange={(e) => setFecha(e.target.value)} className="campo disabled:bg-stone-100" />
+                <label htmlFor={`editar_fecha_${cargo.id}`} className="etiqueta">
+                  Fecha <span className="font-normal text-stone-400">(opcional)</span>
+                </label>
+                <input id={`editar_fecha_${cargo.id}`} type="date" disabled={cargo.conPagos} value={fecha} onChange={(e) => setFecha(e.target.value)} className="campo disabled:bg-stone-100" />
               </div>
             </div>
             <div>

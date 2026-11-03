@@ -30,7 +30,7 @@ export type CargoEditable = { id: string; detalle: string; monto: number; fecha:
 /** Un pago o cobro registrado desde la cuenta corriente (o pagado directo en Financiero). */
 export type PagoCuenta = {
   id: string | null;
-  fecha: string;
+  fecha: string | null;
   monto: number;
   medio_pago: MedioPago;
   notas: string | null;

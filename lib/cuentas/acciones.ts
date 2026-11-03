@@ -56,7 +56,8 @@ const esquemaCargo = z.object({
   tipo: z.enum(["pago", "cobro"]),
   id: z.uuid(),
   empresa: z.enum(EMPRESAS),
-  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Falta la fecha"),
+  // Vacía = sin fecha: va así a Financiero (no entra al cashflow hasta que se le ponga).
+  fecha: z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"), z.literal("")]).transform((v) => v || null),
   monto: z.string(),
   detalle: z.string().trim().min(1, "Escribí qué es (ej. Sonido evento del sábado)").max(200),
   categoria_id: z.uuid("Elegí la categoría"),

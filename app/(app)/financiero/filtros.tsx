@@ -68,6 +68,7 @@ export function Filtros({
   const { aplicar, pendiente } = useFiltros();
   const [valores, setValores] = useState(iniciales);
   const [escribiendo, setEscribiendo] = useState(false);
+  const [verFiltros, setVerFiltros] = useState(false);
   const temporizador = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Si la URL cambia desde afuera (atrás/adelante del navegador), se sincronizan
@@ -152,7 +153,12 @@ export function Filtros({
         {pendiente && <span className="ml-auto text-xs text-stone-500">Actualizando…</span>}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
+      {/* En el celular los filtros van plegados: si no, tapan los movimientos. */}
+      <button type="button" onClick={() => setVerFiltros(!verFiltros)} aria-expanded={verFiltros} className="text-xs font-medium underline sm:hidden">
+        {verFiltros ? "Ocultar filtros" : hayFiltrosExtra ? "Ver filtros (hay activos)" : "Fechas y filtros"}
+      </button>
+
+      <div className={`${verFiltros ? "grid" : "hidden"} gap-3 sm:grid sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7`}>
         <div>
           <label htmlFor="desde" className="etiqueta">Desde</label>
           <input id="desde" type="date" value={valores.desde} onChange={(e) => cambiar("desde", e.target.value)} className="campo" />

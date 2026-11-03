@@ -105,6 +105,14 @@ export function TablaPersonal({ convocados, polizas, puestos, editable }: { conv
         </div>
       )}
 
+      {/* En el celular no se ve el encabezado de la tabla, que es donde está este tilde. */}
+      {editable && visibles.length > 0 && (
+        <label className="flex items-center gap-2 text-sm md:hidden">
+          <input type="checkbox" checked={todos} onChange={() => setElegidos(todos ? new Set() : new Set(visibles.map((c) => c.id)))} />
+          Seleccionar todos
+        </label>
+      )}
+
       <div className="tarjeta overflow-x-auto p-0">
         <table className="w-full min-w-[720px] text-sm">
           <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">

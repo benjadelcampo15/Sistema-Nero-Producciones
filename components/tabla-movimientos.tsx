@@ -20,7 +20,53 @@ export function TablaMovimientos({
   const columnas = 5 + (mostrarEvento ? 1 : 0) + (editable ? 1 : 0);
 
   return (
-    <div className="tarjeta overflow-x-auto p-0">
+    <>
+    {/* Celular: una tarjeta por movimiento. */}
+    <div className="space-y-2 md:hidden">
+      {transacciones.length === 0 && <p className="tarjeta p-6 text-center text-sm text-stone-500">No hay movimientos.</p>}
+      {transacciones.map((t) => (
+        <article key={t.id} className="tarjeta space-y-2 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <p className="min-w-0 font-medium">{t.descripcion}</p>
+            <p className={`shrink-0 font-mono font-semibold ${t.tipo === "ingreso" ? "text-green-700" : "text-red-700"}`}>
+              {t.tipo === "ingreso" ? "+" : "−"} {formatoPesos(t.monto)}
+            </p>
+          </div>
+          <p className="text-xs text-stone-500">
+            {t.fecha ? formatoFecha(t.fecha) : <span className="text-amber-700">Sin fecha</span>}
+            {" · "}
+            {t.categoria.nombre}
+            {" · "}
+            {NOMBRE_MEDIO_PAGO[t.medio_pago]}
+            {t.contraparte && ` · ${t.contraparte}`}
+          </p>
+          {mostrarEvento && t.evento && (
+            <Link href={`/eventos/${t.evento.id}`} className="block text-xs underline decoration-stone-300">{t.evento.nombre}</Link>
+          )}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            {editable ? (
+              <SelectorEstado key={t.estado} id={t.id} estado={t.estado} />
+            ) : (
+              t.estado !== "real" && (
+                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${t.estado === "pendiente" ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"}`}>
+                  {NOMBRE_ESTADO_MOVIMIENTO[t.estado]}
+                </span>
+              )
+            )}
+            {t.facturado && <span className="rounded-full bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-stone-600">Fact.</span>}
+            {editable && (
+              <span className="ml-auto flex items-center gap-3">
+                {t.estado !== "real" && <RegistrarPago t={t} />}
+                <Link href={`/financiero/${t.id}/editar?volver_a=${encodeURIComponent(volverA)}`} className="text-xs text-stone-600 hover:text-stone-900">Editar</Link>
+                <BotonEliminar id={t.id} descripcion={t.descripcion} />
+              </span>
+            )}
+          </div>
+        </article>
+      ))}
+    </div>
+
+    <div className="tarjeta hidden overflow-x-auto p-0 md:block">
       <table className="w-full min-w-[680px] text-sm">
         <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
           <tr>
@@ -108,5 +154,6 @@ export function TablaMovimientos({
         </tbody>
       </table>
     </div>
+    </>
   );
 }
