@@ -9,7 +9,7 @@ name: Migraciones
 on:
   push:
     branches: [main]
-    paths: ["supabase/migrations/**"]
+    paths: ["supabase/migrations/**", "central/supabase/migrations/**"]
   workflow_dispatch:
 
 concurrency:
@@ -48,3 +48,24 @@ jobs:
             exit 1
           fi
           cat salida.txt
+
+  # Base central de Planix (Centro de Solicitudes): vive en la base de la demo,
+  # con su propio registro de migraciones (central/supabase/migrations).
+  central:
+    runs-on: ubuntu-latest
+    name: Central
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Aplicar migraciones centrales
+        env:
+          CENTRAL_DB_URL: ${{ secrets.DEMO_DB_URL }}
+        run: |
+          if [ -z "$CENTRAL_DB_URL" ]; then
+            echo "Falta el secreto DEMO_DB_URL: se saltea la base central."
+            exit 0
+          fi
+          npm install --no-save --no-package-lock pg@8 > /dev/null
+          node scripts/aplicar-central.mts

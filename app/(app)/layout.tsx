@@ -7,6 +7,9 @@ import { MODO_DEMO } from "@/lib/cliente";
 import { EnlacesMenu, type GrupoMenu } from "./enlaces-menu";
 import { BarraLateral } from "./barra-lateral";
 import { EtiquetasTablas } from "./etiquetas-tablas";
+import Link from "next/link";
+import { centralConfigurada } from "@/lib/solicitudes/central";
+import { cantidadNovedades } from "@/lib/solicitudes/consultas";
 
 const encabezado = (
   <div className="px-5 py-3 md:py-5">
@@ -37,6 +40,9 @@ export default function LayoutApp({ children }: LayoutProps<"/">) {
             <span className="font-semibold">Modo demo:</span> los datos son ficticios y se reinician todas las noches. Probá lo que quieras.
           </p>
         )}
+        <Suspense fallback={null}>
+          <AvisoSolicitudes />
+        </Suspense>
         {children}
         <EtiquetasTablas />
       </main>
@@ -52,6 +58,9 @@ async function Menu() {
     nombre: g.grupo,
     items: g.items.filter((i) => usuario.permisos[i.permiso] !== "ninguno").map(({ nombre, href }) => ({ nombre, href })),
   }));
+  if (centralConfigurada()) {
+    grupos.push({ nombre: "Planix", items: [{ href: "/solicitudes", nombre: "Solicitudes y mejoras", aviso: await cantidadNovedades(usuario) }] });
+  }
   grupos.push({
     nombre: "Configuración",
     items: [...(usuario.esAdmin ? [{ href: "/configuracion/usuarios", nombre: "Usuarios" }] : []), { href: "/plantillas", nombre: "Plantillas Excel" }],
@@ -72,5 +81,18 @@ async function Menu() {
         </form>
       </div>
     </div>
+  );
+}
+
+/** Aviso arriba de todo cuando hay novedades en el Centro de Solicitudes (se ve también en el celular). */
+async function AvisoSolicitudes() {
+  if (!centralConfigurada()) return null;
+  const novedades = await cantidadNovedades(await obtenerUsuario());
+  if (!novedades) return null;
+  return (
+    <Link href="/solicitudes" className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-900 hover:bg-red-100 print:hidden">
+      <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{novedades}</span>
+      {novedades === 1 ? "Hay una novedad" : `Hay ${novedades} novedades`} en Solicitudes y mejoras →
+    </Link>
   );
 }
