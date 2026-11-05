@@ -48,9 +48,9 @@ const LIMITE = 5000;
  * Financiero y, si se pide, los cheques pendientes de la sección Cheques
  * (emitidos = egreso, recibidos en cartera o depositados = ingreso).
  */
-export async function movimientosEntre(desde: string, hasta: string, { proyectados = true, cheques = true } = {}) {
+export async function movimientosEntre(desde: string, hasta: string, { proyectados = true, cheques = true, reales = true } = {}) {
   const supabase = await crearClienteServidor();
-  const estados = proyectados ? ["real", "pendiente", "proyectado"] : ["real", "pendiente"];
+  const estados = [...(reales ? ["real"] : []), "pendiente", ...(proyectados ? ["proyectado"] : [])];
   const [trx, chq, vinculados] = await Promise.all([
     supabase
       .from("transacciones")

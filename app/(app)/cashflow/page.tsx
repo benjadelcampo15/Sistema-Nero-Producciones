@@ -30,7 +30,8 @@ export default async function PaginaCashflow({ searchParams }: PageProps<"/cashf
   const filtrado = p.hasta !== undefined || p.desde !== undefined;
   const opciones = { proyectados: !filtrado || p.proyectados === "1", cheques: !filtrado || p.cheques === "1" };
 
-  const { movimientos, truncado } = await movimientosEntre(desde, hasta, opciones);
+  // Los movimientos reales ya pasaron por el banco (están en el saldo cargado): cuenta solo lo pendiente y lo proyectado.
+  const { movimientos, truncado } = await movimientosEntre(desde, hasta, { ...opciones, reales: false });
   const inicio = { saldo: t.total, descubierto: t.descubierto };
 
   // Saldo acumulado movimiento a movimiento, agrupado por mes.
@@ -49,7 +50,7 @@ export default async function PaginaCashflow({ searchParams }: PageProps<"/cashf
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Cashflow</h1>
-        <p className="text-sm text-stone-500">Arranca del saldo bancario cargado y suma los ingresos y egresos de {NOMBRE_EMPRESA.nero} y de {NOMBRE_EMPRESA.ruta} de ahí en adelante, mes a mes, con el saldo a cada fecha.</p>
+        <p className="text-sm text-stone-500">Arranca del saldo bancario cargado y suma lo pendiente y proyectado de {NOMBRE_EMPRESA.nero} y de {NOMBRE_EMPRESA.ruta} de ahí en adelante, mes a mes, con el saldo a cada fecha. Los movimientos reales no se suman: ya están en el saldo del banco.</p>
       </div>
 
       {cargas.length === 0 && (
