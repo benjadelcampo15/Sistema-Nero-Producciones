@@ -160,57 +160,16 @@ export async function categoriasDeCuenta(tipo: TipoCuenta) {
 
 /**
  * Las cuentas corrientes con una empresa: por cada proveedor (tipo "pago") o
- * cliente ("cobro") con movimientos, su saldo pendiente. Lee con la clave
- * secreta: llamarla después de verificar el permiso.
+ * cliente ("cobro") con movimientos, su saldo pendiente. Se calcula en la base
+ * (resumen_cuentas), en un solo viaje; la función verifica el permiso.
  */
 export async function resumenCuentas(tipo: TipoCuenta, empresa: Empresa) {
-  const admin = crearClienteAdmin();
+  const supabase = await crearClienteServidor();
+  const { data, error } = await supabase.rpc("resumen_cuentas", { p_tipo: tipo, p_empresa: empresa });
+  if (error) throw new Error(`No se pudieron calcular las cuentas corrientes: ${error.message}`);
   const resumen = new Map<string, { saldo: number; movimientos: number }>();
-  // Movimiento raíz (el de la factura) → id de la ficha.
-  const duenio = new Map<string, string>();
-
-  if (tipo === "pago") {
-    const [{ data: proveedores }, { data: facturas }] = await Promise.all([
-      admin.from("proveedores").select("id, cuit").not("cuit", "is", null),
-      admin.from("facturas").select("id, cuit_emisor").eq("estado", "aprobada").limit(20000),
-    ]);
-    const porCuit = new Map((proveedores ?? []).map((p) => [p.cuit as string, p.id as string]));
-    const proveedorDeFactura = new Map<string, string>();
-    for (const f of facturas ?? []) {
-      const p = porCuit.get((f.cuit_emisor ?? "").replace(/\D/g, ""));
-      if (p) proveedorDeFactura.set(f.id, p);
-    }
-    const { data: raices } = await admin.from("transacciones").select("id, factura_id").not("factura_id", "is", null).eq("empresa", empresa).limit(20000);
-    for (const r of raices ?? []) {
-      const p = proveedorDeFactura.get(r.factura_id as string);
-      if (p) duenio.set(r.id, p);
-    }
-  } else {
-    const { data } = await admin.from("comprobantes_emitidos").select("transaccion_id, cliente_id").not("transaccion_id", "is", null).not("cliente_id", "is", null).limit(20000);
-    for (const c of data ?? []) duenio.set(c.transaccion_id as string, c.cliente_id as string);
-  }
-
-  // Cargos a mano (sin factura).
-  const { data: cargos } = await admin
-    .from("transacciones")
-    .select(`id, ${tipo === "pago" ? "proveedor_id" : "cliente_id"}`)
-    .not(tipo === "pago" ? "proveedor_id" : "cliente_id", "is", null)
-    .eq("empresa", empresa)
-    .limit(20000);
-  for (const c of (cargos ?? []) as unknown as Record<string, string>[]) duenio.set(c.id, c[tipo === "pago" ? "proveedor_id" : "cliente_id"]);
-
-  const { data: movimientos } = await admin
-    .from("transacciones")
-    .select("id, monto, estado, parte_de")
-    .neq("estado", "proyectado")
-    .eq("empresa", empresa)
-    .is("eliminado_en", null)
-    .limit(20000);
-  for (const m of movimientos ?? []) {
-    const ficha = duenio.get((m.parte_de as string | null) ?? m.id);
-    if (!ficha) continue;
-    const r = resumen.get(ficha) ?? { saldo: 0, movimientos: 0 };
-    resumen.set(ficha, { saldo: m.estado === "pendiente" ? sumar([r.saldo, Number(m.monto)]) : r.saldo, movimientos: r.movimientos + 1 });
+  for (const r of (data ?? []) as { ficha: string; saldo: number | string; movimientos: number }[]) {
+    resumen.set(r.ficha, { saldo: Number(r.saldo), movimientos: r.movimientos });
   }
   return resumen;
 }

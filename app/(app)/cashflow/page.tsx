@@ -17,21 +17,24 @@ export default async function PaginaCashflow({ searchParams }: PageProps<"/cashf
 
   const p = await searchParams;
   // Por defecto arranca el día de la última carga de saldos bancarios; se puede elegir otra fecha.
-  const ultimos = await saldosAFecha(hoy());
+  const [ultimos, cuentas] = await Promise.all([saldosAFecha(hoy()), listarCuentas()]);
   const ultimaCarga = [...ultimos.values()].map((s) => s.fecha).sort().at(-1) ?? hoy();
   const desde = fechaValida(p.desde) ? (p.desde as string) : ultimaCarga;
-  // Saldo inicial: los saldos bancarios tal cual se cargaron hasta esa fecha (sin calcular saldos históricos).
-  const [cuentas, saldos] = await Promise.all([listarCuentas(), desde === hoy() ? ultimos : saldosAFecha(desde)]);
-  const t = totalSaldos(cuentas, saldos);
-  const cargas = [...saldos.values()].map((s) => s.fecha).sort();
   const porDefecto = proximosMeses(3);
   const hasta = fechaValida(p.hasta) && (p.hasta as string) >= desde ? (p.hasta as string) : porDefecto.hasta > desde ? porDefecto.hasta : desde;
   // Los checkboxes vienen solo si están tildados; sin filtros aplicados, van los dos.
   const filtrado = p.hasta !== undefined || p.desde !== undefined;
   const opciones = { proyectados: !filtrado || p.proyectados === "1", cheques: !filtrado || p.cheques === "1" };
 
+  // Saldo inicial: los saldos bancarios tal cual se cargaron hasta esa fecha (sin calcular saldos históricos);
+  // desde la última carga en adelante son los mismos que ya se leyeron.
   // Los movimientos reales ya pasaron por el banco (están en el saldo cargado): cuenta solo lo pendiente y lo proyectado.
-  const { movimientos, truncado } = await movimientosEntre(desde, hasta, { ...opciones, reales: false });
+  const [saldos, { movimientos, truncado }] = await Promise.all([
+    desde >= ultimaCarga ? ultimos : saldosAFecha(desde),
+    movimientosEntre(desde, hasta, { ...opciones, reales: false }),
+  ]);
+  const t = totalSaldos(cuentas, saldos);
+  const cargas = [...saldos.values()].map((s) => s.fecha).sort();
   const inicio = { saldo: t.total, descubierto: t.descubierto };
 
   // Saldo acumulado movimiento a movimiento, agrupado por mes.

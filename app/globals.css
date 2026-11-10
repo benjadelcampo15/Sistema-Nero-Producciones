@@ -143,3 +143,20 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .planix-bloque { animation: none; }
 }
+/* Esqueleto de carga entre pantallas: aparece después de un instante (las cargas rápidas no lo muestran) y late suave. */
+.esqueleto {
+  animation:
+    esqueleto-aparecer 0.2s ease-out 0.12s both,
+    esqueleto-latido 1.4s ease-in-out 0.32s infinite;
+}
+@keyframes esqueleto-aparecer {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes esqueleto-latido {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .esqueleto { animation: esqueleto-aparecer 0.2s ease-out 0.12s both; }
+}
