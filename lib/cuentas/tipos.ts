@@ -24,8 +24,8 @@ export type ComprobanteCuenta = {
   cargo: CargoEditable | null;
 };
 
-/** Movimiento a mano de una cuenta: con pagos, solo se cambian el detalle y la categoría. */
-export type CargoEditable = { id: string; detalle: string; monto: number; fecha: string | null; categoria_id: string; conPagos: boolean };
+/** Movimiento a mano de una cuenta. Con pagos, el importe no puede quedar por debajo de lo pagado. */
+export type CargoEditable = { id: string; detalle: string; monto: number; fecha: string | null; categoria_id: string; conPagos: boolean; pagado: number };
 
 /** Un pago o cobro registrado desde la cuenta corriente (o pagado directo en Financiero). */
 export type PagoCuenta = {
@@ -34,10 +34,21 @@ export type PagoCuenta = {
   monto: number;
   medio_pago: MedioPago;
   notas: string | null;
-  anulado: boolean;
 };
 
 /** Renglón del extracto: debe (facturado) o haber (pagado), con el saldo acumulado. */
-export type RenglonCuenta = { fecha: string | null; detalle: string; href: string | null; debe: number; haber: number; saldo: number; pagoId: string | null; cargo?: CargoEditable | null; anulado?: boolean };
+export type RenglonCuenta = {
+  fecha: string | null;
+  detalle: string;
+  href: string | null;
+  debe: number;
+  haber: number;
+  saldo: number;
+  /** Pago registrado desde la cuenta (se edita y elimina acá). */
+  pago?: PagoCuenta & { id: string };
+  /** Pago marcado directo en Financiero (se cambia allá). */
+  enFinanciero?: boolean;
+  cargo?: CargoEditable | null;
+};
 
 export type CuentaCorriente = { comprobantes: ComprobanteCuenta[]; pagos: PagoCuenta[]; extracto: RenglonCuenta[]; saldo: number; facturado: number; pagado: number };

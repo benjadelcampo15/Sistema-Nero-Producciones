@@ -3,7 +3,7 @@ import { categoriasDeCuenta, cuentaCorriente } from "@/lib/cuentas/consultas";
 import type { TipoCuenta } from "@/lib/cuentas/tipos";
 import { NOMBRE_EMPRESA, type Empresa } from "@/lib/empresas";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
-import { AccionesCargo, BotonAnularPago, FormularioCargo, FormularioPago } from "./formulario-pago";
+import { AccionesCargo, AccionesPago, FormularioCargo, FormularioPago } from "./formulario-pago";
 
 /**
  * Cuenta corriente de un proveedor o cliente con una empresa: saldo, registrar
@@ -101,23 +101,32 @@ export async function SeccionCuentaCorriente({
               </tr>
             )}
             {cuenta.extracto.map((r, i) => (
-              <tr key={i} className={r.anulado ? "text-stone-400 line-through" : ""}>
+              <tr key={r.pago?.id ?? r.cargo?.id ?? i}>
                 <td className="whitespace-nowrap px-4 py-2 text-stone-600">{r.fecha ? formatoFecha(r.fecha) : "Sin fecha"}</td>
                 <td className="px-4 py-2">
                   {r.href ? (
                     <Link href={r.href} className="font-medium underline decoration-stone-300 hover:decoration-stone-900">{r.detalle}</Link>
                   ) : (
-                    <span className={r.haber || r.anulado ? "text-green-800" : ""}>{r.detalle}</span>
+                    <span className={r.haber ? "text-green-800" : ""}>{r.detalle}</span>
                   )}
-                  {r.anulado && <span className="ml-2 text-xs no-underline">(anulado)</span>}
                 </td>
                 <td className="whitespace-nowrap px-4 py-2 text-right font-mono">{r.debe ? formatoPesos(r.debe) : ""}</td>
                 <td className="whitespace-nowrap px-4 py-2 text-right font-mono text-green-800">{r.haber ? formatoPesos(r.haber) : ""}</td>
                 <td className="whitespace-nowrap px-4 py-2 text-right font-mono font-semibold">{formatoPesos(r.saldo)}</td>
                 {editable && (
                   <td className="px-4 py-2 text-right">
-                    {r.pagoId && !r.anulado && <BotonAnularPago tipo={tipo} pagoId={r.pagoId} />}
-                    {r.cargo && <AccionesCargo tipo={tipo} cargo={r.cargo} categorias={lista} />}
+                    {r.pago && <AccionesPago key={`${r.pago.id}-${r.pago.monto}-${r.pago.fecha}`} tipo={tipo} pago={r.pago} />}
+                    {r.cargo && <AccionesCargo key={`${r.cargo.id}-${r.cargo.monto}-${r.cargo.fecha}`} tipo={tipo} cargo={r.cargo} categorias={lista} />}
+                    {r.debe > 0 && !r.cargo && r.href && (
+                      <Link href={r.href} title="Viene de una factura: el importe se cambia en la factura" className="text-xs text-stone-500 hover:underline">
+                        Ver factura
+                      </Link>
+                    )}
+                    {r.enFinanciero && (
+                      <span title="Se marcó pagado directo en Financiero: se cambia desde Financiero" className="cursor-help text-xs text-stone-400">
+                        Desde Financiero
+                      </span>
+                    )}
                   </td>
                 )}
               </tr>

@@ -89,36 +89,42 @@ export async function cuentaCorriente(tipo: TipoCuenta, id: string, empresa: Emp
         total,
         pendiente: sumar(pendientes.map((m) => m.monto)),
         pendientes: pendientes.map((m) => m.id),
-        cargo: manual ? { id: r.id, detalle: r.descripcion, monto: total, fecha, categoria_id: r.categoria_id, conPagos: familia.length > 1 || r.estado !== "pendiente" } : null,
+        cargo: manual
+          ? {
+              id: r.id,
+              detalle: r.descripcion,
+              monto: total,
+              fecha,
+              categoria_id: r.categoria_id,
+              conPagos: familia.length > 1 || r.estado !== "pendiente",
+              pagado: sumar(familia.filter((m) => m.estado !== "pendiente").map((m) => m.monto)),
+            }
+          : null,
       };
     })
     .sort((a, b) => porFecha(a.fecha, b.fecha));
 
-  // Pagos registrados acá, más lo que se marcó pagado directo en Financiero.
-  const listaPagos: PagoCuenta[] = (pagos ?? []).map((p) => ({
-    id: p.id,
-    fecha: p.fecha,
-    monto: Number(p.monto),
-    medio_pago: p.medio_pago as MedioPago,
-    notas: p.notas,
-    anulado: p.anulado_en !== null,
-  }));
+  // Pagos registrados acá (los eliminados no se muestran: quedan guardados para auditoría),
+  // más lo que se marcó pagado directo en Financiero.
+  const listaPagos: PagoCuenta[] = (pagos ?? [])
+    .filter((p) => p.anulado_en === null)
+    .map((p) => ({ id: p.id, fecha: p.fecha, monto: Number(p.monto), medio_pago: p.medio_pago as MedioPago, notas: p.notas }));
   for (const m of movimientos) {
-    if (m.estado === "real" && !m.pago_id) listaPagos.push({ id: null, fecha: m.fecha, monto: m.monto, medio_pago: m.medio_pago, notas: "Marcado como pagado en Financiero", anulado: false });
+    if (m.estado === "real" && !m.pago_id) listaPagos.push({ id: null, fecha: m.fecha, monto: m.monto, medio_pago: m.medio_pago, notas: "Marcado como pagado en Financiero" });
   }
   listaPagos.sort((a, b) => porFecha(a.fecha, b.fecha));
 
   const extracto: RenglonCuenta[] = [
-    ...comprobantes.map((c) => ({ fecha: c.fecha, detalle: c.nombre, href: c.href, debe: c.total, haber: 0, saldo: 0, pagoId: null, cargo: c.cargo })),
+    ...comprobantes.map((c) => ({ fecha: c.fecha, detalle: c.nombre, href: c.href, debe: c.total, haber: 0, saldo: 0, cargo: c.cargo })),
     ...listaPagos.map((p) => ({
       fecha: p.fecha,
       detalle: `${tipo === "pago" ? "Pago" : "Cobro"}${p.notas ? ` · ${p.notas}` : ""}`,
       href: null,
       debe: 0,
-      haber: p.anulado ? 0 : p.monto,
+      haber: p.monto,
       saldo: 0,
-      pagoId: p.id,
-      anulado: p.anulado,
+      pago: p.id ? { ...p, id: p.id } : undefined,
+      enFinanciero: !p.id,
     })),
   ].sort((a, b) => porFecha(a.fecha, b.fecha) || b.debe - a.debe);
   let saldo = 0;
