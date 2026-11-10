@@ -1,23 +1,30 @@
 import Link from "next/link";
-import { NOMBRE_ESTADO_MOVIMIENTO, NOMBRE_MEDIO_PAGO, type Transaccion } from "@/lib/financiero/tipos";
+import { NOMBRE_ESTADO_MOVIMIENTO, NOMBRE_MEDIO_PAGO, type Categoria, type EventoResumido, type Transaccion } from "@/lib/financiero/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { BotonEliminar } from "./boton-eliminar-transaccion";
 import { SelectorEstado } from "./selector-estado";
 import { RegistrarPago } from "./registrar-pago";
+import { CeldaCategoria, CeldaEvento, CeldaFecha } from "./celdas-movimiento";
 
 export function TablaMovimientos({
   transacciones,
   editable,
   volverA,
   mostrarEvento = true,
+  categorias,
+  eventos,
 }: {
   transacciones: Transaccion[];
   editable: boolean;
   /** Pantalla a la que se vuelve después de editar. */
   volverA: string;
   mostrarEvento?: boolean;
+  /** Con categorías y eventos, la fecha, la categoría y el evento se editan en la misma lista. */
+  categorias?: Categoria[];
+  eventos?: EventoResumido[];
 }) {
   const columnas = 5 + (mostrarEvento ? 1 : 0) + (editable ? 1 : 0);
+  const rapida = editable && categorias !== undefined && eventos !== undefined;
 
   return (
     <>
@@ -32,20 +39,38 @@ export function TablaMovimientos({
               {t.tipo === "ingreso" ? "+" : "−"} {formatoPesos(t.monto)}
             </p>
           </div>
-          <p className="text-xs text-stone-500">
-            {t.fecha ? formatoFecha(t.fecha) : <span className="text-amber-700">Sin fecha</span>}
-            {" · "}
-            {t.categoria.nombre}
-            {" · "}
-            {NOMBRE_MEDIO_PAGO[t.medio_pago]}
-            {t.contraparte && ` · ${t.contraparte}`}
-          </p>
-          {mostrarEvento && t.evento && (
-            <Link href={`/eventos/${t.evento.id}`} className="block text-xs underline decoration-stone-300">{t.evento.nombre}</Link>
+          {rapida ? (
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-stone-500">
+              <CeldaFecha t={t} />
+              <CeldaCategoria t={t} categorias={categorias} />
+              {mostrarEvento && (
+                <div className="col-span-2">
+                  <CeldaEvento t={t} eventos={eventos} />
+                </div>
+              )}
+              <p className="col-span-2">
+                {NOMBRE_MEDIO_PAGO[t.medio_pago]}
+                {t.contraparte && ` · ${t.contraparte}`}
+              </p>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs text-stone-500">
+                {t.fecha ? formatoFecha(t.fecha) : <span className="text-amber-700">Sin fecha</span>}
+                {" · "}
+                {t.categoria.nombre}
+                {" · "}
+                {NOMBRE_MEDIO_PAGO[t.medio_pago]}
+                {t.contraparte && ` · ${t.contraparte}`}
+              </p>
+              {mostrarEvento && t.evento && (
+                <Link href={`/eventos/${t.evento.id}`} className="block text-xs underline decoration-stone-300">{t.evento.nombre}</Link>
+              )}
+            </>
           )}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             {editable ? (
-              <SelectorEstado key={t.estado} id={t.id} estado={t.estado} />
+              <SelectorEstado key={t.estado} id={t.id} estado={t.estado} t={t} />
             ) : (
               t.estado !== "real" && (
                 <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${t.estado === "pendiente" ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"}`}>
@@ -89,13 +114,15 @@ export function TablaMovimientos({
           )}
           {transacciones.map((t) => (
             <tr key={t.id} className="hover:bg-stone-50">
-              <td className="whitespace-nowrap px-4 py-3 text-stone-600">{t.fecha ? formatoFecha(t.fecha) : <span className="text-amber-700">Sin fecha</span>}</td>
+              <td className="whitespace-nowrap px-4 py-3 text-stone-600">
+                {rapida ? <CeldaFecha t={t} /> : t.fecha ? formatoFecha(t.fecha) : <span className="text-amber-700">Sin fecha</span>}
+              </td>
               <td className="px-4 py-3">
-                <p className="font-medium">
+                <div className="font-medium">
                   {t.descripcion}
                   {editable ? (
                     <span className="ml-2 inline-block align-middle">
-                      <SelectorEstado key={t.estado} id={t.id} estado={t.estado} />
+                      <SelectorEstado key={t.estado} id={t.id} estado={t.estado} t={t} />
                     </span>
                   ) : t.estado !== "real" && (
                     <span
@@ -111,13 +138,15 @@ export function TablaMovimientos({
                       Fact.
                     </span>
                   )}
-                </p>
+                </div>
                 {t.contraparte && <p className="text-xs text-stone-500">{t.contraparte}</p>}
               </td>
-              <td className="px-4 py-3 text-stone-600">{t.categoria.nombre}</td>
+              <td className="px-4 py-3 text-stone-600">{rapida ? <CeldaCategoria t={t} categorias={categorias} /> : t.categoria.nombre}</td>
               {mostrarEvento && (
                 <td className="px-4 py-3">
-                  {t.evento ? (
+                  {rapida ? (
+                    <CeldaEvento t={t} eventos={eventos} />
+                  ) : t.evento ? (
                     <Link
                       href={`/eventos/${t.evento.id}`}
                       className="text-stone-900 underline decoration-stone-300 hover:decoration-stone-900"

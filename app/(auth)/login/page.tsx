@@ -51,7 +51,8 @@ function FormularioLogin() {
   }
 
   return (
-    <form onSubmit={ingresar} className="tarjeta space-y-4">
+    // method="post": si se manda antes de que cargue la página, la contraseña no queda en la dirección.
+    <form onSubmit={ingresar} method="post" className="tarjeta space-y-4">
       <h1 className="text-lg font-semibold">Ingresar</h1>
       {error && <p className="alerta-error">{error}</p>}
       <div>

@@ -153,6 +153,49 @@ export async function cambiarEstadoMovimiento(id: string, estado: EstadoMovimien
   return {};
 }
 
+/**
+ * Edición rápida desde la lista: cambia un solo dato (fecha, categoría o
+ * evento) sin tocar el resto. Queda en la auditoría como cualquier cambio.
+ */
+export async function editarCampoMovimiento(
+  id: string,
+  campo: "fecha" | "categoria_id" | "evento_id",
+  valor: string | null,
+): Promise<{ error?: string }> {
+  const usuario = await obtenerUsuario();
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { error: "Movimiento inválido" };
+  const supabase = await crearClienteServidor();
+  const { data: t } = await supabase.from("transacciones").select("empresa, tipo, evento_id").eq("id", id).is("eliminado_en", null).maybeSingle();
+  if (!t) return { error: "Movimiento no encontrado" };
+  // Mismo permiso que el formulario: Financiero, o Eventos si el movimiento es (o pasa a ser) de un evento.
+  const conEvento = t.evento_id !== null || (campo === "evento_id" && valor !== null);
+  if (!puede(usuario, "financiero", "editar") && !(conEvento && puede(usuario, "eventos", "editar"))) return { error: "No tenés permiso para editar este movimiento" };
+
+  let cambio: Record<string, string | null>;
+  if (campo === "fecha") {
+    if (valor !== null && !/^\d{4}-\d{2}-\d{2}$/.test(valor)) return { error: "Fecha inválida" };
+    cambio = { fecha: valor };
+  } else if (campo === "categoria_id") {
+    if (!valor || !/^[0-9a-f-]{36}$/i.test(valor)) return { error: "Elegí una categoría" };
+    const { data: c } = await supabase.from("categorias").select("tipo").eq("id", valor).maybeSingle();
+    if (!c || c.tipo !== t.tipo) return { error: "La categoría no corresponde al tipo de movimiento" };
+    cambio = { categoria_id: valor };
+  } else {
+    if (valor !== null) {
+      if (!/^[0-9a-f-]{36}$/i.test(valor)) return { error: "Evento inválido" };
+      // Un movimiento solo va a un evento de su misma empresa.
+      const { data: e } = await supabase.from("eventos").select("empresa").eq("id", valor).maybeSingle();
+      if (!e || e.empresa !== t.empresa) return { error: "Ese evento es de otra empresa" };
+    }
+    cambio = { evento_id: valor };
+  }
+
+  const { data } = await supabase.from("transacciones").update(cambio).eq("id", id).is("eliminado_en", null).select("id");
+  if (!data?.length) return { error: "No se pudo guardar el cambio" };
+  refresh();
+  return {};
+}
+
 export async function eliminarTransaccion(id: string): Promise<EstadoFormulario> {
   await obtenerUsuario();
   const supabase = await crearClienteServidor();

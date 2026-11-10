@@ -29,16 +29,20 @@ function etiquetar() {
 export function EtiquetasTablas() {
   useEffect(() => {
     let pendiente: ReturnType<typeof setTimeout>;
+    // Solo hacen falta en el celular (en la compu se ve la tabla con su encabezado).
+    const celular = window.matchMedia("(max-width: 767px)");
     // Con una espera: las tablas que llegan en streaming tienen que hidratarse antes de tocarlas.
     const programar = () => {
       clearTimeout(pendiente);
-      pendiente = setTimeout(etiquetar, 300);
+      if (celular.matches) pendiente = setTimeout(etiquetar, 300);
     };
     programar();
     const observador = new MutationObserver(programar);
     observador.observe(document.body, { childList: true, subtree: true });
+    celular.addEventListener("change", programar);
     return () => {
       observador.disconnect();
+      celular.removeEventListener("change", programar);
       clearTimeout(pendiente);
     };
   }, []);

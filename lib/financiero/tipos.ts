@@ -48,7 +48,7 @@ export const NOMBRE_ESTADO_MOVIMIENTO: Record<EstadoMovimiento, string> = {
 
 export type Categoria = { id: string; nombre: string; tipo: TipoMovimiento; activa: boolean };
 
-export type EventoResumido = { id: string; nombre: string; fecha: string };
+export type EventoResumido = { id: string; nombre: string; fecha: string; empresa?: Empresa };
 
 export type Transaccion = {
   id: string;

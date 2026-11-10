@@ -107,7 +107,7 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
             </p>
           )}
 
-          <TablaMovimientos transacciones={pasados} editable={editable} volverA={volverA} />
+          <TablaMovimientos transacciones={pasados} editable={editable} volverA={volverA} categorias={categorias} eventos={eventos} />
           <p className="text-xs text-stone-500">{pasados.length} movimientos</p>
 
           {proximos.length > 0 && (
@@ -115,7 +115,7 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
               <h2 className="text-lg font-semibold">
                 Próximos <span className="text-sm font-normal text-stone-500">· con fecha posterior a hoy</span>
               </h2>
-              <TablaMovimientos transacciones={proximos} editable={editable} volverA={volverA} />
+              <TablaMovimientos transacciones={proximos} editable={editable} volverA={volverA} categorias={categorias} eventos={eventos} />
             </section>
           )}
 
@@ -128,8 +128,8 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
                   {formatoPesos(sinFecha.totales.total.egresos)}
                 </span>
               </summary>
-              <p className="text-sm text-stone-500">Editá cada uno para ponerle fecha cuando se sepa.</p>
-              <TablaMovimientos transacciones={sinFecha.transacciones} editable={editable} volverA={volverA} />
+              <p className="text-sm text-stone-500">Tocá la fecha de cada uno para ponérsela cuando se sepa.</p>
+              <TablaMovimientos transacciones={sinFecha.transacciones} editable={editable} volverA={volverA} categorias={categorias} eventos={eventos} />
             </details>
           )}
         </ZonaResultados>

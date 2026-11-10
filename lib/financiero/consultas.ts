@@ -147,7 +147,7 @@ export async function obtenerEventosResumidos() {
   const supabase = await crearClienteServidor();
   const { data } = await supabase
     .from("eventos")
-    .select("id, nombre, fecha")
+    .select("id, nombre, fecha, empresa")
     .neq("estado", "cancelado")
     .order("fecha", { ascending: false })
     .limit(200);

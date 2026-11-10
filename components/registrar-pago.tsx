@@ -5,18 +5,28 @@ import { registrarPago } from "@/lib/financiero/acciones";
 import { MEDIOS_PAGO, NOMBRE_MEDIO_PAGO, type Transaccion } from "@/lib/financiero/tipos";
 import { formatoPesos, hoy } from "@/lib/formato";
 
+type DatosPago = Pick<Transaccion, "id" | "tipo" | "monto" | "descripcion" | "medio_pago">;
+
 /** Botón para registrar el pago (total o parcial) de un movimiento pendiente o proyectado. */
-export function RegistrarPago({ t }: { t: Pick<Transaccion, "id" | "tipo" | "monto" | "descripcion" | "medio_pago"> }) {
+export function RegistrarPago({ t }: { t: DatosPago }) {
   const dialogo = useRef<HTMLDialogElement>(null);
+  return (
+    <>
+      <button type="button" onClick={() => dialogo.current?.showModal()} className="text-xs font-medium text-stone-700 underline hover:text-stone-900">
+        Registrar {t.tipo === "egreso" ? "pago" : "cobro"}
+      </button>
+      <DialogoPago t={t} dialogo={dialogo} />
+    </>
+  );
+}
+
+/** El formulario del pago (o cobro), en un diálogo: lo abre el botón o el cambio de estado a real. */
+export function DialogoPago({ t, dialogo }: { t: DatosPago; dialogo: React.RefObject<HTMLDialogElement | null> }) {
   const [estado, accion, enviando] = useActionState(registrarPago.bind(null, t.id), {});
   const v = (campo: string, inicial: string) => estado.valores?.[campo] ?? inicial;
   const verbo = t.tipo === "egreso" ? "pago" : "cobro";
 
   return (
-    <>
-      <button type="button" onClick={() => dialogo.current?.showModal()} className="text-xs font-medium text-stone-700 underline hover:text-stone-900">
-        Registrar {verbo}
-      </button>
       <dialog ref={dialogo} className="m-auto w-full max-w-sm rounded-lg p-0 shadow-xl backdrop:bg-black/40">
         {estado.ok ? (
           <div className="space-y-3 p-5 text-center">
@@ -65,6 +75,5 @@ export function RegistrarPago({ t }: { t: Pick<Transaccion, "id" | "tipo" | "mon
           </form>
         )}
       </dialog>
-    </>
   );
 }
