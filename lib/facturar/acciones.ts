@@ -235,7 +235,11 @@ export async function emitirFactura(_previo: EstadoEmision, formData: FormData):
       })
       .select("id")
       .single();
-    if (trx) await supabase.from("comprobantes_emitidos").update({ transaccion_id: trx.id }).eq("id", comprobante.id);
+    if (trx) {
+      await supabase.from("comprobantes_emitidos").update({ transaccion_id: trx.id }).eq("id", comprobante.id);
+      // Si el cliente tenía saldo a favor (cobros de más), cubre la factura.
+      if (clienteId) await supabase.rpc("aplicar_saldo_a_favor", { p_tipo: "cobro", p_id: clienteId, p_empresa: d.empresa });
+    }
   }
 
   // Mail al cliente con el link a la factura. Si falla, la factura igual quedó emitida.

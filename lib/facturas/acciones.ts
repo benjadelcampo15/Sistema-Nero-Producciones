@@ -311,6 +311,9 @@ export async function aprobarFactura(
     await supabase
       .from("proveedores")
       .upsert({ cuit, razon_social: d.razon_social_emisor?.trim() || `Proveedor ${cuit}` }, { onConflict: "cuit", ignoreDuplicates: true });
+    // Si el proveedor tenía saldo a favor (pagos de más), cubre la factura.
+    const { data: proveedor } = await supabase.from("proveedores").select("id").eq("cuit", cuit).maybeSingle();
+    if (proveedor) await supabase.rpc("aplicar_saldo_a_favor", { p_tipo: "pago", p_id: proveedor.id, p_empresa: d.empresa });
   }
 
   redirect("/facturas/lista?estado=por_revisar");

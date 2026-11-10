@@ -138,6 +138,8 @@ export async function guardarPlanillaEvento(eventoId: string, datos: unknown): P
       return { error: `La planilla se guardó, pero no se pudo pasar a Financiero.${motivo} Corregilo y volvé a guardar.`, planilla: conPagosDeCuenta(planilla, cuentas) };
     }
   }
+  // Proveedores vinculados con saldo a favor: se aplica a los gastos nuevos.
+  if (evento?.planilla_en_financiero && planilla.gastos.some((g) => g.proveedor_id)) await supabase.rpc("aplicar_saldo_evento", { p_evento_id: eventoId });
   return { planilla: conPagosDeCuenta(planilla, await cuentaDeGastos(eventoId)) };
 }
 

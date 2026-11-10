@@ -3,7 +3,7 @@ import { categoriasDeCuenta, cuentaCorriente } from "@/lib/cuentas/consultas";
 import type { TipoCuenta } from "@/lib/cuentas/tipos";
 import { NOMBRE_EMPRESA, type Empresa } from "@/lib/empresas";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
-import { AccionesCargo, AccionesPago, FormularioCargo, FormularioPago } from "./formulario-pago";
+import { AccionesCargo, AccionesPago, AplicarSaldo, FormularioCargo, FormularioPago } from "./formulario-pago";
 import { ExtractoConFiltro } from "./filtro-evento";
 
 /**
@@ -52,18 +52,28 @@ export async function SeccionCuentaCorriente({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className={`tarjeta p-4 ${cuenta.saldo > 0 ? "border-amber-300 bg-amber-50" : ""}`}>
-          <p className="text-xs uppercase tracking-wide text-stone-500">
-            {debe} · {NOMBRE_EMPRESA[empresa]}
-          </p>
-          <p className="mt-1 font-mono text-xl font-semibold">{formatoPesos(cuenta.saldo)}</p>
-          <p className="text-xs text-stone-500">
-            {(() => {
-              const n = cuenta.comprobantes.filter((c) => c.pendiente > 0).length;
-              return n === 1 ? "1 pendiente" : `${n} pendientes`;
-            })()}
-          </p>
-        </div>
+        {cuenta.saldo < 0 ? (
+          <div className="tarjeta border-green-300 bg-green-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-green-800">Saldo a favor · {NOMBRE_EMPRESA[empresa]}</p>
+            <p className="mt-1 font-mono text-xl font-semibold text-green-800">{formatoPesos(cuenta.saldo)}</p>
+            <p className="text-xs text-green-900">
+              {tipo === "pago" ? "Le pagamos de más: es un anticipo a nuestro favor" : "Nos pagó de más: es saldo a favor del cliente"}. Se usa solo para las próximas deudas.
+            </p>
+          </div>
+        ) : (
+          <div className={`tarjeta p-4 ${cuenta.saldo > 0 ? "border-amber-300 bg-amber-50" : ""}`}>
+            <p className="text-xs uppercase tracking-wide text-stone-500">
+              {debe} · {NOMBRE_EMPRESA[empresa]}
+            </p>
+            <p className="mt-1 font-mono text-xl font-semibold">{formatoPesos(cuenta.saldo)}</p>
+            <p className="text-xs text-stone-500">
+              {(() => {
+                const n = cuenta.comprobantes.filter((c) => c.pendiente > 0).length;
+                return n === 1 ? "1 pendiente" : `${n} pendientes`;
+              })()}
+            </p>
+          </div>
+        )}
         <div className="tarjeta p-4">
           <p className="text-xs uppercase tracking-wide text-stone-500">Total (con y sin factura)</p>
           <p className="mt-1 font-mono text-xl font-semibold">{formatoPesos(cuenta.facturado)}</p>
@@ -76,6 +86,7 @@ export async function SeccionCuentaCorriente({
 
       {editable && (
         <div className="space-y-3">
+          {cuenta.aFavor > 0 && cuenta.pendiente > 0 && <AplicarSaldo tipo={tipo} id={id} empresa={empresa} aFavor={cuenta.aFavor} />}
           <FormularioPago key={empresa} tipo={tipo} id={id} empresa={empresa} comprobantes={cuenta.comprobantes} />
           {lista.length > 0 && <FormularioCargo key={`cargo-${empresa}`} tipo={tipo} id={id} empresa={empresa} categorias={lista} categoriaDefecto={defecto} />}
         </div>
@@ -118,7 +129,10 @@ export async function SeccionCuentaCorriente({
               </td>
               <td className="whitespace-nowrap px-4 py-2 text-right font-mono">{r.debe ? formatoPesos(r.debe) : ""}</td>
               <td className="whitespace-nowrap px-4 py-2 text-right font-mono text-green-800">{r.haber ? formatoPesos(r.haber) : ""}</td>
-              <td className="whitespace-nowrap px-4 py-2 text-right font-mono font-semibold">{formatoPesos(r.saldo)}</td>
+              <td className={`whitespace-nowrap px-4 py-2 text-right font-mono font-semibold ${r.saldo < 0 ? "text-green-800" : ""}`}>
+                {formatoPesos(r.saldo)}
+                {r.saldo < 0 && <span className="block text-[10px] font-sans font-medium uppercase tracking-wide">Saldo a favor</span>}
+              </td>
               {editable && (
                 <td className="px-4 py-2 text-right">
                   {r.pago && <AccionesPago key={`${r.pago.id}-${r.pago.monto}-${r.pago.fecha}`} tipo={tipo} pago={r.pago} />}

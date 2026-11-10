@@ -96,6 +96,12 @@ export function TarjetasFichas({ fichas: clientes, mes, editable, rutas }: { fic
               </p>
             </div>
 
+            {rutas.saldo && (c.saldo ?? 0) < 0 && (
+              <Link href={`${rutas.ficha}/${c.id}${rutas.consulta ?? ""}#cuenta`} className="-mt-1 flex items-center justify-between rounded-lg bg-green-50 px-3 py-1.5 text-sm text-green-900 hover:bg-green-100">
+                <span>Saldo a favor</span>
+                <span className="font-mono font-semibold">{formatoPesos(c.saldo ?? 0)}</span>
+              </Link>
+            )}
             {rutas.saldo && (c.saldo ?? 0) > 0 && (
               <Link href={`${rutas.ficha}/${c.id}${rutas.consulta ?? ""}#cuenta`} className="-mt-1 flex items-center justify-between rounded-lg bg-amber-50 px-3 py-1.5 text-sm text-amber-900 hover:bg-amber-100">
                 <span>{rutas.saldo}</span>

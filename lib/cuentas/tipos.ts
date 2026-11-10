@@ -69,7 +69,12 @@ export type CuentaCorriente = {
   comprobantes: ComprobanteCuenta[];
   pagos: PagoCuenta[];
   extracto: RenglonCuenta[];
+  /** Lo pendiente menos el saldo a favor: negativo = saldo a favor. */
   saldo: number;
+  /** Lo que falta pagar de las deudas. */
+  pendiente: number;
+  /** Lo pagado de más que todavía no cubre ninguna deuda. */
+  aFavor: number;
   facturado: number;
   pagado: number;
   /** Eventos con movimientos en la cuenta, para filtrar. */

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { borrarCargo, cargarDeuda, editarCargo, editarPago, eliminarPago, registrarPago } from "@/lib/cuentas/acciones";
+import { aplicarSaldoAFavor, borrarCargo, cargarDeuda, editarCargo, editarPago, eliminarPago, registrarPago } from "@/lib/cuentas/acciones";
 import type { CargoEditable, ComprobanteCuenta, PagoCuenta, TipoCuenta } from "@/lib/cuentas/tipos";
 import type { Empresa } from "@/lib/empresas";
 import { NOMBRE_MEDIO_PAGO, type MedioPago } from "@/lib/financiero/tipos";
@@ -48,12 +48,12 @@ export function FormularioPago({ tipo, id, empresa, comprobantes }: { tipo: Tipo
     });
   }
 
-  if (!abiertos.length) return mensaje.ok ? <p className="text-sm text-green-700">{mensaje.ok}</p> : null;
   if (!abierto) {
     return (
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={() => setAbierto(true)} className="boton">
+        <button type="button" onClick={() => setAbierto(true)} className={abiertos.length ? "boton" : "boton-secundario"}>
           + Registrar {verbo}
+          {!abiertos.length && " a cuenta"}
         </button>
         {mensaje.ok && <p className="text-sm text-green-700">{mensaje.ok}</p>}
       </div>
@@ -68,9 +68,11 @@ export function FormularioPago({ tipo, id, empresa, comprobantes }: { tipo: Tipo
         <div>
           <label htmlFor="pago_monto" className="etiqueta">Monto</label>
           <input id="pago_monto" required inputMode="decimal" value={monto} onChange={(e) => setMonto(e.target.value)} placeholder={formatoPesos(deuda)} className="campo text-right font-mono" />
-          <button type="button" onClick={() => setMonto(String(deuda).replace(".", ","))} className="mt-1 text-xs text-stone-600 underline">
-            Todo lo pendiente ({formatoPesos(deuda)})
-          </button>
+          {deuda > 0 && (
+            <button type="button" onClick={() => setMonto(String(deuda).replace(".", ","))} className="mt-1 text-xs text-stone-600 underline">
+              Todo lo pendiente ({formatoPesos(deuda)})
+            </button>
+          )}
         </div>
         <div>
           <label htmlFor="pago_fecha" className="etiqueta">Fecha</label>
@@ -90,6 +92,7 @@ export function FormularioPago({ tipo, id, empresa, comprobantes }: { tipo: Tipo
         </div>
       </div>
 
+      {abiertos.length > 0 && (
       <div>
         <p className="etiqueta">¿Qué {tipo === "pago" ? "paga" : "cobra"}?</p>
         <p className="mb-2 text-xs text-stone-500">Si no elegís ninguno, se imputa a los más viejos primero. Si el monto no alcanza, el último queda pagado en parte.</p>
@@ -104,8 +107,14 @@ export function FormularioPago({ tipo, id, empresa, comprobantes }: { tipo: Tipo
           ))}
         </div>
       </div>
+      )}
 
-      {valor !== null && valor > deuda && <p className="text-sm text-amber-700">El monto supera lo pendiente ({formatoPesos(deuda)}).</p>}
+      {valor !== null && valor > deuda && (
+        <p className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
+          {deuda > 0 ? `Supera lo pendiente (${formatoPesos(deuda)}): ` : "No hay nada pendiente: "}
+          {formatoPesos(valor - deuda)} quedan como saldo a favor{tipo === "pago" ? " (anticipo al proveedor)" : " del cliente"} y se usan solos para las próximas deudas.
+        </p>
+      )}
       {mensaje.error && <p className="alerta-error">{mensaje.error}</p>}
       <div className="flex items-center gap-3">
         <button type="submit" disabled={pendiente} className="boton">{pendiente ? "Guardando…" : `Guardar ${verbo}`}</button>
@@ -216,7 +225,7 @@ export function FormularioCargo({
   );
 }
 
-/** Editar y eliminar un movimiento a mano. Con pagos no se elimina, y el importe no puede quedar por debajo de lo pagado. */
+/** Editar y eliminar un movimiento a mano. Si tenía pagos y se baja o se elimina, lo pagado de más queda como saldo a favor. */
 export function AccionesCargo({ tipo, cargo, categorias }: { tipo: TipoCuenta; cargo: CargoEditable; categorias: Categorias }) {
   const [pendiente, iniciar] = useTransition();
   const [editando, setEditando] = useState(false);
@@ -239,14 +248,15 @@ export function AccionesCargo({ tipo, cargo, categorias }: { tipo: TipoCuenta; c
   return (
     <span className="inline-flex gap-3">
       <button type="button" onClick={() => setEditando(true)} className="text-xs font-medium text-stone-700 hover:underline">Editar</button>
-      {cargo.conPagos ? (
-        <span title="Tiene pagos: para eliminarlo, primero eliminá los pagos" className="cursor-help text-xs text-stone-400">Eliminar</span>
-      ) : (
+      {(
         <button
           type="button"
           disabled={pendiente}
           onClick={() => {
-            if (!window.confirm("¿Eliminar este movimiento? Desaparece de la cuenta corriente y de Financiero.")) return;
+            const aviso = cargo.conPagos
+              ? `¿Eliminar este movimiento? Desaparece de la cuenta corriente y de Financiero, y lo que tenía pagado (${formatoPesos(cargo.pagado)}) queda como saldo a favor.`
+              : "¿Eliminar este movimiento? Desaparece de la cuenta corriente y de Financiero.";
+            if (!window.confirm(aviso)) return;
             iniciar(async () => {
               const r = await borrarCargo(tipo, cargo.id);
               if (r.error) window.alert(r.error);
@@ -263,7 +273,7 @@ export function AccionesCargo({ tipo, cargo, categorias }: { tipo: TipoCuenta; c
             <h3 className="font-semibold">Editar movimiento</h3>
             {cargo.conPagos && (
               <p className="text-xs text-amber-800">
-                Ya tiene pagos por {formatoPesos(cargo.pagado)}: el importe no puede ser menor a eso. La diferencia se suma o se resta de lo que queda pendiente.
+                Ya tiene pagos por {formatoPesos(cargo.pagado)}. Si el importe queda por debajo, lo pagado de más pasa a ser saldo a favor.
               </p>
             )}
             <div>
@@ -382,5 +392,26 @@ export function AccionesPago({ tipo, pago }: { tipo: TipoCuenta; pago: PagoCuent
         </span>
       )}
     </span>
+  );
+}
+
+/** Hay saldo a favor y deudas pendientes a la vez: aplicarlo (normalmente se aplica solo). */
+export function AplicarSaldo({ tipo, id, empresa, aFavor }: { tipo: TipoCuenta; id: string; empresa: Empresa; aFavor: number }) {
+  const [pendiente, iniciar] = useTransition();
+  const [mensaje, setMensaje] = useState<{ error?: string; ok?: string }>({});
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
+      <span>Hay {formatoPesos(aFavor)} de saldo a favor sin aplicar a lo pendiente.</span>
+      <button
+        type="button"
+        disabled={pendiente}
+        onClick={() => iniciar(async () => setMensaje(await aplicarSaldoAFavor(tipo, id, empresa)))}
+        className="boton py-1 text-xs"
+      >
+        {pendiente ? "Aplicando…" : "Aplicar saldo a favor"}
+      </button>
+      {mensaje.error && <span className="text-red-700">{mensaje.error}</span>}
+      {mensaje.ok && <span>{mensaje.ok}</span>}
+    </div>
   );
 }

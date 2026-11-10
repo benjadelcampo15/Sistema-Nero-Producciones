@@ -128,11 +128,14 @@ export async function cuentaCorriente(tipo: TipoCuenta, id: string, empresa: Emp
     .map((p) => ({ id: p.id, fecha: p.fecha, monto: Number(p.monto), medio_pago: p.medio_pago as MedioPago, notas: p.notas }));
   // Eventos que cubre cada pago (por lo que se le imputó).
   const eventosDePago = new Map<string, string[]>();
+  // Lo imputado de cada pago: lo que sobra es saldo a favor.
+  const aplicado = new Map<string, number>();
   const idsPagos = listaPagos.map((p) => p.id).filter((x): x is string => !!x);
   if (idsPagos.length) {
     const eventoMovimiento = new Map(movimientos.map((m) => [m.id, m.evento_id]));
-    const { data } = await supabase.from("pago_aplicaciones").select("pago_id, transaccion_id").in("pago_id", idsPagos);
+    const { data } = await supabase.from("pago_aplicaciones").select("pago_id, transaccion_id, monto").in("pago_id", idsPagos);
     for (const a of data ?? []) {
+      aplicado.set(a.pago_id as string, sumar([aplicado.get(a.pago_id as string) ?? 0, Number(a.monto)]));
       const ev = eventoMovimiento.get(a.transaccion_id as string);
       if (!ev) continue;
       const lista = eventosDePago.get(a.pago_id as string) ?? [];
@@ -185,10 +188,11 @@ export async function cuentaCorriente(tipo: TipoCuenta, id: string, empresa: Emp
       };
     }),
   ].sort((a, b) => porFecha(a.fecha, b.fecha) || b.debe - a.debe);
-  let saldo = 0;
+  // Saldo acumulado fila por fila (puede quedar negativo: saldo a favor).
+  let acumulado = 0;
   for (const r of extracto) {
-    saldo = sumar([saldo, r.debe, -r.haber]);
-    r.saldo = saldo;
+    acumulado = sumar([acumulado, r.debe, -r.haber]);
+    r.saldo = acumulado;
   }
 
   const facturado = sumar(comprobantes.map((c) => c.total));
@@ -204,7 +208,10 @@ export async function cuentaCorriente(tipo: TipoCuenta, id: string, empresa: Emp
     porEvento.set(c.evento.id, e);
   }
   const eventos = [...porEvento.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
-  return { comprobantes, pagos: listaPagos, extracto, saldo: pendiente, facturado, pagado: sumar([facturado, -pendiente]), eventos };
+  // Saldo a favor: lo pagado de más (lo que los pagos no tienen imputado). El saldo puede quedar negativo.
+  const aFavor = sumar(listaPagos.filter((p) => p.id).map((p) => sumar([p.monto, -(aplicado.get(p.id!) ?? 0)])));
+  const saldo = sumar([pendiente, -aFavor]);
+  return { comprobantes, pagos: listaPagos, extracto, saldo, pendiente, aFavor, facturado, pagado: sumar([facturado, -saldo]), eventos };
 }
 
 /** Saldo pendiente de cada proveedor o cliente con una empresa (ver resumenCuentas). */

@@ -42,12 +42,7 @@ export async function registrarPago(datos: z.input<typeof esquemaPago>): Promise
     p_pago: { tipo, id, empresa, fecha, monto, medio_pago, notas: notas ?? "" },
     p_movimientos: movimientos?.length ? movimientos : null,
   });
-  if (error) {
-    // "sobran $699,999.00" (formato de la base) → "sobran $ 699.999,00".
-    const sobra = error.message.match(/sobran \$([\d,.]+)/);
-    if (sobra) return { error: `El monto supera lo pendiente: sobran ${formatoPesos(Number(sobra[1].replace(/,/g, "")))}` };
-    return { error: /cero|permiso/.test(error.message) ? error.message : `No se pudo registrar el ${tipo}` };
-  }
+  if (error) return { error: /cero|permiso/.test(error.message) ? error.message : `No se pudo registrar el ${tipo}` };
   refresh();
   return { ok: tipo === "pago" ? "Pago registrado: ya está en Financiero" : "Cobro registrado: ya está en Financiero" };
 }
@@ -71,7 +66,7 @@ export async function cargarDeuda(datos: z.input<typeof esquemaCargo>): Promise<
   const monto = parsearMonto(r.data.monto);
   if (monto === null || monto <= 0) return { error: "Monto inválido. Ejemplo: 150.000" };
   const supabase = await crearClienteServidor();
-  const { error } = await supabase.rpc("cargar_cuenta", { p_cargo: { ...r.data, monto } });
+  const { error } = await supabase.rpc("cargar_cuenta_con_saldo", { p_cargo: { ...r.data, monto } });
   if (error) return { error: error.message.includes("permiso") ? error.message : "No se pudo cargar la deuda" };
   refresh();
   return { ok: "Movimiento cargado: ya está en Financiero como pendiente" };
@@ -89,7 +84,7 @@ export async function editarCargo(tipo: TipoCuenta, transaccionId: string, datos
   if (monto === null || monto <= 0) return { error: "Monto inválido. Ejemplo: 150.000" };
   const supabase = await crearClienteServidor();
   const { error } = await supabase.rpc("editar_cargo_cuenta", { p_transaccion_id: transaccionId, p_cambios: { ...r.data, monto } });
-  if (error) return { error: /existe|permiso|pagaron|mayor a cero|planilla/.test(error.message) ? mensajeBase(error.message) : "No se pudo guardar el movimiento" };
+  if (error) return { error: /existe|permiso|pagaron|pagados|mayor a cero|planilla/.test(error.message) ? mensajeBase(error.message) : "No se pudo guardar el movimiento" };
   refresh();
   return {};
 }
@@ -100,7 +95,7 @@ export async function borrarCargo(tipo: TipoCuenta, transaccionId: string): Prom
   if (!/^[0-9a-f-]{36}$/i.test(transaccionId)) return { error: "Cargo inválido" };
   const supabase = await crearClienteServidor();
   const { error } = await supabase.rpc("borrar_cargo_cuenta", { p_transaccion_id: transaccionId });
-  if (error) return { error: /pagos|permiso|existe|planilla/.test(error.message) ? error.message : "No se pudo eliminar" };
+  if (error) return { error: /pagos|pagada|permiso|existe|planilla/.test(error.message) ? error.message : "No se pudo eliminar" };
   refresh();
   return {};
 }
@@ -113,7 +108,7 @@ export async function eliminarPago(tipo: TipoCuenta, pagoId: string): Promise<{ 
   await exigirPermisoPagos(tipo);
   if (!/^[0-9a-f-]{36}$/i.test(pagoId)) return { error: "Pago inválido" };
   const supabase = await crearClienteServidor();
-  const { error } = await supabase.rpc("anular_pago", { p_pago_id: pagoId });
+  const { error } = await supabase.rpc("eliminar_pago", { p_pago_id: pagoId });
   if (error) return { error: /anulado|permiso/.test(error.message) ? "El pago ya no existe (actualizá la página)" : "No se pudo eliminar" };
   refresh();
   return {};
@@ -136,11 +131,7 @@ export async function editarPago(tipo: TipoCuenta, pagoId: string, datos: z.inpu
   if (monto === null || monto <= 0) return { error: "Importe inválido. Ejemplo: 150.000" };
   const supabase = await crearClienteServidor();
   const { error } = await supabase.rpc("editar_pago", { p_pago_id: pagoId, p_cambios: { ...r.data, monto } });
-  if (error) {
-    const sobra = error.message.match(/sobran \$([\d,.]+)/);
-    if (sobra) return { error: `El importe supera lo que hay pendiente: sobran ${formatoPesos(Number(sobra[1].replace(/,/g, "")))}` };
-    return { error: /existe|eliminado|permiso/.test(error.message) ? error.message : "No se pudo guardar el pago" };
-  }
+  if (error) return { error: /existe|eliminado|permiso/.test(error.message) ? error.message : "No se pudo guardar el pago" };
   refresh();
   return {};
 }
@@ -148,4 +139,16 @@ export async function editarPago(tipo: TipoCuenta, pagoId: string, datos: z.inpu
 /** Los importes de la base vienen como "1,234,567.00": se muestran como "$ 1.234.567,00". */
 function mensajeBase(mensaje: string) {
   return mensaje.replace(/\$([\d,]+\.\d{2})/g,(_, n: string) => formatoPesos(Number(n.replace(/,/g, ""))));
+}
+
+/** Aplica el saldo a favor de la cuenta (lo pagado de más) a lo que esté pendiente. */
+export async function aplicarSaldoAFavor(tipo: TipoCuenta, id: string, empresa: string): Promise<{ error?: string; ok?: string }> {
+  await exigirPermisoPagos(tipo);
+  if (!/^[0-9a-f-]{36}$/i.test(id) || !EMPRESAS.includes(empresa as never)) return { error: "Datos inválidos" };
+  const supabase = await crearClienteServidor();
+  const { data, error } = await supabase.rpc("aplicar_saldo_a_favor", { p_tipo: tipo, p_id: id, p_empresa: empresa });
+  if (error) return { error: "No se pudo aplicar el saldo a favor" };
+  refresh();
+  const aplicado = Number(data ?? 0);
+  return { ok: aplicado > 0 ? `Se aplicaron ${formatoPesos(aplicado)} del saldo a favor` : "No había nada pendiente para aplicar" };
 }

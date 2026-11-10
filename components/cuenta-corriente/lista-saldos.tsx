@@ -106,7 +106,10 @@ export function ListaSaldos({
                     <Link href={`${ruta}/${f.id}?empresa=${empresa}`} className="font-medium underline decoration-stone-300 hover:decoration-stone-900">{f.nombre}</Link>
                   </td>
                   <td className="px-4 py-2 font-mono text-xs text-stone-600">{f.documento}</td>
-                  <td className="whitespace-nowrap px-4 py-2 text-right font-mono font-semibold">{formatoPesos(f.saldo)}</td>
+                  <td className={`whitespace-nowrap px-4 py-2 text-right font-mono font-semibold ${f.saldo < 0 ? "text-green-800" : ""}`}>
+                    {formatoPesos(f.saldo)}
+                    {f.saldo < 0 && <span className="block text-[10px] font-sans font-medium uppercase tracking-wide">Saldo a favor</span>}
+                  </td>
                   {editable && (
                     <td className="whitespace-nowrap px-4 py-2 text-right">
                       <button type="button" onClick={() => setAbierta(abierta === f.id ? null : f.id)} className="text-xs font-medium underline">+ Movimiento</button>
