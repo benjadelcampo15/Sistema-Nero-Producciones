@@ -1,4 +1,5 @@
 import "server-only";
+import { conPagosDeCuenta, cuentaDeGastos } from "./cuenta-gastos";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { sumar } from "@/lib/formato";
 import { CAMPOS_TRANSACCION, calcularTotales, normalizarTransacciones } from "@/lib/financiero/consultas";
@@ -94,7 +95,10 @@ export async function obtenerPlanillaEvento(eventoId: string): Promise<Planilla>
   const supabase = await crearClienteServidor();
   const { data } = await supabase.from("planillas_evento").select("datos").eq("evento_id", eventoId).maybeSingle();
   const datos = esquemaPlanilla.safeParse(data?.datos ?? {});
-  return datos.success ? datos.data : PLANILLA_VACIA;
+  const planilla = datos.success ? datos.data : PLANILLA_VACIA;
+  // Lo pagado desde la cuenta corriente de los proveedores se ve sumado a la seña.
+  if (!planilla.gastos.some((g) => g.id)) return planilla;
+  return conPagosDeCuenta(planilla, await cuentaDeGastos(eventoId));
 }
 
 /** Las cajas del evento, en el orden en que se crearon. */

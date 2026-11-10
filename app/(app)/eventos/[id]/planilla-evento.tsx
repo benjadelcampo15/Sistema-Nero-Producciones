@@ -15,6 +15,7 @@ import {
 } from "@/lib/eventos/planilla";
 import { formatoPesos } from "@/lib/formato";
 import { CampoMonto } from "@/components/campo-monto";
+import { SelectorProveedor, type ProveedorCuenta } from "./selector-proveedor";
 
 /** Color de cada sector de gastos (fuerte para títulos y franja, suave para el fondo). */
 const COLOR_SECTOR: Record<string, { fuerte: string; suave: string }> = {
@@ -34,7 +35,24 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 const celdaTexto =
   "w-full min-w-28 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-sm hover:border-stone-200 focus:border-stone-400 focus:bg-white focus:outline-none disabled:hover:border-transparent";
 
-export function PlanillaEvento({ eventoId, inicial, editable, enFinanciero = false }: { eventoId: string; inicial: Planilla; editable: boolean; enFinanciero?: boolean }) {
+export function PlanillaEvento({
+  eventoId,
+  inicial,
+  editable,
+  enFinanciero = false,
+  proveedores,
+  empresa,
+}: {
+  eventoId: string;
+  inicial: Planilla;
+  editable: boolean;
+  enFinanciero?: boolean;
+  /** Proveedores con cuenta corriente que se pueden vincular a un gasto (solo con la planilla en Financiero). */
+  proveedores?: ProveedorCuenta[];
+  empresa: string;
+}) {
+  const conProveedor = enFinanciero && proveedores !== undefined;
+  const columnasGasto = 9 + (conProveedor ? 1 : 0) + (editable ? 1 : 0);
   const [p, setP] = useState<Planilla>(inicial);
   const [sinGuardar, setSinGuardar] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
@@ -215,7 +233,7 @@ export function PlanillaEvento({ eventoId, inicial, editable, enFinanciero = fal
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">Gastos por sector</h2>
         <div className="tarjeta max-h-[70vh] overflow-auto overscroll-contain p-0 print:max-h-none print:overflow-visible">
-          <table className="w-full min-w-[1100px] text-sm">
+          <table className={`w-full ${conProveedor ? "min-w-[1280px]" : "min-w-[1100px]"} text-sm`}>
             <thead className={`sticky top-0 z-10 border-b shadow-sm border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500 print:static`}>
               <tr>
                 <th className="px-2 py-2">Detalle</th>
@@ -226,6 +244,7 @@ export function PlanillaEvento({ eventoId, inicial, editable, enFinanciero = fal
                 <th className="px-2 py-2 text-center">Urgente</th>
                 <th className="px-2 py-2 text-right">Seña / pagado</th>
                 <th className="px-2 py-2 text-right">Diferencia</th>
+                {conProveedor && <th className="px-2 py-2">Proveedor (cta. cte.)</th>}
                 <th className="px-2 py-2">Datos bancarios</th>
                 {editable && <th className="w-6" />}
               </tr>
@@ -239,7 +258,7 @@ export function PlanillaEvento({ eventoId, inicial, editable, enFinanciero = fal
               return (
                 <tbody key={s.nombre} className="divide-y divide-stone-100 border-t-8 border-white first:border-t-0">
                   <tr style={{ background: color.fuerte, printColorAdjust: "exact" }}>
-                    <th colSpan={editable ? 10 : 9} className="px-3 py-2 text-left text-sm font-bold uppercase tracking-wide text-white">
+                    <th colSpan={columnasGasto} className="px-3 py-2 text-left text-sm font-bold uppercase tracking-wide text-white">
                       {s.nombre}
                       <span className="ml-3 text-xs font-normal normal-case opacity-80">
                         {s.gastos.length} gasto{s.gastos.length === 1 ? "" : "s"} · {formatoPesos(s.totales.total)}
@@ -258,8 +277,27 @@ export function PlanillaEvento({ eventoId, inicial, editable, enFinanciero = fal
                       <td className="px-1 py-0.5"><CampoMonto valor={g.iva} disabled={!editable} etiqueta="IVA crédito" alCambiar={(iva) => editarGasto(indice, { iva })} /></td>
                       <td className="px-2 py-0.5 text-right font-mono font-semibold">{formatoPesos(totalGasto(g))}</td>
                       <td className="px-2 py-0.5 text-center"><input type="checkbox" checked={g.urgente} disabled={!editable} aria-label="Urgente" onChange={(e) => editarGasto(indice, { urgente: e.target.checked })} /></td>
-                      <td className="px-1 py-0.5"><CampoMonto valor={g.sena} disabled={!editable} etiqueta="Seña o pagado" alCambiar={(sena) => editarGasto(indice, { sena })} /></td>
+                      <td className="px-1 py-0.5">
+                        <CampoMonto valor={g.sena} disabled={!editable} etiqueta="Seña o pagado" alCambiar={(sena) => editarGasto(indice, { sena })} />
+                        {(g.pagado_cuenta ?? 0) > 0 && (
+                          <span className="block px-1.5 text-right text-[10px] text-stone-500" title="Pagos registrados desde la cuenta corriente del proveedor">
+                            incl. {formatoPesos(g.pagado_cuenta!)} desde cta. cte.
+                          </span>
+                        )}
+                      </td>
                       <td className={`px-2 py-0.5 text-right font-mono ${diferenciaGasto(g) > 0 ? "font-semibold text-amber-700" : "text-stone-400"}`}>{formatoPesos(diferenciaGasto(g))}</td>
+                      {conProveedor && (
+                        <td className="px-1 py-0.5">
+                          <SelectorProveedor
+                            valor={g.proveedor_id}
+                            proveedores={proveedores!}
+                            empresa={empresa}
+                            editable={editable}
+                            bloqueado={(g.pagado_cuenta ?? 0) > 0}
+                            alCambiar={(proveedor_id) => editarGasto(indice, { proveedor_id })}
+                          />
+                        </td>
+                      )}
                       <td className="px-1 py-0.5"><input value={g.datos_bancarios} disabled={!editable} maxLength={300} placeholder="Alias / CBU" aria-label="Datos bancarios" onChange={(e) => editarGasto(indice, { datos_bancarios: e.target.value })} className={`${celdaTexto} font-mono text-xs`} /></td>
                       {editable && (
                         <td><button type="button" onClick={() => cambiar((p) => ({ ...p, gastos: p.gastos.filter((_, j) => j !== indice) }))} className="px-1 text-stone-400 hover:text-red-700" aria-label="Quitar gasto">×</button></td>
@@ -281,7 +319,7 @@ export function PlanillaEvento({ eventoId, inicial, editable, enFinanciero = fal
                     <td />
                     <td className="px-2 py-1.5 text-right font-mono">{formatoPesos(s.totales.sena)}</td>
                     <td className="px-2 py-1.5 text-right font-mono text-amber-700">{formatoPesos(s.totales.diferencia)}</td>
-                    <td colSpan={editable ? 2 : 1} />
+                    <td colSpan={(editable ? 2 : 1) + (conProveedor ? 1 : 0)} />
                   </tr>
                 </tbody>
               );
@@ -296,7 +334,7 @@ export function PlanillaEvento({ eventoId, inicial, editable, enFinanciero = fal
                 <td />
                 <td className="px-2 py-2 text-right font-mono">{formatoPesos(c.gastos.sena)}</td>
                 <td className="px-2 py-2 text-right font-mono">{formatoPesos(c.gastos.diferencia)}</td>
-                <td colSpan={editable ? 2 : 1} />
+                <td colSpan={(editable ? 2 : 1) + (conProveedor ? 1 : 0)} />
               </tr>
             </tfoot>
           </table>

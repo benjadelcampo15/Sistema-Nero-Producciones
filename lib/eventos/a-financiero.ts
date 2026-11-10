@@ -25,6 +25,9 @@ export type MovimientoDePlanilla = {
   estado: "real" | "pendiente";
   facturado: boolean;
   iva: number | null;
+  /** Gastos: de qué renglón son y el proveedor con cuenta corriente (si tiene). */
+  gasto?: string;
+  proveedor_id?: string | null;
 };
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -65,6 +68,8 @@ export function movimientosDePlanilla(p: Planilla, evento: { fecha: string }, ca
     const sena = Math.min(Math.max(g.sena, 0), total);
     const resta = diferenciaGasto({ ...g, sena });
     const base = {
+      gasto: g.id,
+      proveedor_id: g.proveedor_id ?? null,
       tipo: "egreso" as const,
       categoria_id: categoria("egreso", CATEGORIAS_DE_SECTOR[g.sector] ?? []),
       facturado: g.tipo_factura !== "",

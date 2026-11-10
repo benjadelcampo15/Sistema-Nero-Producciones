@@ -147,3 +147,41 @@ export function PanelEquipo({ solicitud: s }: { solicitud: Solicitud }) {
     </form>
   );
 }
+
+/** Copia el título y la descripción de la solicitud al portapapeles. */
+export function CopiarDescripcion({ titulo, descripcion }: { titulo: string; descripcion: string }) {
+  const [estado, setEstado] = useState<"listo" | "copiado" | "error">("listo");
+  const copiar = async () => {
+    const texto = `${titulo}\n\n${descripcion}`;
+    try {
+      await navigator.clipboard.writeText(texto);
+      setEstado("copiado");
+    } catch {
+      // Navegadores sin permiso de portapapeles: se copia con un campo temporal.
+      const campo = document.createElement("textarea");
+      campo.value = texto;
+      campo.style.position = "fixed";
+      campo.style.opacity = "0";
+      document.body.appendChild(campo);
+      campo.select();
+      const ok = document.execCommand("copy");
+      campo.remove();
+      setEstado(ok ? "copiado" : "error");
+    }
+    setTimeout(() => setEstado("listo"), 2000);
+  };
+  return (
+    <button
+      type="button"
+      onClick={copiar}
+      title="Copiar el título y la descripción"
+      className="inline-flex items-center gap-1.5 rounded-md border border-stone-300 px-2 py-1 text-xs font-medium text-stone-700 hover:bg-stone-100"
+    >
+      <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className="h-3.5 w-3.5">
+        <path d="M7 3.5A1.5 1.5 0 0 1 8.5 2h7A1.5 1.5 0 0 1 17 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 7 12.5v-9Z" />
+        <path d="M4.5 6A1.5 1.5 0 0 0 3 7.5v9A1.5 1.5 0 0 0 4.5 18h7a1.5 1.5 0 0 0 1.5-1.5V15H8.5A2.5 2.5 0 0 1 6 12.5V6H4.5Z" />
+      </svg>
+      {estado === "copiado" ? "¡Copiado!" : estado === "error" ? "No se pudo copiar" : "Copiar"}
+    </button>
+  );
+}

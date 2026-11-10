@@ -7,7 +7,7 @@ import { CLASIFICACIONES, PRIORIDADES, PRIORIDADES_INTERNAS, TIPOS, codigoSolici
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { EtiquetaEstado, Historial, ListaAdjuntos, formatoFechaHora } from "@/components/solicitudes/comunes";
 import { SinConfigurar } from "../sin-configurar";
-import { FormularioComentario, PanelEquipo, RespuestaCotizacion } from "./componentes";
+import { FormularioComentario, PanelEquipo, RespuestaCotizacion, CopiarDescripcion } from "./componentes";
 
 export default async function PaginaSolicitud({ params, searchParams }: PageProps<"/solicitudes/[numero]">) {
   if (!centralConfigurada()) return <SinConfigurar />;
@@ -48,7 +48,10 @@ export default async function PaginaSolicitud({ params, searchParams }: PageProp
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="min-w-0 space-y-6">
           <section className="tarjeta space-y-2">
-            <h2 className="font-semibold">Descripción</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-semibold">Descripción</h2>
+              <CopiarDescripcion titulo={s.titulo} descripcion={s.descripcion} />
+            </div>
             <p className="whitespace-pre-line text-sm">{s.descripcion}</p>
             <ListaAdjuntos adjuntos={delInicio} />
           </section>

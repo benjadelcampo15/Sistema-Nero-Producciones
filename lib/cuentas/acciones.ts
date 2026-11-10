@@ -88,8 +88,8 @@ export async function editarCargo(tipo: TipoCuenta, transaccionId: string, datos
   const monto = parsearMonto(r.data.monto);
   if (monto === null || monto <= 0) return { error: "Monto inválido. Ejemplo: 150.000" };
   const supabase = await crearClienteServidor();
-  const { error } = await supabase.rpc("editar_cargo", { p_transaccion_id: transaccionId, p_cambios: { ...r.data, monto } });
-  if (error) return { error: /existe|permiso|pagaron|mayor a cero/.test(error.message) ? mensajeBase(error.message) : "No se pudo guardar el movimiento" };
+  const { error } = await supabase.rpc("editar_cargo_cuenta", { p_transaccion_id: transaccionId, p_cambios: { ...r.data, monto } });
+  if (error) return { error: /existe|permiso|pagaron|mayor a cero|planilla/.test(error.message) ? mensajeBase(error.message) : "No se pudo guardar el movimiento" };
   refresh();
   return {};
 }
@@ -99,8 +99,8 @@ export async function borrarCargo(tipo: TipoCuenta, transaccionId: string): Prom
   await exigirPermisoPagos(tipo);
   if (!/^[0-9a-f-]{36}$/i.test(transaccionId)) return { error: "Cargo inválido" };
   const supabase = await crearClienteServidor();
-  const { error } = await supabase.rpc("borrar_cargo", { p_transaccion_id: transaccionId });
-  if (error) return { error: /pagos|permiso|existe/.test(error.message) ? error.message : "No se pudo eliminar" };
+  const { error } = await supabase.rpc("borrar_cargo_cuenta", { p_transaccion_id: transaccionId });
+  if (error) return { error: /pagos|permiso|existe|planilla/.test(error.message) ? error.message : "No se pudo eliminar" };
   refresh();
   return {};
 }

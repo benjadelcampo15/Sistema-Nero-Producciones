@@ -12,6 +12,7 @@ import { PlanillaEvento } from "./planilla-evento";
 import { CierreCajas } from "./cierre-cajas";
 import { LiquidacionIsidris } from "./liquidacion-isidris";
 import { obtenerLiquidacion } from "@/lib/eventos/consultas-liquidacion";
+import { proveedoresParaEvento } from "@/lib/eventos/cuenta-gastos";
 
 export default async function PaginaEvento({ params, searchParams }: PageProps<"/eventos/[id]">) {
   const usuario = await obtenerUsuario();
@@ -29,6 +30,8 @@ export default async function PaginaEvento({ params, searchParams }: PageProps<"
   ]);
   if (!detalle) notFound();
   const { evento, transacciones, totales, desglose } = detalle;
+  // Proveedores para vincular gastos con su cuenta corriente (solo si la planilla pasa a Financiero).
+  const proveedores = planilla && evento.planilla_en_financiero ? await proveedoresParaEvento(evento.empresa) : undefined;
 
   const editaEvento = puede(usuario, "eventos", "editar");
   const editaMovimientos = editaEvento || puede(usuario, "financiero", "editar");
@@ -90,7 +93,15 @@ export default async function PaginaEvento({ params, searchParams }: PageProps<"
         <CierreCajas eventoId={evento.id} cajas={cajas} editable={editaEvento} />
       ) : planilla ? (
         <>
-          <PlanillaEvento key={evento.id} eventoId={evento.id} inicial={planilla} editable={editaEvento} enFinanciero={evento.planilla_en_financiero} />
+          <PlanillaEvento
+            key={evento.id}
+            eventoId={evento.id}
+            inicial={planilla}
+            editable={editaEvento}
+            enFinanciero={evento.planilla_en_financiero}
+            proveedores={proveedores}
+            empresa={evento.empresa}
+          />
           <LiquidacionIsidris
             eventoId={evento.id}
             inicial={liquidacion}

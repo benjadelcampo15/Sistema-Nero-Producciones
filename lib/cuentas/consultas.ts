@@ -5,7 +5,7 @@ import { sumar } from "@/lib/formato";
 import type { Empresa } from "@/lib/empresas";
 import type { MedioPago } from "@/lib/financiero/tipos";
 import { nombreTipoCbte, numeroComprobante } from "@/lib/facturar/tipos";
-import type { ComprobanteCuenta, CuentaCorriente, PagoCuenta, RenglonCuenta, TipoCuenta } from "./tipos";
+import type { ComprobanteCuenta, CuentaCorriente, PagoCuenta, RenglonCuenta, ResumenEventoCuenta, TipoCuenta } from "./tipos";
 
 type Movimiento = {
   id: string;
@@ -22,6 +22,8 @@ type Movimiento = {
   medio_pago: MedioPago;
   notas: string | null;
   creado_en: string;
+  evento_id: string | null;
+  planilla_ref: string | null;
 };
 
 /** De la fecha más vieja a la más nueva; lo que no tiene fecha va al final. */
@@ -64,6 +66,15 @@ export async function cuentaCorriente(tipo: TipoCuenta, id: string, empresa: Emp
     }
   }
 
+  // Nombres de los eventos de donde vienen los movimientos (con la clave secreta: quien ve la cuenta puede no ver Eventos).
+  const idsEventos = [...new Set(movimientos.map((m) => m.evento_id).filter((x): x is string => !!x))];
+  const nombreEvento = new Map<string, string>();
+  if (idsEventos.length) {
+    const { data } = await crearClienteAdmin().from("eventos").select("id, nombre").in("id", idsEventos);
+    for (const e of data ?? []) nombreEvento.set(e.id as string, e.nombre as string);
+  }
+  const eventoDe = (id: string | null) => (id ? { id, nombre: nombreEvento.get(id) ?? "Evento" } : undefined);
+
   // Un movimiento a mano pagado entero toma la fecha del pago: la suya quedó en la imputación.
   const pagadosEnteros = raices.filter((m) => (m.proveedor_id || m.cliente_id) && m.pago_id).map((m) => m.id);
   const fechaOriginal = new Map<string, string | null>();
@@ -78,14 +89,20 @@ export async function cuentaCorriente(tipo: TipoCuenta, id: string, empresa: Emp
       const familia = movimientos.filter((m) => m.id === r.id || m.parte_de === r.id);
       const pendientes = familia.filter((m) => m.estado === "pendiente");
       const d = datos.get(r.id);
-      const manual = Boolean(r.proveedor_id || r.cliente_id);
+      // Los gastos de la planilla de un evento se cambian desde la planilla (no son editables acá).
+      const deLaPlanilla = Boolean(r.planilla_ref);
+      const manual = Boolean(r.proveedor_id || r.cliente_id) && !deLaPlanilla;
+      const evento = eventoDe(r.evento_id);
       const fecha = d?.fecha ?? (fechaOriginal.has(r.id) ? fechaOriginal.get(r.id)! : r.fecha);
       const total = sumar(familia.map((m) => m.monto));
       return {
         id: r.id,
         fecha,
-        nombre: d?.nombre ?? (manual ? `${r.descripcion} · sin factura` : r.descripcion),
-        href: d?.href ?? null,
+        // En la planilla el saldo de un gasto con seña se llama "… · saldo": acá la fila es el gasto entero.
+        nombre: `${d?.nombre ?? (manual ? `${r.descripcion} · sin factura` : deLaPlanilla ? r.descripcion.replace(/ · saldo$/, "") : r.descripcion)}${evento ? ` · ${evento.nombre}` : ""}`,
+        href: d?.href ?? (deLaPlanilla && evento ? `/eventos/${evento.id}` : null),
+        evento,
+        deLaPlanilla,
         total,
         pendiente: sumar(pendientes.map((m) => m.monto)),
         pendientes: pendientes.map((m) => m.id),
@@ -109,23 +126,64 @@ export async function cuentaCorriente(tipo: TipoCuenta, id: string, empresa: Emp
   const listaPagos: PagoCuenta[] = (pagos ?? [])
     .filter((p) => p.anulado_en === null)
     .map((p) => ({ id: p.id, fecha: p.fecha, monto: Number(p.monto), medio_pago: p.medio_pago as MedioPago, notas: p.notas }));
+  // Eventos que cubre cada pago (por lo que se le imputó).
+  const eventosDePago = new Map<string, string[]>();
+  const idsPagos = listaPagos.map((p) => p.id).filter((x): x is string => !!x);
+  if (idsPagos.length) {
+    const eventoMovimiento = new Map(movimientos.map((m) => [m.id, m.evento_id]));
+    const { data } = await supabase.from("pago_aplicaciones").select("pago_id, transaccion_id").in("pago_id", idsPagos);
+    for (const a of data ?? []) {
+      const ev = eventoMovimiento.get(a.transaccion_id as string);
+      if (!ev) continue;
+      const lista = eventosDePago.get(a.pago_id as string) ?? [];
+      if (!lista.includes(ev)) lista.push(ev);
+      eventosDePago.set(a.pago_id as string, lista);
+    }
+  }
+  const extrasPagos: { pago: PagoCuenta; eventos: string[]; planilla?: { id: string; nombre: string } }[] = [];
   for (const m of movimientos) {
-    if (m.estado === "real" && !m.pago_id) listaPagos.push({ id: null, fecha: m.fecha, monto: m.monto, medio_pago: m.medio_pago, notas: "Marcado como pagado en Financiero" });
+    if (m.estado === "real" && !m.pago_id) {
+      const evento = eventoDe(m.evento_id);
+      const pago = {
+        id: null,
+        fecha: m.fecha,
+        monto: m.monto,
+        medio_pago: m.medio_pago,
+        notas: m.planilla_ref ? `Seña / pagado desde la planilla${evento ? ` de ${evento.nombre}` : ""}` : "Marcado como pagado en Financiero",
+      };
+      listaPagos.push(pago);
+      extrasPagos.push({ pago, eventos: m.evento_id ? [m.evento_id] : [], planilla: m.planilla_ref ? evento : undefined });
+    }
   }
   listaPagos.sort((a, b) => porFecha(a.fecha, b.fecha));
 
   const extracto: RenglonCuenta[] = [
-    ...comprobantes.map((c) => ({ fecha: c.fecha, detalle: c.nombre, href: c.href, debe: c.total, haber: 0, saldo: 0, cargo: c.cargo })),
-    ...listaPagos.map((p) => ({
-      fecha: p.fecha,
-      detalle: `${tipo === "pago" ? "Pago" : "Cobro"}${p.notas ? ` · ${p.notas}` : ""}`,
-      href: null,
-      debe: 0,
-      haber: p.monto,
+    ...comprobantes.map((c) => ({
+      fecha: c.fecha,
+      detalle: c.nombre,
+      href: c.href,
+      debe: c.total,
+      haber: 0,
       saldo: 0,
-      pago: p.id ? { ...p, id: p.id } : undefined,
-      enFinanciero: !p.id,
+      cargo: c.cargo,
+      eventos: c.evento ? [c.evento.id] : [],
+      planilla: c.deLaPlanilla ? c.evento : undefined,
     })),
+    ...listaPagos.map((p) => {
+      const extra = extrasPagos.find((x) => x.pago === p);
+      return {
+        fecha: p.fecha,
+        detalle: `${tipo === "pago" ? "Pago" : "Cobro"}${p.notas ? ` · ${p.notas}` : ""}`,
+        href: null,
+        debe: 0,
+        haber: p.monto,
+        saldo: 0,
+        pago: p.id ? { ...p, id: p.id } : undefined,
+        enFinanciero: !p.id && !extra?.planilla,
+        planilla: extra?.planilla,
+        eventos: p.id ? (eventosDePago.get(p.id) ?? []) : (extra?.eventos ?? []),
+      };
+    }),
   ].sort((a, b) => porFecha(a.fecha, b.fecha) || b.debe - a.debe);
   let saldo = 0;
   for (const r of extracto) {
@@ -135,7 +193,18 @@ export async function cuentaCorriente(tipo: TipoCuenta, id: string, empresa: Emp
 
   const facturado = sumar(comprobantes.map((c) => c.total));
   const pendiente = sumar(comprobantes.map((c) => c.pendiente));
-  return { comprobantes, pagos: listaPagos, extracto, saldo: pendiente, facturado, pagado: sumar([facturado, -pendiente]) };
+  // Lo de cada evento: su deuda, lo pagado y lo que falta (de los comprobantes que vienen de él).
+  const porEvento = new Map<string, ResumenEventoCuenta>();
+  for (const c of comprobantes) {
+    if (!c.evento) continue;
+    const e = porEvento.get(c.evento.id) ?? { ...c.evento, total: 0, pagado: 0, pendiente: 0 };
+    e.total = sumar([e.total, c.total]);
+    e.pendiente = sumar([e.pendiente, c.pendiente]);
+    e.pagado = sumar([e.total, -e.pendiente]);
+    porEvento.set(c.evento.id, e);
+  }
+  const eventos = [...porEvento.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
+  return { comprobantes, pagos: listaPagos, extracto, saldo: pendiente, facturado, pagado: sumar([facturado, -pendiente]), eventos };
 }
 
 /** Saldo pendiente de cada proveedor o cliente con una empresa (ver resumenCuentas). */

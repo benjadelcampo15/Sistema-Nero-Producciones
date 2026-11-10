@@ -42,6 +42,10 @@ const esquemaGasto = z.object({
   // Lo ya pagado (seña); la diferencia es lo que falta pagar.
   sena: monto,
   datos_bancarios: texto(300),
+  // Proveedor con cuenta corriente: el gasto es deuda en su cuenta (opcional).
+  proveedor_id: z.preprocess((v) => v || null, z.uuid().nullable()).optional(),
+  // Solo para mostrar: lo pagado desde la cuenta corriente del proveedor (ya incluido en la seña).
+  pagado_cuenta: z.number().min(0).max(1e13).optional(),
 });
 
 const esquemaEntrada = z.object({

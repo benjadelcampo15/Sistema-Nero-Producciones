@@ -22,6 +22,10 @@ export type ComprobanteCuenta = {
   pendientes: string[];
   /** Si es un movimiento a mano (sin factura): sus datos para editarlo o borrarlo. */
   cargo: CargoEditable | null;
+  /** Evento del que viene (si viene de uno). */
+  evento?: EventoCuenta;
+  /** Es un gasto de la planilla del evento (se cambia desde la planilla). */
+  deLaPlanilla?: boolean;
 };
 
 /** Movimiento a mano de una cuenta. Con pagos, el importe no puede quedar por debajo de lo pagado. */
@@ -37,8 +41,18 @@ export type PagoCuenta = {
 };
 
 /** Renglón del extracto: debe (facturado) o haber (pagado), con el saldo acumulado. */
+/** Evento del que viene un movimiento (gastos de la planilla, facturas cargadas al evento). */
+export type EventoCuenta = { id: string; nombre: string };
+
+/** Lo de un evento dentro de la cuenta: deuda, pagado y lo que falta. */
+export type ResumenEventoCuenta = EventoCuenta & { total: number; pagado: number; pendiente: number };
+
 export type RenglonCuenta = {
   fecha: string | null;
+  /** Eventos de la fila (un pago puede cubrir gastos de varios). */
+  eventos: string[];
+  /** Viene de la planilla de un evento: se cambia desde la planilla. */
+  planilla?: EventoCuenta;
   detalle: string;
   href: string | null;
   debe: number;
@@ -51,4 +65,13 @@ export type RenglonCuenta = {
   cargo?: CargoEditable | null;
 };
 
-export type CuentaCorriente = { comprobantes: ComprobanteCuenta[]; pagos: PagoCuenta[]; extracto: RenglonCuenta[]; saldo: number; facturado: number; pagado: number };
+export type CuentaCorriente = {
+  comprobantes: ComprobanteCuenta[];
+  pagos: PagoCuenta[];
+  extracto: RenglonCuenta[];
+  saldo: number;
+  facturado: number;
+  pagado: number;
+  /** Eventos con movimientos en la cuenta, para filtrar. */
+  eventos: ResumenEventoCuenta[];
+};

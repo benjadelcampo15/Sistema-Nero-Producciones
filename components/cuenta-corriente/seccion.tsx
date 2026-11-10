@@ -4,6 +4,7 @@ import type { TipoCuenta } from "@/lib/cuentas/tipos";
 import { NOMBRE_EMPRESA, type Empresa } from "@/lib/empresas";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { AccionesCargo, AccionesPago, FormularioCargo, FormularioPago } from "./formulario-pago";
+import { ExtractoConFiltro } from "./filtro-evento";
 
 /**
  * Cuenta corriente de un proveedor o cliente con una empresa: saldo, registrar
@@ -80,8 +81,10 @@ export async function SeccionCuentaCorriente({
         </div>
       )}
 
-      <div className="tarjeta overflow-x-auto p-0">
-        <table className="w-full min-w-[640px] text-sm">
+      <ExtractoConFiltro
+        eventos={cuenta.eventos}
+        saldoGeneral={cuenta.saldo}
+        encabezado={
           <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
             <tr>
               <th className="px-4 py-3">Fecha</th>
@@ -92,48 +95,58 @@ export async function SeccionCuentaCorriente({
               {editable && <th className="px-4 py-3" />}
             </tr>
           </thead>
-          <tbody className="divide-y divide-stone-100">
-            {cuenta.extracto.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-stone-500">
-                  Sin movimientos con {NOMBRE_EMPRESA[empresa]}. {tipo === "pago" ? "Las facturas aprobadas de este proveedor aparecen acá." : "Las facturas emitidas a este cliente (con el ingreso en Financiero) aparecen acá."} Lo que no tiene factura se carga con “+ Movimiento”.
-                </td>
-              </tr>
-            )}
-            {cuenta.extracto.map((r, i) => (
-              <tr key={r.pago?.id ?? r.cargo?.id ?? i}>
-                <td className="whitespace-nowrap px-4 py-2 text-stone-600">{r.fecha ? formatoFecha(r.fecha) : "Sin fecha"}</td>
-                <td className="px-4 py-2">
-                  {r.href ? (
-                    <Link href={r.href} className="font-medium underline decoration-stone-300 hover:decoration-stone-900">{r.detalle}</Link>
+        }
+        vacio={
+          <tr>
+            <td colSpan={6} className="px-4 py-8 text-center text-stone-500">
+              Sin movimientos con {NOMBRE_EMPRESA[empresa]}. {tipo === "pago" ? "Las facturas aprobadas de este proveedor y los gastos de eventos vinculados a su cuenta aparecen acá." : "Las facturas emitidas a este cliente (con el ingreso en Financiero) aparecen acá."} Lo que no tiene factura se carga con “+ Movimiento”.
+            </td>
+          </tr>
+        }
+        filas={cuenta.extracto.map((r, i) => ({
+          clave: r.pago?.id ?? r.cargo?.id ?? `${i}-${r.fecha}-${r.debe}-${r.haber}`,
+          eventos: r.eventos,
+          fila: (
+            <tr>
+              <td className="whitespace-nowrap px-4 py-2 text-stone-600">{r.fecha ? formatoFecha(r.fecha) : "Sin fecha"}</td>
+              <td className="px-4 py-2">
+                {r.href ? (
+                  <Link href={r.href} className="font-medium underline decoration-stone-300 hover:decoration-stone-900">{r.detalle}</Link>
+                ) : (
+                  <span className={r.haber ? "text-green-800" : ""}>{r.detalle}</span>
+                )}
+              </td>
+              <td className="whitespace-nowrap px-4 py-2 text-right font-mono">{r.debe ? formatoPesos(r.debe) : ""}</td>
+              <td className="whitespace-nowrap px-4 py-2 text-right font-mono text-green-800">{r.haber ? formatoPesos(r.haber) : ""}</td>
+              <td className="whitespace-nowrap px-4 py-2 text-right font-mono font-semibold">{formatoPesos(r.saldo)}</td>
+              {editable && (
+                <td className="px-4 py-2 text-right">
+                  {r.pago && <AccionesPago key={`${r.pago.id}-${r.pago.monto}-${r.pago.fecha}`} tipo={tipo} pago={r.pago} />}
+                  {r.cargo && <AccionesCargo key={`${r.cargo.id}-${r.cargo.monto}-${r.cargo.fecha}`} tipo={tipo} cargo={r.cargo} categorias={lista} />}
+                  {r.planilla ? (
+                    <Link href={`/eventos/${r.planilla.id}`} title="Viene de la planilla del evento: se cambia desde la planilla" className="text-xs text-stone-500 hover:underline">
+                      Ver evento
+                    </Link>
                   ) : (
-                    <span className={r.haber ? "text-green-800" : ""}>{r.detalle}</span>
-                  )}
-                </td>
-                <td className="whitespace-nowrap px-4 py-2 text-right font-mono">{r.debe ? formatoPesos(r.debe) : ""}</td>
-                <td className="whitespace-nowrap px-4 py-2 text-right font-mono text-green-800">{r.haber ? formatoPesos(r.haber) : ""}</td>
-                <td className="whitespace-nowrap px-4 py-2 text-right font-mono font-semibold">{formatoPesos(r.saldo)}</td>
-                {editable && (
-                  <td className="px-4 py-2 text-right">
-                    {r.pago && <AccionesPago key={`${r.pago.id}-${r.pago.monto}-${r.pago.fecha}`} tipo={tipo} pago={r.pago} />}
-                    {r.cargo && <AccionesCargo key={`${r.cargo.id}-${r.cargo.monto}-${r.cargo.fecha}`} tipo={tipo} cargo={r.cargo} categorias={lista} />}
-                    {r.debe > 0 && !r.cargo && r.href && (
+                    r.debe > 0 &&
+                    !r.cargo &&
+                    r.href && (
                       <Link href={r.href} title="Viene de una factura: el importe se cambia en la factura" className="text-xs text-stone-500 hover:underline">
                         Ver factura
                       </Link>
-                    )}
-                    {r.enFinanciero && (
-                      <span title="Se marcó pagado directo en Financiero: se cambia desde Financiero" className="cursor-help text-xs text-stone-400">
-                        Desde Financiero
-                      </span>
-                    )}
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                    )
+                  )}
+                  {r.enFinanciero && (
+                    <span title="Se marcó pagado directo en Financiero: se cambia desde Financiero" className="cursor-help text-xs text-stone-400">
+                      Desde Financiero
+                    </span>
+                  )}
+                </td>
+              )}
+            </tr>
+          ),
+        }))}
+      />
     </section>
   );
 }
