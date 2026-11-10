@@ -23,6 +23,7 @@ export const MENU = [
       { nombre: "Cashflow", href: "/cashflow", permiso: "financiero" },
       { nombre: "Saldos bancarios", href: "/saldos", permiso: "financiero" },
       { nombre: "Extractos bancarios", href: "/extractos", permiso: "financiero" },
+      { nombre: "Tarjetas de crédito", href: "/tarjetas", permiso: "financiero" },
       { nombre: "Objetivos", href: "/objetivos", permiso: "objetivos" },
     ],
   },
