@@ -10,6 +10,8 @@ import { SinAcceso } from "../../sin-acceso";
 import { EtiquetaEmpresa } from "@/components/empresa";
 import { PlanillaEvento } from "./planilla-evento";
 import { CierreCajas } from "./cierre-cajas";
+import { LiquidacionIsidris } from "./liquidacion-isidris";
+import { obtenerLiquidacion } from "@/lib/eventos/consultas-liquidacion";
 
 export default async function PaginaEvento({ params, searchParams }: PageProps<"/eventos/[id]">) {
   const usuario = await obtenerUsuario();
@@ -19,7 +21,12 @@ export default async function PaginaEvento({ params, searchParams }: PageProps<"
   const { vista: parametroVista } = await searchParams;
   const vista = parametroVista === "movimientos" || parametroVista === "cajas" ? parametroVista : "planilla";
   const enPlanilla = vista === "planilla";
-  const [detalle, planilla, cajas] = await Promise.all([obtenerDetalleEvento(id), enPlanilla ? obtenerPlanillaEvento(id) : null, vista === "cajas" ? cajasDeEvento(id) : null]);
+  const [detalle, planilla, cajas, liquidacion] = await Promise.all([
+    obtenerDetalleEvento(id),
+    enPlanilla ? obtenerPlanillaEvento(id) : null,
+    vista === "cajas" ? cajasDeEvento(id) : null,
+    enPlanilla ? obtenerLiquidacion(id) : null,
+  ]);
   if (!detalle) notFound();
   const { evento, transacciones, totales, desglose } = detalle;
 
@@ -82,7 +89,15 @@ export default async function PaginaEvento({ params, searchParams }: PageProps<"
       {cajas ? (
         <CierreCajas eventoId={evento.id} cajas={cajas} editable={editaEvento} />
       ) : planilla ? (
-        <PlanillaEvento key={evento.id} eventoId={evento.id} inicial={planilla} editable={editaEvento} enFinanciero={evento.planilla_en_financiero} />
+        <>
+          <PlanillaEvento key={evento.id} eventoId={evento.id} inicial={planilla} editable={editaEvento} enFinanciero={evento.planilla_en_financiero} />
+          <LiquidacionIsidris
+            eventoId={evento.id}
+            inicial={liquidacion}
+            editable={editaEvento}
+            cambiaReparto={usuario.esAdmin || puede(usuario, "financiero", "editar")}
+          />
+        </>
       ) : (
       <>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
