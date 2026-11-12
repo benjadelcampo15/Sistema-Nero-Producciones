@@ -50,6 +50,10 @@ export const esquemaMesRuta = z.object({
   // Para revisar con el equipo (diferencias con la planilla, criterios a confirmar).
   observaciones: z.array(texto(1500)).max(50).default([]),
   notas: z.string().max(4000).optional(),
+  // Porcentaje de ingresos brutos sobre los netos (4 = 4%).
+  ib_porcentaje: porcentaje.optional(),
+  // Correcciones a mano de importes calculados (clave → valor): mandan sobre el cálculo hasta restaurarlas.
+  ajustes: z.record(z.string().max(120), monto).default({}),
 });
 export type MesRuta = z.infer<typeof esquemaMesRuta>;
 
@@ -62,70 +66,107 @@ export const MES_RUTA_VACIO: MesRuta = {
   distribucion_mensual: [],
   distribucion_variable: [],
   observaciones: [],
+  ajustes: {},
 };
 
-/** Balance de un evento de Ruta en el mes (resultado = ingresos − egresos de sus movimientos). */
-export type EventoRuta = { id: string; nombre: string; fecha: string; ingresos: number; egresos: number; resultado: number };
+/**
+ * Un evento de Ruta en el mes, con los mismos cinco indicadores que muestra la
+ * planilla del evento (total ingresos, total gastos, IVA a pagar, IIBB y
+ * rentabilidad real). Sin planilla, se usa el balance de sus movimientos.
+ */
+export type EventoRuta = {
+  id: string;
+  nombre: string;
+  fecha: string;
+  ingresos: number;
+  egresos: number;
+  iva: number;
+  iibb: number;
+  rentabilidad: number;
+  /** Sin planilla cargada: ingresos − egresos de sus movimientos (sin IVA ni IIBB). */
+  sinPlanilla?: boolean;
+  /** Formato viejo (cierres anteriores): ingresos − egresos. */
+  resultado?: number;
+};
 
-/** Un importe calculado y de dónde sale. */
-export type Calculado = { valor: number; formula: string };
-const calc = (valor: number, formula: string): Calculado => ({ valor: r2(valor), formula });
+/** Normaliza un evento guardado en un cierre viejo (solo traía ingresos, egresos y resultado). */
+export const eventoRutaCompleto = (e: EventoRuta): EventoRuta =>
+  e.rentabilidad === undefined
+    ? { ...e, iva: 0, iibb: 0, rentabilidad: e.resultado ?? r2(e.ingresos - e.egresos), sinPlanilla: true }
+    : e;
+
+/**
+ * Un importe calculado y de dónde sale. Si tiene clave, se puede corregir a
+ * mano: el ajuste manda sobre el cálculo hasta que se restaura.
+ */
+export type Calculado = { valor: number; formula: string; clave?: string; automatico?: number; manual?: boolean };
 
 const esEstructura = (nombre: string) => /estructura/i.test(nombre);
 const PARECE_IMPUESTO = /\biva\b|ingresos brutos|\biibb\b|\bib\b/i;
 
-export function calcularMesRuta(d: MesRuta, nombres: { clientes: Map<string, string>; colaboradores: Map<string, string> }, eventos: EventoRuta[]) {
+export function calcularMesRuta(d: MesRuta, nombres: { clientes: Map<string, string>; colaboradores: Map<string, string> }, eventosOriginales: EventoRuta[]) {
   const cliente = (id: string) => nombres.clientes.get(id) ?? "Cliente borrado";
   const colaborador = (id: string) => nombres.colaboradores.get(id) ?? "Colaborador borrado";
+  const ajustes = d.ajustes ?? {};
+  /** El valor vigente: el ajuste manual si hay, si no el automático. */
+  const v = (clave: string, automatico: number, formula: string): Calculado =>
+    Object.hasOwn(ajustes, clave)
+      ? { valor: r2(ajustes[clave]), formula, clave, automatico: r2(automatico), manual: true }
+      : { valor: r2(automatico), formula, clave };
+  const ib = (d.ib_porcentaje ?? IB * 100) / 100;
+  const ibTexto = pct(ib * 100);
 
-  // Fees: IVA y bruto para facturar; el IB (4% del neto) es costo y no se suma al cliente.
+  // Fees: IVA y bruto para facturar; el IB (del neto) es costo y no se suma al cliente.
   const fees = d.fees.map((f) => ({
     cliente_id: f.cliente_id,
     cliente: cliente(f.cliente_id),
     neto: f.neto,
-    iva: r2(f.neto * IVA),
-    bruto: r2(f.neto * (1 + IVA)),
-    ib: r2(f.neto * IB),
+    iva: v(`fee:${f.cliente_id}:iva`, f.neto * IVA, `${formatoPesos(f.neto)} × 21%`),
+    bruto: v(`fee:${f.cliente_id}:bruto`, f.neto * (1 + IVA), "Neto + IVA"),
+    ib: v(`fee:${f.cliente_id}:ib`, f.neto * ib, `${formatoPesos(f.neto)} × ${ibTexto}`),
   }));
-  const fNeto = suma(fees.map((f) => f.neto));
   const totalFees = {
-    neto: calc(fNeto, `Suma de los netos de ${fees.length} cliente${fees.length === 1 ? "" : "s"}`),
-    iva: calc(suma(fees.map((f) => f.iva)), `${formatoPesos(fNeto)} × 21%`),
-    bruto: calc(suma(fees.map((f) => f.bruto)), `Neto + IVA`),
-    ib: calc(suma(fees.map((f) => f.ib)), `${formatoPesos(fNeto)} × 4%`),
+    neto: v("fees:neto", suma(fees.map((f) => f.neto)), `Suma de los netos de ${fees.length} cliente${fees.length === 1 ? "" : "s"}`),
+    iva: v("fees:iva", suma(fees.map((f) => f.iva.valor)), "Suma del IVA de cada cliente"),
+    bruto: v("fees:bruto", suma(fees.map((f) => f.bruto.valor)), "Suma del bruto de cada cliente"),
+    ib: v("fees:ib", suma(fees.map((f) => f.ib.valor)), `Suma del IB (${ibTexto}) de cada cliente`),
   };
+  const fNeto = totalFees.neto.valor;
 
   // Sueldos sobre el total neto de fees.
   const sueldos = d.porcentajes.map((p) => ({
     colaborador_id: p.colaborador_id,
     colaborador: colaborador(p.colaborador_id),
     porcentaje: p.porcentaje,
-    sueldo: calc((fNeto * p.porcentaje) / 100, `${formatoPesos(fNeto)} (neto fees) × ${pct(p.porcentaje)}`),
+    sueldo: v(`sueldo:${p.colaborador_id}`, (fNeto * p.porcentaje) / 100, `${formatoPesos(fNeto)} (neto fees) × ${pct(p.porcentaje)}`),
   }));
   const porcentajeSueldos = r2(suma(d.porcentajes.map((p) => p.porcentaje)));
-  const totalSueldos = calc(suma(sueldos.map((s) => s.sueldo.valor)), `${pct(porcentajeSueldos)} del neto de fees`);
+  const totalSueldos = v("sueldos:total", suma(sueldos.map((s) => s.sueldo.valor)), `Suma de los sueldos (${pct(porcentajeSueldos)} del neto de fees)`);
 
   // One shots: neto − IB − asignaciones = saldo para estructura (integra el resultado mensual).
   const oneShots = d.one_shots.map((o) => {
-    const asignado = suma(o.asignaciones.map((a) => a.monto));
-    const ib = r2(o.neto * IB);
+    const asignado = v(`os:${o.id}:asignado`, suma(o.asignaciones.map((a) => a.monto)), "Suma de las asignaciones");
+    const ibOs = v(`os:${o.id}:ib`, o.neto * ib, `${formatoPesos(o.neto)} × ${ibTexto}`);
     return {
       ...o,
-      iva: r2(o.neto * IVA),
-      bruto: r2(o.neto * (1 + IVA)),
-      ib,
+      iva: v(`os:${o.id}:iva`, o.neto * IVA, `${formatoPesos(o.neto)} × 21%`),
+      bruto: v(`os:${o.id}:bruto`, o.neto * (1 + IVA), "Neto + IVA"),
+      ib: ibOs,
       asignado,
-      estructura: calc(o.neto - ib - asignado, `${formatoPesos(o.neto)} neto − ${formatoPesos(ib)} IB − ${formatoPesos(asignado)} asignado`),
+      estructura: v(
+        `os:${o.id}:estructura`,
+        o.neto - ibOs.valor - asignado.valor,
+        `${formatoPesos(o.neto)} neto − ${formatoPesos(ibOs.valor)} IB − ${formatoPesos(asignado.valor)} asignado`,
+      ),
     };
   });
-  const oNeto = suma(oneShots.map((o) => o.neto));
   const totalOneShots = {
-    neto: calc(oNeto, `Suma de ${oneShots.length} one shot${oneShots.length === 1 ? "" : "s"}`),
-    iva: calc(suma(oneShots.map((o) => o.iva)), `${formatoPesos(oNeto)} × 21%`),
-    bruto: calc(suma(oneShots.map((o) => o.bruto)), "Neto + IVA"),
-    ib: calc(suma(oneShots.map((o) => o.ib)), `${formatoPesos(oNeto)} × 4%`),
-    asignado: calc(suma(oneShots.map((o) => o.asignado)), "Suma de las asignaciones a empleados"),
-    estructura: calc(suma(oneShots.map((o) => o.estructura.valor)), "Neto − IB − asignaciones de todos los one shots"),
+    neto: v("os:neto", suma(oneShots.map((o) => o.neto)), `Suma de ${oneShots.length} one shot${oneShots.length === 1 ? "" : "s"}`),
+    iva: v("os:iva", suma(oneShots.map((o) => o.iva.valor)), "Suma del IVA de cada one shot"),
+    bruto: v("os:bruto", suma(oneShots.map((o) => o.bruto.valor)), "Suma del bruto de cada one shot"),
+    ib: v("os:ib", suma(oneShots.map((o) => o.ib.valor)), `Suma del IB (${ibTexto}) de cada one shot`),
+    asignado: v("os:asignado", suma(oneShots.map((o) => o.asignado.valor)), "Suma de las asignaciones a empleados"),
+    estructura: v("os:estructura", suma(oneShots.map((o) => o.estructura.valor)), "Neto − IB − asignaciones de todos los one shots"),
   };
 
   // Lo que cobra cada colaborador en el mes: sueldo sobre fees + one shots.
@@ -136,27 +177,51 @@ export function calcularMesRuta(d: MesRuta, nombres: { clientes: Map<string, str
     return { colaborador_id: id, colaborador: colaborador(id), sueldo, oneShots: os, total: r2(sueldo + os) };
   });
 
-  const fijos = calc(suma(d.gastos_fijos.map((g) => g.monto)), `Suma de ${d.gastos_fijos.length} gasto${d.gastos_fijos.length === 1 ? "" : "s"} fijo${d.gastos_fijos.length === 1 ? "" : "s"}`);
-  const variables = calc(suma(d.gastos_variables.map((g) => g.monto)), `Suma de ${d.gastos_variables.length} gasto${d.gastos_variables.length === 1 ? "" : "s"} variable${d.gastos_variables.length === 1 ? "" : "s"}`);
+  const fijos = v("fijos:total", suma(d.gastos_fijos.map((g) => g.monto)), `Suma de ${d.gastos_fijos.length} gasto${d.gastos_fijos.length === 1 ? "" : "s"} fijo${d.gastos_fijos.length === 1 ? "" : "s"}`);
+  const variables = v(
+    "variables:total",
+    suma(d.gastos_variables.map((g) => g.monto)),
+    `Suma de ${d.gastos_variables.length} gasto${d.gastos_variables.length === 1 ? "" : "s"} variable${d.gastos_variables.length === 1 ? "" : "s"}`,
+  );
 
   // Resultado mensual: sobre netos (el IVA se cobra y se paga, no es rentabilidad).
   const lineasMensual = [
-    { concepto: "Fees netos", valor: fNeto, signo: 1 },
-    { concepto: "Ingresos brutos de fees (4%)", valor: totalFees.ib.valor, signo: -1 },
-    { concepto: "Sueldos sobre fees", valor: totalSueldos.valor, signo: -1 },
-    { concepto: "Gastos fijos", valor: fijos.valor, signo: -1 },
-    { concepto: "Gastos variables", valor: variables.valor, signo: -1 },
-    { concepto: "One shots: saldo para estructura", valor: totalOneShots.estructura.valor, signo: 1 },
-  ];
-  const rentabilidad = calc(
+    { concepto: "Fees netos", c: totalFees.neto, signo: 1 },
+    { concepto: `Ingresos brutos de fees (${ibTexto})`, c: totalFees.ib, signo: -1 },
+    { concepto: "Sueldos sobre fees", c: totalSueldos, signo: -1 },
+    { concepto: "Gastos fijos", c: fijos, signo: -1 },
+    { concepto: "Gastos variables", c: variables, signo: -1 },
+    { concepto: "One shots: saldo para estructura", c: totalOneShots.estructura, signo: 1 },
+  ].map((l) => ({ ...l, valor: l.c.valor }));
+  const rentabilidad = v(
+    "rentabilidad",
     suma(lineasMensual.map((l) => l.signo * l.valor)),
     "Fees netos − IB fees − sueldos − gastos fijos − gastos variables + saldo de one shots",
   );
 
-  // Rentabilidad variable: el resultado del balance de cada evento de Ruta del mes (ya neto de sus costos).
-  const variable = calc(suma(eventos.map((e) => e.resultado)), `Suma del balance de ${eventos.length} evento${eventos.length === 1 ? "" : "s"} de Ruta`);
+  // Rentabilidad variable: la rentabilidad real de cada evento de Ruta del mes (la de su planilla).
+  const eventos = eventosOriginales.map(eventoRutaCompleto).map((e) => {
+    const origen = e.sinPlanilla ? "del balance de movimientos (el evento no tiene planilla)" : "de la planilla del evento";
+    return {
+      ...e,
+      cIngresos: v(`ev:${e.id}:ingresos`, e.ingresos, `Total ingresos ${origen}`),
+      cEgresos: v(`ev:${e.id}:egresos`, e.egresos, `Total gastos ${origen}`),
+      cIva: v(`ev:${e.id}:iva`, e.iva, e.sinPlanilla ? "Sin planilla: no se calcula" : "IVA a pagar de la planilla del evento"),
+      cIibb: v(`ev:${e.id}:iibb`, e.iibb, e.sinPlanilla ? "Sin planilla: no se calcula" : "IIBB de la planilla del evento"),
+    };
+  }).map((e) => {
+    // Sin ajustes es exactamente la del evento; si se corrigió ingresos, gastos, IVA o IIBB, se mueve por esa diferencia.
+    const dif = e.cIngresos.valor - e.ingresos - (e.cEgresos.valor - e.egresos) - (e.cIva.valor - e.iva) - (e.cIibb.valor - e.iibb);
+    const base = e.sinPlanilla ? "Ingresos − egresos de sus movimientos" : "Rentabilidad real de la planilla del evento";
+    return { ...e, cRentabilidad: v(`ev:${e.id}:rentabilidad`, e.rentabilidad + dif, Math.abs(dif) >= 0.005 ? `${base}, con los ajustes de esta fila` : base) };
+  });
+  const variable = v(
+    "variable",
+    suma(eventos.map((e) => e.cRentabilidad.valor)),
+    `Suma de la rentabilidad real de ${eventos.length} evento${eventos.length === 1 ? "" : "s"} de Ruta`,
+  );
 
-  const repartir = (lista: MesRuta["distribucion_mensual"], base: Calculado, titulo: string) => {
+  const repartir = (lista: MesRuta["distribucion_mensual"], base: Calculado, titulo: string, prefijo: string) => {
     const total = r2(suma(lista.map((r) => r.porcentaje)));
     // Con pérdida no hay reparto: nunca se generan pagos negativos.
     const conReparto = base.valor > 0;
@@ -166,17 +231,22 @@ export function calcularMesRuta(d: MesRuta, nombres: { clientes: Map<string, str
       sumaPorcentajes: total,
       ok: Math.abs(total - 100) < 0.001,
       conReparto,
-      filas: lista.map((r) => ({
+      filas: lista.map((r, i) => ({
         ...r,
-        monto: calc(conReparto ? (base.valor * r.porcentaje) / 100 : 0, conReparto ? `${formatoPesos(base.valor)} × ${pct(r.porcentaje)}` : "Sin reparto: el resultado no es positivo"),
+        monto: v(
+          `${prefijo}:${i}`,
+          conReparto ? (base.valor * r.porcentaje) / 100 : 0,
+          conReparto ? `${formatoPesos(base.valor)} × ${pct(r.porcentaje)}` : "Sin reparto: el resultado no es positivo",
+        ),
       })),
     };
   };
-  const repartoMensual = repartir(d.distribucion_mensual, rentabilidad, "Distribución de la rentabilidad mensual");
-  const repartoVariable = repartir(d.distribucion_variable, variable, "Distribución de la rentabilidad variable");
+  const repartoMensual = repartir(d.distribucion_mensual, rentabilidad, "Distribución de la rentabilidad mensual", "reparto:mensual");
+  const repartoVariable = repartir(d.distribucion_variable, variable, "Distribución de la rentabilidad variable", "reparto:variable");
 
   const estructuraDe = (r: ReturnType<typeof repartir>) => suma(r.filas.filter((f) => esEstructura(f.nombre)).map((f) => f.monto.valor));
-  const cajaEstructura = calc(
+  const cajaEstructura = v(
+    "caja",
     estructuraDe(repartoMensual) + estructuraDe(repartoVariable),
     "Parte de estructura del reparto mensual + parte de estructura del reparto variable",
   );
@@ -192,9 +262,21 @@ export function calcularMesRuta(d: MesRuta, nombres: { clientes: Map<string, str
   }
   for (const g of d.gastos_variables) {
     const evento = eventos.find((e) => g.concepto && e.nombre.toLowerCase().includes(g.concepto.toLowerCase().trim()));
-    if (evento) avisos.push(`El gasto variable "${g.concepto}" coincide con el evento "${evento.nombre}": si ya está en su balance, no lo cargues acá.`);
+    if (evento) avisos.push(`El gasto variable "${g.concepto}" coincide con el evento "${evento.nombre}": si ya está en su planilla, no lo cargues acá.`);
   }
   for (const o of oneShots) if (o.estructura.valor < 0) avisos.push(`One shot "${o.descripcion || o.cliente}": lo asignado supera el neto menos IB.`);
+  // Ajustes que ya no corresponden a nada (un cliente o evento que se sacó): no afectan el resultado.
+  const usadas = new Set<string>();
+  const marcar = (c: Calculado) => c.clave && usadas.add(c.clave);
+  [totalFees.neto, totalFees.iva, totalFees.bruto, totalFees.ib, totalSueldos, fijos, variables, rentabilidad, variable, cajaEstructura].forEach(marcar);
+  Object.values(totalOneShots).forEach(marcar);
+  fees.forEach((f) => [f.iva, f.bruto, f.ib].forEach(marcar));
+  sueldos.forEach((s) => marcar(s.sueldo));
+  oneShots.forEach((o) => [o.iva, o.bruto, o.ib, o.asignado, o.estructura].forEach(marcar));
+  eventos.forEach((e) => [e.cIngresos, e.cEgresos, e.cIva, e.cIibb, e.cRentabilidad].forEach(marcar));
+  [...repartoMensual.filas, ...repartoVariable.filas].forEach((f) => marcar(f.monto));
+  const ajustesVigentes = Object.keys(ajustes).filter((k) => usadas.has(k));
+  const eventosConAjuste = eventos.filter((e) => [e.cIngresos, e.cEgresos, e.cIva, e.cIibb, e.cRentabilidad].some((c) => c.manual)).length;
 
   return {
     fees,
@@ -207,6 +289,7 @@ export function calcularMesRuta(d: MesRuta, nombres: { clientes: Map<string, str
     porColaborador,
     fijos,
     variables,
+    ibPorcentaje: ib * 100,
     impuestos: {
       ivaFees: totalFees.iva,
       ibFees: totalFees.ib,
@@ -216,10 +299,12 @@ export function calcularMesRuta(d: MesRuta, nombres: { clientes: Map<string, str
     lineasMensual,
     rentabilidad,
     eventos,
+    eventosConAjuste,
     variable,
     repartoMensual,
     repartoVariable,
     cajaEstructura,
+    ajustesVigentes,
     avisos,
   };
 }

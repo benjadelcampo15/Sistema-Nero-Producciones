@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition, createContext, useContext } from "react";
 import { calcularMesRuta, type Calculado, type EventoRuta, type MesRuta } from "@/lib/objetivos/ruta";
 import { cambiarActivoPersonaRuta, cerrarMesRuta, crearPersonaRuta, guardarMesRuta, reabrirMesRuta } from "@/lib/objetivos/ruta-acciones";
 import { MESES } from "@/lib/objetivos/tipos";
@@ -14,6 +14,9 @@ type TipoPersona = "cliente" | "colaborador";
 
 const pct = (n: number) => `${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n)}%`;
 const nuevoId = () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+
+/** Quien puede corregir a mano los importes calculados (y cómo se guarda). */
+const Ajustes = createContext<{ editable: boolean; ajustar: (clave: string, valor: number | null) => void }>({ editable: false, ajustar: () => {} });
 
 export function EditorRuta({
   anio,
@@ -75,6 +78,23 @@ export function EditorRuta({
     });
 
   const guardar = () => correr(() => guardarMesRuta(anio, mes, datos), "Guardado", () => setSinGuardar(false));
+
+  /** Corrige a mano un importe calculado (o lo vuelve al automático) y lo guarda en el momento. */
+  const ajustar = (clave: string, valor: number | null) => {
+    const ajustes = { ...datos.ajustes };
+    if (valor === null) delete ajustes[clave];
+    else ajustes[clave] = valor;
+    const nuevos = { ...datos, ajustes };
+    setDatos(nuevos);
+    setMensaje(null);
+    correr(() => guardarMesRuta(anio, mes, nuevos), valor === null ? "Se restauró el cálculo automático" : "Ajuste guardado", () => setSinGuardar(false));
+  };
+  const restaurarTodos = () => {
+    if (!window.confirm(`¿Restaurar el cálculo automático de los ${c.ajustesVigentes.length} importes corregidos a mano?`)) return;
+    const nuevos = { ...datos, ajustes: {} };
+    setDatos(nuevos);
+    correr(() => guardarMesRuta(anio, mes, nuevos), "Se restauraron todos los cálculos automáticos", () => setSinGuardar(false));
+  };
   const cerrar = () => {
     if (sinGuardar) return setMensaje({ tipo: "error", texto: "Guardá los cambios antes de cerrar el mes" });
     if (!window.confirm("¿Cerrar el mes? Ya no se edita y la rentabilidad variable queda con los balances de los eventos de hoy.")) return;
@@ -102,7 +122,17 @@ export function EditorRuta({
   const totalMes = Math.round((c.rentabilidad.valor + c.variable.valor) * 100) / 100;
 
   return (
+    <Ajustes.Provider value={{ editable, ajustar }}>
     <div className="space-y-4">
+      {c.ajustesVigentes.length > 0 && (
+        <p className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <span className="inline-block h-2 w-2 rounded-full bg-amber-500" aria-hidden />
+          {c.ajustesVigentes.length} importe{c.ajustesVigentes.length === 1 ? " corregido" : "s corregidos"} a mano (resaltados). Mandan sobre el cálculo automático; los datos de los eventos no se tocan.
+          {editable && (
+            <button type="button" onClick={restaurarTodos} className="ml-auto text-xs underline">Restaurar todos</button>
+          )}
+        </p>
+      )}
       {copiadoDe && !guardado && (
         <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
           Mes nuevo: se copiaron los clientes, porcentajes, gastos fijos y repartos de {MESES[Number(copiadoDe.slice(5)) - 1]} {copiadoDe.slice(0, 4)}. Revisalos y guardá.
@@ -176,7 +206,7 @@ export function EditorRuta({
 
       <div className="grid gap-4 xl:grid-cols-2">
         {/* Fees */}
-        <Seccion titulo="Fees mensuales" ayuda="Importe neto de cada cliente. IVA 21% y bruto para facturar; IB 4% del neto, como costo.">
+        <Seccion titulo="Fees mensuales" ayuda={`Importe neto de cada cliente. IVA 21% y bruto para facturar; IB ${pct(c.ibPorcentaje)} del neto, como costo. Hacé clic en un importe calculado para corregirlo.`}>
           <table className="w-full text-sm">
             <thead className="text-xs text-stone-500">
               <tr>
@@ -200,9 +230,9 @@ export function EditorRuta({
                       alCambiar={(n) => cambiar((d) => ({ ...d, fees: d.fees.map((x, j) => (j === i ? { ...x, neto: n } : x)) }))}
                     />
                   </td>
-                  <Celda valor={f.iva} formula={`${formatoPesos(f.neto)} × 21%`} />
-                  <Celda valor={f.bruto} formula="Neto + IVA" />
-                  <Celda valor={f.ib} formula={`${formatoPesos(f.neto)} × 4%`} />
+                  <CeldaC c={f.iva} />
+                  <CeldaC c={f.bruto} />
+                  <CeldaC c={f.ib} />
                   {editable && <Quitar alQuitar={() => cambiar((d) => ({ ...d, fees: d.fees.filter((_, j) => j !== i) }))} />}
                 </tr>
               ))}
@@ -310,7 +340,7 @@ export function EditorRuta({
       {/* One shots */}
       <Seccion
         titulo="One shots"
-        ayuda="Trabajos puntuales. IVA 21% y bruto para facturar; IB 4% del neto. Saldo para estructura = neto − IB − lo asignado a empleados (se suma a la rentabilidad mensual)."
+        ayuda="Trabajos puntuales. IVA 21% y bruto para facturar; IB sobre el neto. Saldo para estructura = neto − IB − lo asignado a empleados (se suma a la rentabilidad mensual)."
       >
         {c.oneShots.length === 0 && <p className="px-3 py-2 text-sm text-stone-500">No hay one shots este mes.</p>}
         <div className="divide-y divide-stone-200">
@@ -334,11 +364,11 @@ export function EditorRuta({
                     )}
                   </div>
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
-                    <Dato titulo="IVA (no es rentabilidad)" valor={o.iva} formula={`${formatoPesos(o.neto)} × 21%`} />
-                    <Dato titulo="Bruto" valor={o.bruto} formula="Neto + IVA" />
-                    <Dato titulo="IB" valor={o.ib} formula={`${formatoPesos(o.neto)} × 4%`} />
-                    <Dato titulo="Empleados" valor={o.asignado} formula="Suma de las asignaciones" />
-                    <Dato titulo="Estructura" valor={o.estructura.valor} formula={o.estructura.formula} negrita />
+                    <Dato titulo="IVA (no es rentabilidad)" c={o.iva} />
+                    <Dato titulo="Bruto" c={o.bruto} />
+                    <Dato titulo="IB" c={o.ib} />
+                    <Dato titulo="Empleados" c={o.asignado} />
+                    <Dato titulo="Estructura" c={o.estructura} negrita />
                   </dl>
                 </div>
                 <div className="space-y-1">
@@ -381,11 +411,11 @@ export function EditorRuta({
         </div>
         {c.oneShots.length > 0 && (
           <dl className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-stone-200 bg-stone-50 px-3 py-2 text-sm sm:grid-cols-5">
-            <Dato titulo="Neto total" valor={c.totalOneShots.neto.valor} formula={c.totalOneShots.neto.formula} />
-            <Dato titulo="IVA total" valor={c.totalOneShots.iva.valor} formula={c.totalOneShots.iva.formula} />
-            <Dato titulo="IB total" valor={c.totalOneShots.ib.valor} formula={c.totalOneShots.ib.formula} />
-            <Dato titulo="Empleados" valor={c.totalOneShots.asignado.valor} formula={c.totalOneShots.asignado.formula} />
-            <Dato titulo="Estructura" valor={c.totalOneShots.estructura.valor} formula={c.totalOneShots.estructura.formula} negrita />
+            <Dato titulo="Neto total" c={c.totalOneShots.neto} />
+            <Dato titulo="IVA total" c={c.totalOneShots.iva} />
+            <Dato titulo="IB total" c={c.totalOneShots.ib} />
+            <Dato titulo="Empleados" c={c.totalOneShots.asignado} />
+            <Dato titulo="Estructura" c={c.totalOneShots.estructura} negrita />
           </dl>
         )}
         {editable && (
@@ -419,10 +449,21 @@ export function EditorRuta({
         />
         <Seccion titulo="Impuestos calculados" ayuda="Los calcula el sistema: no los cargues como gastos.">
           <dl className="space-y-1 px-3 py-2 text-sm">
-            <Dato titulo="IVA de fees (se cobra y se paga, no es costo)" valor={c.impuestos.ivaFees.valor} formula={c.impuestos.ivaFees.formula} fila />
-            <Dato titulo="IVA de one shots (ídem)" valor={c.impuestos.ivaOneShots.valor} formula={c.impuestos.ivaOneShots.formula} fila />
-            <Dato titulo="Ingresos brutos de fees (costo)" valor={c.impuestos.ibFees.valor} formula={c.impuestos.ibFees.formula} fila />
-            <Dato titulo="Ingresos brutos de one shots (costo, dentro del saldo de cada one shot)" valor={c.impuestos.ibOneShots.valor} formula={c.impuestos.ibOneShots.formula} fila />
+            <div className="flex items-center justify-between gap-2">
+              <dt className="text-xs text-stone-500">Porcentaje de ingresos brutos (IIBB)</dt>
+              <dd className="w-20">
+                <CampoMonto
+                  valor={c.ibPorcentaje}
+                  disabled={!editable}
+                  etiqueta="Porcentaje de ingresos brutos"
+                  alCambiar={(n) => cambiar((d) => ({ ...d, ib_porcentaje: Math.min(100, Math.max(0, n)) }))}
+                />
+              </dd>
+            </div>
+            <Dato titulo="IVA de fees (se cobra y se paga, no es costo)" c={c.impuestos.ivaFees} fila />
+            <Dato titulo="IVA de one shots (ídem)" c={c.impuestos.ivaOneShots} fila />
+            <Dato titulo="Ingresos brutos de fees (costo)" c={c.impuestos.ibFees} fila />
+            <Dato titulo="Ingresos brutos de one shots (costo, dentro del saldo de cada one shot)" c={c.impuestos.ibOneShots} fila />
           </dl>
         </Seccion>
       </div>
@@ -433,51 +474,65 @@ export function EditorRuta({
             {c.lineasMensual.map((l) => (
               <div key={l.concepto} className="flex justify-between gap-2">
                 <dt className="text-stone-600">{l.signo > 0 ? "+" : "−"} {l.concepto}</dt>
-                <dd className="font-mono">{formatoPesos(l.valor)}</dd>
+                <dd className="font-mono"><ValorAjustable c={l.c} /></dd>
               </div>
             ))}
             <div className="flex justify-between gap-2 border-t border-stone-200 pt-1 font-semibold">
               <dt>Rentabilidad mensual</dt>
-              <dd className={`font-mono ${c.rentabilidad.valor < 0 ? "text-red-700" : ""}`}>{formatoPesos(c.rentabilidad.valor)}</dd>
+              <dd className={`font-mono ${c.rentabilidad.valor < 0 ? "text-red-700" : "text-green-700"}`}><ValorAjustable c={c.rentabilidad} /></dd>
             </div>
           </dl>
         </Seccion>
 
         <Seccion
           titulo={`Rentabilidad variable · eventos de ${NOMBRE_EMPRESA.ruta}`}
-          ayuda={`Resultado del balance de cada evento de ${NOMBRE_EMPRESA.ruta} con fecha en ${MESES[mes - 1].toLowerCase()} (ingresos − egresos de sus movimientos). ${cerrado ? "Balances al cierre del mes." : "Se actualiza sola mientras el mes está abierto."}`}
+          ayuda={`Los indicadores de la planilla de cada evento de ${NOMBRE_EMPRESA.ruta} con fecha en ${MESES[mes - 1].toLowerCase()} (los mismos que se ven en el evento). ${cerrado ? "Valores al cierre del mes." : "Se actualiza sola mientras el mes está abierto."} Una corrección acá no cambia el evento.`}
         >
           {eventos.length === 0 ? (
             <p className="px-3 py-2 text-sm text-stone-500">
               No hay eventos de {NOMBRE_EMPRESA.ruta} este mes. Se cargan en <Link href="/eventos?empresa=ruta" className="underline">Eventos → {NOMBRE_EMPRESA.ruta}</Link>.
             </p>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="text-xs text-stone-500">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead className="text-xs uppercase text-stone-500">
                 <tr>
                   <th className="px-3 py-1 text-left font-medium">Evento</th>
-                  <th className="px-3 py-1 text-right font-medium">Ingresos</th>
-                  <th className="px-3 py-1 text-right font-medium">Egresos</th>
-                  <th className="px-3 py-1 text-right font-medium">Resultado</th>
+                  <th className="px-3 py-1 text-right font-medium">Total ingresos</th>
+                  <th className="px-3 py-1 text-right font-medium">Total gastos</th>
+                  <th className="px-3 py-1 text-right font-medium">IVA a pagar</th>
+                  <th className="px-3 py-1 text-right font-medium">IIBB</th>
+                  <th className="px-3 py-1 text-right font-medium">Rentabilidad real</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {eventos.map((e) => (
+                {c.eventos.map((e) => (
                   <tr key={e.id}>
                     <td className="px-3 py-1">
                       <Link href={`/eventos/${e.id}`} className="underline decoration-stone-300 hover:decoration-stone-900">{e.nombre}</Link>
-                      <span className="block text-xs text-stone-500">{formatoFecha(e.fecha)}</span>
+                      <span className="block text-xs text-stone-500">
+                        {formatoFecha(e.fecha)}
+                        {e.sinPlanilla && " · sin planilla (balance de movimientos)"}
+                      </span>
                     </td>
-                    <Celda valor={e.ingresos} formula="Ingresos del balance del evento" />
-                    <Celda valor={e.egresos} formula="Egresos del balance del evento" />
-                    <Celda valor={e.resultado} formula="Ingresos − egresos" negrita />
+                    <CeldaC c={e.cIngresos} />
+                    <CeldaC c={e.cEgresos} />
+                    <CeldaC c={e.cIva} />
+                    <CeldaC c={e.cIibb} />
+                    <CeldaC c={e.cRentabilidad} negrita signo />
                   </tr>
                 ))}
               </tbody>
               <tfoot className="border-t border-stone-200 bg-stone-50 font-semibold">
                 <tr>
-                  <td className="px-3 py-1.5" colSpan={3}>Rentabilidad variable</td>
-                  <CeldaC c={c.variable} />
+                  <td className="px-3 py-1.5" colSpan={5}>
+                    Total rentabilidad variable
+                    {c.eventosConAjuste > 0 && (
+                      <span className="ml-2 text-xs font-normal text-amber-800">
+                        (con ajustes manuales en {c.eventosConAjuste} evento{c.eventosConAjuste === 1 ? "" : "s"})
+                      </span>
+                    )}
+                  </td>
+                  <CeldaC c={c.variable} signo />
                 </tr>
               </tfoot>
             </table>
@@ -494,14 +549,16 @@ export function EditorRuta({
               <Dato
                 key={r.titulo}
                 titulo={`Estructura · ${r.titulo.replace("Distribución de la ", "").toLowerCase()}`}
-                valor={r.filas.filter((f) => /estructura/i.test(f.nombre)).reduce((s, f) => s + f.monto.valor, 0)}
-                formula={r.filas.filter((f) => /estructura/i.test(f.nombre)).map((f) => f.monto.formula).join(" + ") || "No hay fila de estructura"}
+                c={{
+                  valor: r.filas.filter((f) => /estructura/i.test(f.nombre)).reduce((s, f) => s + f.monto.valor, 0),
+                  formula: r.filas.filter((f) => /estructura/i.test(f.nombre)).map((f) => f.monto.formula).join(" + ") || "No hay fila de estructura",
+                }}
                 fila
               />
             ))}
             <div className="flex justify-between gap-2 border-t border-stone-200 pt-1 font-semibold">
               <dt>Total</dt>
-              <dd className="font-mono">{formatoPesos(c.cajaEstructura.valor)}</dd>
+              <dd className="font-mono"><ValorAjustable c={c.cajaEstructura} /></dd>
             </div>
           </dl>
           <div className="border-t border-stone-100 px-3 py-2">
@@ -519,6 +576,7 @@ export function EditorRuta({
         </Seccion>
       </div>
     </div>
+    </Ajustes.Provider>
   );
 }
 
@@ -540,13 +598,13 @@ function Cifra({ titulo, c }: { titulo: string; c: Calculado }) {
   return (
     <div className="tarjeta p-4">
       <p className="text-xs uppercase tracking-wide text-stone-500">{titulo}</p>
-      <p className={`mt-1 font-mono text-lg font-semibold ${c.valor < 0 ? "text-red-700" : ""}`}>{formatoPesos(c.valor)}</p>
+      <p className={`mt-1 font-mono text-lg font-semibold ${c.valor < 0 ? "text-red-700" : ""}`}><ValorAjustable c={c} /></p>
       <p className="mt-1 text-[11px] text-stone-500">{c.formula}</p>
     </div>
   );
 }
 
-/** Importe calculado: al pasar el mouse muestra de dónde sale. */
+/** Importe derivado (no se corrige a mano): al pasar el mouse muestra de dónde sale. */
 function Celda({ valor, formula, negrita }: { valor: number; formula: string; negrita?: boolean }) {
   return (
     <td title={formula} className={`cursor-help whitespace-nowrap px-3 py-1 text-right font-mono ${negrita ? "font-semibold" : ""} ${valor < 0 ? "text-red-700" : ""}`}>
@@ -554,15 +612,93 @@ function Celda({ valor, formula, negrita }: { valor: number; formula: string; ne
     </td>
   );
 }
-const CeldaC = ({ c }: { c: Calculado }) => <Celda valor={c.valor} formula={c.formula} />;
-
-function Dato({ titulo, valor, formula, negrita, fila }: { titulo: string; valor: number; formula: string; negrita?: boolean; fila?: boolean }) {
+/** Importe calculado (corregible a mano si tiene clave). signo: positivo en verde, negativo en rojo. */
+function CeldaC({ c, negrita, signo }: { c: Calculado; negrita?: boolean; signo?: boolean }) {
   return (
-    <div className={fila ? "flex justify-between gap-2" : ""} title={formula}>
+    <td title={c.formula} className={`whitespace-nowrap px-3 py-1 text-right font-mono ${negrita ? "font-semibold" : ""} ${c.valor < 0 ? "text-red-700" : signo && c.valor > 0 ? "text-green-700" : ""}`}>
+      <ValorAjustable c={c} />
+    </td>
+  );
+}
+
+function Dato({ titulo, c, negrita, fila }: { titulo: string; c: Calculado; negrita?: boolean; fila?: boolean }) {
+  return (
+    <div className={fila ? "flex justify-between gap-2" : ""} title={c.formula}>
       <dt className="text-xs text-stone-500">{titulo}</dt>
-      <dd className={`cursor-help font-mono ${negrita ? "font-semibold" : ""} ${valor < 0 ? "text-red-700" : ""}`}>{formatoPesos(Math.round(valor * 100) / 100)}</dd>
-      {!fila && <p className="text-[10px] leading-tight text-stone-400">{formula}</p>}
+      <dd className={`font-mono ${negrita ? "font-semibold" : ""} ${c.valor < 0 ? "text-red-700" : ""}`}>
+        <ValorAjustable c={c} />
+      </dd>
+      {!fila && <p className="text-[10px] leading-tight text-stone-400">{c.formula}</p>}
     </div>
+  );
+}
+
+/** "1.234.567,89" o "1234567.89" → número (null si no es un importe). */
+function leerImporte(texto: string) {
+  const t = texto.trim().replace(/\$/g, "").replace(/\s/g, "");
+  if (!t) return null;
+  const limpio = t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : /^-?\d{1,3}(\.\d{3})+$/.test(t) ? t.replace(/\./g, "") : t;
+  const n = Number(limpio);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+}
+
+/**
+ * Un importe calculado: con permiso, al hacer clic se corrige a mano (se guarda
+ * solo). Los corregidos se ven resaltados y se pueden volver al cálculo automático.
+ */
+function ValorAjustable({ c }: { c: Calculado }) {
+  const { editable, ajustar } = useContext(Ajustes);
+  const [texto, setTexto] = useState<string | null>(null);
+  const marca = c.manual ? "rounded bg-amber-100 px-1 text-amber-950 ring-1 ring-amber-300" : "";
+  const titulo = c.manual ? `Corregido a mano. Automático: ${formatoPesos(c.automatico ?? 0)} (${c.formula})` : c.formula;
+  if (!editable || !c.clave) {
+    return <span title={titulo} className={marca}>{formatoPesos(c.valor)}</span>;
+  }
+  const clave = c.clave;
+  if (texto !== null) {
+    const confirmar = () => {
+      const n = leerImporte(texto);
+      setTexto(null);
+      if (n !== null && n !== c.valor) ajustar(clave, n);
+    };
+    return (
+      <input
+        autoFocus
+        aria-label="Corregir importe"
+        inputMode="decimal"
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        onBlur={confirmar}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") confirmar();
+          if (e.key === "Escape") setTexto(null);
+        }}
+        className="w-36 rounded border border-stone-400 bg-white px-1 py-0.5 text-right font-mono text-sm text-stone-900"
+      />
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => setTexto(String(c.valor).replace(".", ","))}
+        title={`${titulo}. Clic para corregir.`}
+        className={`cursor-text rounded border-b border-dashed border-stone-300 hover:border-stone-600 ${marca}`}
+      >
+        {formatoPesos(c.valor)}
+      </button>
+      {c.manual && (
+        <button
+          type="button"
+          onClick={() => ajustar(clave, null)}
+          title={`Restaurar cálculo automático (${formatoPesos(c.automatico ?? 0)})`}
+          aria-label="Restaurar cálculo automático"
+          className="text-xs text-amber-700 hover:text-amber-950"
+        >
+          ↺
+        </button>
+      )}
+    </span>
   );
 }
 

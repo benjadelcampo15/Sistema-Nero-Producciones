@@ -1,4 +1,5 @@
 import "server-only";
+import { calcularPlanilla, esquemaPlanilla } from "@/lib/eventos/planilla";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { crearClienteAdmin } from "@/lib/supabase/admin";
 import {
@@ -68,8 +69,9 @@ export async function aniosRuta() {
 }
 
 /**
- * Balance de los eventos de Ruta entre dos fechas: el resultado de sus
- * movimientos (ingresos − egresos), como en la pantalla del evento. Se lee
+ * Los eventos de Ruta entre dos fechas con los indicadores de su planilla
+ * (total ingresos, total gastos, IVA a pagar, IIBB y rentabilidad real), los
+ * mismos que muestra la pantalla del evento. Se lee
  * con la clave secreta para que Objetivos no dependa del permiso de Eventos:
  * llamar solo después de verificar el permiso de Objetivos.
  */
@@ -85,13 +87,25 @@ export async function eventosRutaEntre(desde: string, hasta: string): Promise<Ev
     .order("fecha");
   if (error) throw new Error(`No se pudieron leer los eventos de Ruta: ${error.message}`);
   if (!eventos?.length) return [];
-  const { data: balances } = await admin.from("balance_eventos").select("evento_id, ingresos, egresos").in("evento_id", eventos.map((e) => e.id));
-  const porEvento = new Map((balances ?? []).map((b) => [b.evento_id, b]));
-  return eventos.map((e) => {
-    const b = porEvento.get(e.id);
+  const ids = eventos.map((e) => e.id);
+  const [{ data: planillas }, { data: balances }] = await Promise.all([
+    admin.from("planillas_evento").select("evento_id, datos").in("evento_id", ids),
+    admin.from("balance_eventos").select("evento_id, ingresos, egresos").in("evento_id", ids),
+  ]);
+  const planillaDe = new Map((planillas ?? []).map((p) => [p.evento_id as string, esquemaPlanilla.safeParse(p.datos)]));
+  const balanceDe = new Map((balances ?? []).map((b) => [b.evento_id as string, b]));
+  return eventos.map((e): EventoRuta => {
+    // Los mismos cinco indicadores que muestra la planilla del evento (misma función de cálculo).
+    const p = planillaDe.get(e.id);
+    if (p?.success && (p.data.ingresos.length || p.data.gastos.length)) {
+      const c = calcularPlanilla(p.data);
+      return { id: e.id, nombre: e.nombre, fecha: e.fecha, ingresos: c.ingresos.bruto, egresos: c.gastos.total, iva: c.ivaAPagar, iibb: c.iibb, rentabilidad: c.rentabilidad };
+    }
+    // Sin planilla: el balance de sus movimientos (no hay IVA ni IIBB calculados).
+    const b = balanceDe.get(e.id);
     const ingresos = Number(b?.ingresos ?? 0);
     const egresos = Number(b?.egresos ?? 0);
-    return { id: e.id, nombre: e.nombre, fecha: e.fecha, ingresos, egresos, resultado: Math.round((ingresos - egresos) * 100) / 100 };
+    return { id: e.id, nombre: e.nombre, fecha: e.fecha, ingresos, egresos, iva: 0, iibb: 0, rentabilidad: Math.round((ingresos - egresos) * 100) / 100, sinPlanilla: true };
   });
 }
 
