@@ -109,19 +109,25 @@ export default async function PaginaEventos({ searchParams }: PageProps<"/evento
                   </span>
                 </div>
 
-                <dl className="space-y-1 text-sm">
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-stone-500">Ingresos</dt>
-                    <dd className="font-mono text-green-700">{formatoPesos(e.balance.ingresos)}</dd>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-stone-500">Egresos</dt>
-                    <dd className="font-mono text-red-700">{formatoPesos(e.balance.egresos)}</dd>
-                  </div>
-                  <div className="flex justify-between gap-2 border-t border-stone-100 pt-1">
-                    <dt className="font-medium">Balance</dt>
-                    <dd className={`font-mono font-semibold ${e.balance.resultado >= 0 ? "text-stone-900" : "text-red-700"}`}>
-                      {formatoPesos(e.balance.resultado)}
+                {/* Los cinco indicadores de la planilla del evento (los mismos que se ven adentro), como en el Excel. */}
+                <dl className="overflow-hidden rounded-lg border border-stone-200 text-sm">
+                  {(
+                    [
+                      ["Total ingresos", e.resumen.ingresos],
+                      ["Total gastos", e.resumen.gastos],
+                      ["IVA a pagar", e.resumen.iva],
+                      ["IIBB", e.resumen.iibb],
+                    ] as const
+                  ).map(([concepto, valor]) => (
+                    <div key={concepto} className="flex justify-between gap-2 border-b border-stone-100 px-3 py-1">
+                      <dt className="text-xs font-medium uppercase tracking-wide text-stone-600">{concepto}</dt>
+                      <dd className="whitespace-nowrap font-mono">{formatoPesos(valor)}</dd>
+                    </div>
+                  ))}
+                  <div className="flex justify-between gap-2 bg-green-100 px-3 py-1.5">
+                    <dt className="text-xs font-bold uppercase tracking-wide text-stone-900">Rentabilidad real</dt>
+                    <dd className={`whitespace-nowrap font-mono font-semibold ${e.resumen.rentabilidad < 0 ? "text-red-700" : "text-green-800"}`}>
+                      {formatoPesos(e.resumen.rentabilidad)}
                     </dd>
                   </div>
                 </dl>

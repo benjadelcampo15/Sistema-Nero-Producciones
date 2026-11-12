@@ -32,4 +32,7 @@ export type Evento = {
 
 export type Balance = { ingresos: number; egresos: number; resultado: number; movimientos: number };
 
-export type EventoConBalance = Evento & { balance: Balance };
+/** Los cinco indicadores de la planilla del evento (los mismos que se ven adentro). */
+export type ResumenEvento = { ingresos: number; gastos: number; iva: number; iibb: number; rentabilidad: number };
+
+export type EventoConBalance = Evento & { balance: Balance; resumen: ResumenEvento };

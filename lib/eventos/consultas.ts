@@ -5,8 +5,8 @@ import { sumar } from "@/lib/formato";
 import { CAMPOS_TRANSACCION, calcularTotales, normalizarTransacciones } from "@/lib/financiero/consultas";
 import type { Transaccion } from "@/lib/financiero/tipos";
 import type { Empresa } from "@/lib/empresas";
-import { ESTADOS_EVENTO, type Balance, type EstadoEvento, type Evento, type EventoConBalance } from "./tipos";
-import { PLANILLA_VACIA, esquemaPlanilla, type Planilla } from "./planilla";
+import { ESTADOS_EVENTO, type Balance, type EstadoEvento, type Evento, type EventoConBalance, type ResumenEvento } from "./tipos";
+import { PLANILLA_VACIA, calcularPlanilla, esquemaPlanilla, type Planilla } from "./planilla";
 import type { Caja } from "./cajas";
 
 const CAMPOS_EVENTO = "id, empresa, nombre, fecha, lugar, estado, presupuesto, notas, planilla_en_financiero";
@@ -32,14 +32,30 @@ export async function listarEventos(empresa: Empresa, estado?: EstadoEvento): Pr
   let consulta = supabase.from("eventos").select(CAMPOS_EVENTO).eq("empresa", empresa).order("fecha", { ascending: false });
   if (estado) consulta = consulta.eq("estado", estado);
 
-  const [{ data: eventos, error }, { data: balances }] = await Promise.all([
+  const [{ data: eventos, error }, { data: balances }, { data: planillas }] = await Promise.all([
     consulta,
     supabase.from("balance_eventos").select("evento_id, ingresos, egresos, movimientos"),
+    supabase.from("planillas_evento").select("evento_id, datos, eventos!inner(empresa)").eq("eventos.empresa", empresa),
   ]);
   if (error) throw new Error(`No se pudieron leer los eventos: ${error.message}`);
 
   const porEvento = new Map(((balances ?? []) as FilaBalance[]).map((b) => [b.evento_id, b]));
-  return ((eventos ?? []) as Evento[]).map((e) => ({ ...aEvento(e), balance: aBalance(porEvento.get(e.id)) }));
+  const planillaDe = new Map((planillas ?? []).map((p) => [p.evento_id as string, p.datos]));
+  return ((eventos ?? []) as Evento[]).map((e) => ({
+    ...aEvento(e),
+    balance: aBalance(porEvento.get(e.id)),
+    resumen: resumenPlanilla(planillaDe.get(e.id)),
+  }));
+}
+
+/**
+ * Los cinco indicadores de la planilla del evento, con la misma función que usa
+ * la pantalla del evento (sin planilla cargada, todo en cero, igual que adentro).
+ */
+function resumenPlanilla(datos: unknown): ResumenEvento {
+  const leida = esquemaPlanilla.safeParse(datos ?? {});
+  const c = calcularPlanilla(leida.success ? leida.data : PLANILLA_VACIA);
+  return { ingresos: c.ingresos.bruto, gastos: c.gastos.total, iva: c.ivaAPagar, iibb: c.iibb, rentabilidad: c.rentabilidad };
 }
 
 export async function obtenerEvento(id: string): Promise<Evento | null> {
