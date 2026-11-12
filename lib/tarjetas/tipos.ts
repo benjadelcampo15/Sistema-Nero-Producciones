@@ -1,5 +1,25 @@
 import { z } from "zod";
-import type { Empresa } from "@/lib/empresas";
+import { NOMBRE_EMPRESA, type Empresa } from "@/lib/empresas";
+
+/** A quién se asigna un consumo: una empresa, o las dos en partes iguales ("ambas" = 50/50). */
+export const EMPRESAS_TARJETA = ["nero", "ruta", "ambas"] as const;
+export type EmpresaTarjeta = (typeof EMPRESAS_TARJETA)[number];
+export const nombreEmpresaTarjeta = (e: EmpresaTarjeta) => (e === "ambas" ? `${NOMBRE_EMPRESA.nero} / ${NOMBRE_EMPRESA.ruta} (50/50)` : NOMBRE_EMPRESA[e]);
+
+const centavos = (n: number) => Math.round(n * 100);
+
+/**
+ * La parte de cada empresa de un importe: entero a una, o la mitad a cada una
+ * (el centavo impar va a la primera, siempre). Las dos partes suman exacto el importe.
+ */
+export function partesDe(importe: number, empresa: EmpresaTarjeta | null): Record<Empresa, number> {
+  if (empresa === "nero") return { nero: importe, ruta: 0 };
+  if (empresa === "ruta") return { nero: 0, ruta: importe };
+  if (empresa !== "ambas") return { nero: 0, ruta: 0 };
+  const total = centavos(importe);
+  const nero = Math.sign(total) * Math.ceil(Math.abs(total) / 2);
+  return { nero: nero / 100, ruta: (total - nero) / 100 };
+}
 
 export const TIPOS_MOVIMIENTO = ["consumo", "cargo", "pago"] as const;
 export type TipoMovimiento = (typeof TIPOS_MOVIMIENTO)[number];
@@ -20,7 +40,7 @@ export type LineaTarjeta = z.infer<typeof esquemaLinea>;
 export type MovimientoTarjeta = LineaTarjeta & {
   id: string;
   orden: number;
-  empresa: Empresa | null;
+  empresa: EmpresaTarjeta | null;
   detalle: string | null;
   reparto_nero: number;
 };
@@ -84,7 +104,7 @@ export function tipoDeDescripcion(descripcion: string, importe: number): TipoMov
 export const huella = (l: LineaTarjeta, repeticion: number) =>
   [l.fecha ?? "", l.pesos.toFixed(2), l.dolares.toFixed(2), sinAcentos(l.descripcion.toUpperCase()).replace(/\s+/g, " "), l.cupon ?? "", l.cuota ?? "", repeticion].join("|");
 
-export type Regla = { id: string; clave: string; empresa: Empresa | null; detalle: string | null; ambigua?: boolean };
+export type Regla = { id: string; clave: string; empresa: EmpresaTarjeta | null; detalle: string | null; ambigua?: boolean };
 
 /** La regla con la clave más larga que coincide con el comienzo de la clave de la descripción. */
 export function reglaPara(descripcion: string, reglas: Regla[]) {
@@ -99,8 +119,11 @@ export function reglaPara(descripcion: string, reglas: Regla[]) {
 const redondear = (n: number) => Math.round(n * 100) / 100;
 
 export type Totales = {
-  /** Consumos por empresa (null = sin asignar), en pesos y en dólares. */
-  consumos: Record<Empresa | "sin", { pesos: number; dolares: number; cantidad: number }>;
+  /**
+   * Consumos de cada empresa (incluye su mitad de los compartidos), sin asignar
+   * y compartidos (50/50, el total; ya repartido en nero y ruta), en pesos y en dólares.
+   */
+  consumos: Record<Empresa | "sin" | "ambas", { pesos: number; dolares: number; cantidad: number }>;
   cargos: { pesos: number; dolares: number; nero: number; ruta: number };
   pagos: { pesos: number; dolares: number };
   /** Lo que le toca a cada empresa en pesos (dólares a la cotización + su parte de los cargos). */
@@ -111,7 +134,12 @@ export type Totales = {
 
 export function calcularTotales(movimientos: Pick<MovimientoTarjeta, "tipo" | "pesos" | "dolares" | "empresa" | "reparto_nero">[], cotizacion: number | null): Totales {
   const t: Totales = {
-    consumos: { nero: { pesos: 0, dolares: 0, cantidad: 0 }, ruta: { pesos: 0, dolares: 0, cantidad: 0 }, sin: { pesos: 0, dolares: 0, cantidad: 0 } },
+    consumos: {
+      nero: { pesos: 0, dolares: 0, cantidad: 0 },
+      ruta: { pesos: 0, dolares: 0, cantidad: 0 },
+      sin: { pesos: 0, dolares: 0, cantidad: 0 },
+      ambas: { pesos: 0, dolares: 0, cantidad: 0 },
+    },
     cargos: { pesos: 0, dolares: 0, nero: 0, ruta: 0 },
     pagos: { pesos: 0, dolares: 0 },
     empresa: { nero: 0, ruta: 0 },
@@ -137,7 +165,19 @@ export function calcularTotales(movimientos: Pick<MovimientoTarjeta, "tipo" | "p
       c.pesos += m.pesos;
       c.dolares += m.dolares;
       c.cantidad++;
-      if (m.empresa) t.empresa[m.empresa] += enPesos(m);
+      if (m.empresa === "ambas") {
+        // Compartido: la mitad de los pesos y de los dólares a cada una (sin duplicar el consumo).
+        const pesos = partesDe(m.pesos, "ambas");
+        const dolares = partesDe(m.dolares, "ambas");
+        t.consumos.nero.pesos += pesos.nero;
+        t.consumos.ruta.pesos += pesos.ruta;
+        t.consumos.nero.dolares += dolares.nero;
+        t.consumos.ruta.dolares += dolares.ruta;
+      }
+      // En pesos (dólares a la cotización): el reparto se hace sobre el total, así suma exacto.
+      const partes = partesDe(redondear(enPesos(m)), m.empresa);
+      t.empresa.nero += partes.nero;
+      t.empresa.ruta += partes.ruta;
     }
   }
   // La segunda empresa paga lo que queda: así las dos partes suman justo el total (sin perder centavos al redondear).

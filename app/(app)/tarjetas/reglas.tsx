@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { NOMBRE_EMPRESA } from "@/lib/empresas";
 import { borrarRegla } from "@/lib/tarjetas/acciones";
-import type { Regla } from "@/lib/tarjetas/tipos";
+import { nombreEmpresaTarjeta, type Regla } from "@/lib/tarjetas/tipos";
 
 /** Las asignaciones aprendidas (se crean al asignar un consumo; acá solo se ven y se borran). */
 export function ListaReglas({ reglas, editable }: { reglas: Regla[]; editable: boolean }) {
@@ -38,7 +37,7 @@ export function ListaReglas({ reglas, editable }: { reglas: Regla[]; editable: b
                 {reglas.map((r) => (
                   <tr key={r.id}>
                     <td className="py-1 pr-3 font-mono">{r.clave}</td>
-                    <td className="py-1 pr-3">{r.ambigua ? <span className="text-stone-500">Las dos (se elige a mano)</span> : r.empresa ? NOMBRE_EMPRESA[r.empresa] : "—"}</td>
+                    <td className="py-1 pr-3">{r.ambigua ? <span className="text-stone-500">Las dos (se elige a mano)</span> : r.empresa ? nombreEmpresaTarjeta(r.empresa) : "—"}</td>
                     <td className="py-1 pr-3">{r.detalle ?? "—"}</td>
                     {editable && (
                       <td className="py-1 text-right">

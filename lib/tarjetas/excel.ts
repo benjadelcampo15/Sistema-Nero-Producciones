@@ -2,7 +2,7 @@ import "server-only";
 import { utils, write, type CellObject, type WorkSheet } from "xlsx";
 import { NOMBRE_EMPRESA } from "@/lib/empresas";
 import type { ResumenTarjeta } from "./consultas";
-import { calcularTotales, NOMBRE_MES, type MovimientoTarjeta } from "./tipos";
+import { calcularTotales, nombreEmpresaTarjeta, NOMBRE_MES, partesDe, type MovimientoTarjeta } from "./tipos";
 
 type Mes = { resumen: ResumenTarjeta; movimientos: MovimientoTarjeta[] };
 
@@ -83,7 +83,7 @@ function hojaDelMes(mes: Mes, nombre: string): { hoja: WorkSheet; ref: Referenci
   const consumos = mes.movimientos.filter((m) => m.tipo === "consumo");
   const cargos = mes.movimientos.filter((m) => m.tipo === "cargo");
   const pagos = mes.movimientos.filter((m) => m.tipo === "pago");
-  const titulos = ["FECHA", "DESCRIPCIÓN", "PESOS", "DÓLARES", "EMPRESA", "DETALLE", "TOTAL"];
+  const titulos = ["FECHA", "DESCRIPCIÓN", "PESOS", "DÓLARES", "EMPRESA", "DETALLE", "TOTAL", `${NERO} $`, `${NERO} U$S`, `${RUTA} $`, `${RUTA} U$S`];
   titulos.forEach((t, c) => h.set(0, c, t));
 
   // Consumos.
@@ -93,7 +93,13 @@ function hojaDelMes(mes: Mes, nombre: string): { hoja: WorkSheet; ref: Referenci
     h.set(f, 1, m.descripcion);
     if (m.pesos) h.set(f, 2, m.pesos, { z: PESOS });
     if (m.dolares) h.set(f, 3, m.dolares, { z: PESOS });
-    h.set(f, 4, m.empresa ? NOMBRE_EMPRESA[m.empresa].toUpperCase() : null);
+    h.set(f, 4, m.empresa ? nombreEmpresaTarjeta(m.empresa).toUpperCase() : null);
+    // La parte de cada empresa (entero, o la mitad si es 50/50): los totales por empresa salen de estas columnas.
+    const pp = partesDe(m.pesos, m.empresa);
+    const pd = partesDe(m.dolares, m.empresa);
+    [pp.nero, pd.nero, pp.ruta, pd.ruta].forEach((n, k) => {
+      if (n) h.set(f, 7 + k, n, { z: PESOS });
+    });
     h.set(f, 5, m.detalle);
     // En cuotas: el total de la compra (cuota × cantidad de cuotas), como en la planilla.
     if (m.cuotas && m.cuotas > 1 && m.pesos) h.set(f, 6, r2(m.pesos * m.cuotas), { f: `C${f + 1}*${m.cuotas}`, z: PESOS });
@@ -163,12 +169,15 @@ function hojaDelMes(mes: Mes, nombre: string): { hoja: WorkSheet; ref: Referenci
     ["sin", "SIN ASIGNAR", `""`],
   ] as const) {
     filas[clave] = f;
-    const propios = consumos.filter((m) => (m.empresa ?? "sin") === clave);
-    const pesos = suma(propios, "pesos");
-    const dolares = suma(propios, "dolares");
+    // Cada empresa suma su parte (de los 50/50, la mitad); sin asignar, lo que no tiene empresa.
+    const parte = (campo: "pesos" | "dolares") =>
+      clave === "sin" ? suma(consumos.filter((m) => !m.empresa), campo) : r2(consumos.reduce((t, m) => t + partesDe(m[campo], m.empresa)[clave], 0));
+    const pesos = parte("pesos");
+    const dolares = parte("dolares");
+    const [colPesos, colDolares] = clave === "nero" ? ["H", "I"] : ["J", "K"];
     h.set(f, 1, etiqueta);
-    h.set(f, 2, pesos, { f: `SUMIF(${rango("E")},${criterio},${rango("C")})`, z: PESOS });
-    h.set(f, 3, dolares, { f: `SUMIF(${rango("E")},${criterio},${rango("D")})`, z: PESOS });
+    h.set(f, 2, pesos, { f: clave === "sin" ? `SUMIF(${rango("E")},${criterio},${rango("C")})` : `SUM(${rango(colPesos)})`, z: PESOS });
+    h.set(f, 3, dolares, { f: clave === "sin" ? `SUMIF(${rango("E")},${criterio},${rango("D")})` : `SUM(${rango(colDolares)})`, z: PESOS });
     if (clave !== "sin") {
       const susCargos = r2(clave === "nero" ? cargosNero : cargosRuta);
       h.set(f, 4, susCargos, { f: `${clave === "nero" ? "E" : "F"}${filaTotalCargos + 1}`, z: PESOS });
@@ -198,7 +207,7 @@ function hojaDelMes(mes: Mes, nombre: string): { hoja: WorkSheet; ref: Referenci
   const q = `'${nombre}'!`;
   const abs = (celda: string) => q + celda.replace(/^([A-Z]+)(\d+)$/, "$$$1$$$2");
   return {
-    hoja: h.cerrar([12, 44, 16, 12, 16, 18, 14]),
+    hoja: h.cerrar([12, 44, 16, 12, 22, 18, 14, 14, 12, 14, 12]),
     ref: {
       hoja: nombre,
       cotizacion: abs(C(filaCotizacion)),

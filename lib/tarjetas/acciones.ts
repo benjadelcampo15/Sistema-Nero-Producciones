@@ -10,7 +10,7 @@ import { EMPRESAS, NOMBRE_EMPRESA } from "@/lib/empresas";
 import { formatoPesos } from "@/lib/formato";
 import { leerResumenPdf } from "./leer-pdf";
 import { obtenerResumen, listarReglas } from "./consultas";
-import { claveDescripcion, esquemaLinea, huella, mesDelResumen, reglaPara, TIPOS_MOVIMIENTO } from "./tipos";
+import { EMPRESAS_TARJETA, claveDescripcion, esquemaLinea, huella, mesDelResumen, reglaPara, TIPOS_MOVIMIENTO } from "./tipos";
 
 type Resultado = { error?: string; ok?: string };
 
@@ -155,7 +155,7 @@ export async function actualizarResumen(id: string, datos: unknown): Promise<Res
 }
 
 const esquemaAsignacion = z.object({
-  empresa: z.enum(EMPRESAS).nullable().optional(),
+  empresa: z.enum(EMPRESAS_TARJETA).nullable().optional(),
   detalle: z.string().trim().max(60).nullable().optional(),
   reparto_nero: z.number().min(0).max(100).optional(),
   tipo: z.enum(TIPOS_MOVIMIENTO).optional(),

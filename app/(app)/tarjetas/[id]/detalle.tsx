@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { EMPRESAS, NOMBRE_EMPRESA, type Empresa } from "@/lib/empresas";
+import { EMPRESAS, NOMBRE_EMPRESA } from "@/lib/empresas";
 import {
   actualizarResumen,
   agregarMovimiento,
@@ -15,7 +15,16 @@ import {
   pasarAFinanciero,
   repartirCargos,
 } from "@/lib/tarjetas/acciones";
-import { formatoDolares, type MovimientoTarjeta, type Totales, type TipoMovimiento } from "@/lib/tarjetas/tipos";
+import {
+  EMPRESAS_TARJETA,
+  formatoDolares,
+  nombreEmpresaTarjeta,
+  partesDe,
+  type EmpresaTarjeta,
+  type MovimientoTarjeta,
+  type Totales,
+  type TipoMovimiento,
+} from "@/lib/tarjetas/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 
 type Aviso = { tipo: "ok" | "error"; texto: string; accion?: { etiqueta: string; ejecutar: () => Promise<{ error?: string; ok?: string }> } } | null;
@@ -140,7 +149,7 @@ export function DatosResumen({ id, cotizacion, vencimiento, editable }: { id: st
   );
 }
 
-const ETIQUETA_FILTRO = { todos: "Todos", sin: "Sin asignar", nero: NOMBRE_EMPRESA.nero, ruta: NOMBRE_EMPRESA.ruta } as const;
+const ETIQUETA_FILTRO = { todos: "Todos", sin: "Sin asignar", nero: NOMBRE_EMPRESA.nero, ruta: NOMBRE_EMPRESA.ruta, ambas: "50/50" } as const;
 
 export function TablaConsumos({ resumenId, movimientos, detalles, editable }: { resumenId: string; movimientos: MovimientoTarjeta[]; detalles: string[]; editable: boolean }) {
   const [filtro, setFiltro] = useState<keyof typeof ETIQUETA_FILTRO>("todos");
@@ -208,7 +217,7 @@ export function TablaConsumos({ resumenId, movimientos, detalles, editable }: { 
 function FilaConsumo({ m, editable, onAviso }: { m: MovimientoTarjeta; editable: boolean; onAviso: (a: Aviso) => void }) {
   const [pendiente, iniciar] = useTransition();
   const [detalle, setDetalle] = useState(m.detalle ?? "");
-  const guardar = (cambios: { empresa?: Empresa | null; detalle?: string | null; tipo?: TipoMovimiento }) =>
+  const guardar = (cambios: { empresa?: EmpresaTarjeta | null; detalle?: string | null; tipo?: TipoMovimiento }) =>
     iniciar(async () => {
       const r = await asignarMovimiento(m.id, cambios);
       if (r.error) onAviso({ tipo: "error", texto: r.error });
@@ -216,7 +225,7 @@ function FilaConsumo({ m, editable, onAviso }: { m: MovimientoTarjeta; editable:
         onAviso({
           tipo: "ok",
           texto: `Hay ${r.iguales} consumo${r.iguales === 1 ? "" : "s"} más de ${m.descripcion.split(/[s*]/)[0]} sin asignar.${r.ambigua ? " (Este comercio ya se usó para las dos empresas.)" : ""}`,
-          accion: { etiqueta: `Asignarlos a ${NOMBRE_EMPRESA[cambios.empresa]}`, ejecutar: () => asignarIguales(m.id) },
+          accion: { etiqueta: `Asignarlos a ${nombreEmpresaTarjeta(cambios.empresa)}`, ejecutar: () => asignarIguales(m.id) },
         });
       else if (r.ambigua) onAviso({ tipo: "ok", texto: "Este comercio ya se usó para las dos empresas: en los próximos resúmenes se va a elegir a mano." });
       else onAviso(null);
@@ -236,19 +245,20 @@ function FilaConsumo({ m, editable, onAviso }: { m: MovimientoTarjeta; editable:
             aria-label="Empresa"
             value={m.empresa ?? ""}
             disabled={pendiente}
-            onChange={(e) => guardar({ empresa: (e.target.value || null) as Empresa | null })}
-            className={`campo w-32 py-1 text-sm ${!m.empresa ? "border-amber-400" : ""}`}
+            onChange={(e) => guardar({ empresa: (e.target.value || null) as EmpresaTarjeta | null })}
+            className={`campo w-40 py-1 text-sm ${!m.empresa ? "border-amber-400" : ""}`}
           >
             <option value="">Sin asignar</option>
-            {EMPRESAS.map((e) => (
-              <option key={e} value={e}>{NOMBRE_EMPRESA[e]}</option>
+            {EMPRESAS_TARJETA.map((e) => (
+              <option key={e} value={e}>{e === "ambas" ? `${NOMBRE_EMPRESA.nero} / ${NOMBRE_EMPRESA.ruta} (50/50)` : `${NOMBRE_EMPRESA[e]} (100%)`}</option>
             ))}
           </select>
         ) : m.empresa ? (
-          NOMBRE_EMPRESA[m.empresa]
+          nombreEmpresaTarjeta(m.empresa)
         ) : (
           <span className="text-amber-700">Sin asignar</span>
         )}
+        {m.empresa === "ambas" && <Mitades m={m} />}
       </td>
       <td className="px-3 py-1.5">
         {editable ? (
@@ -661,5 +671,18 @@ export function PaseFinanciero({
       </button>
       <MensajeAviso aviso={aviso} />
     </section>
+  );
+}
+
+/** Lo que le toca a cada empresa de un consumo compartido (50/50). */
+function Mitades({ m }: { m: MovimientoTarjeta }) {
+  const pesos = partesDe(m.pesos, "ambas");
+  const dolares = partesDe(m.dolares, "ambas");
+  const texto = (e: "nero" | "ruta") =>
+    [m.pesos ? formatoPesos(pesos[e]) : null, m.dolares ? formatoDolares(dolares[e]) : null].filter(Boolean).join(" + ");
+  return (
+    <span className="mt-0.5 block text-[11px] leading-tight text-stone-500">
+      {NOMBRE_EMPRESA.nero} {texto("nero")} · {NOMBRE_EMPRESA.ruta} {texto("ruta")}
+    </span>
   );
 }
