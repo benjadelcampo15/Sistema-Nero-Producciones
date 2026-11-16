@@ -11,6 +11,7 @@ import Link from "next/link";
 import { centralConfigurada } from "@/lib/solicitudes/central";
 import { cantidadNovedades } from "@/lib/solicitudes/consultas";
 import { cantidadNotificaciones } from "@/lib/pagos/consultas";
+import { notificacionesPendientes } from "@/lib/notificaciones/consultas";
 
 const encabezado = (
   <div className="px-5 py-3 md:py-5">
@@ -63,6 +64,8 @@ async function Menu() {
     nombre: g.grupo,
     items: g.items.filter((i) => usuario.permisos[i.permiso] !== "ninguno").map(({ nombre, href }) => ({ nombre, href, aviso: href === "/solicitudes-pago" ? avisosPagos : undefined })),
   }));
+  const pendientes = await notificacionesPendientes();
+  grupos.unshift({ nombre: "Avisos", items: [{ href: "/notificaciones", nombre: "🔔 Notificaciones", aviso: pendientes }] });
   if (centralConfigurada()) {
     grupos.push({ nombre: "Planix", items: [{ href: "/solicitudes", nombre: "Solicitudes y mejoras", aviso: await cantidadNovedades(usuario) }] });
   }
@@ -102,16 +105,15 @@ async function AvisoSolicitudes() {
   );
 }
 
-/** Aviso de novedades en Solicitudes de pagos (nuevas para Contabilidad; cambios de estado para quien pidió). */
+/** Aviso arriba de todo cuando hay notificaciones sin leer (Tareas, Solicitudes de pagos). Se ve también en el celular. */
 async function AvisoPagos() {
-  const usuario = await obtenerUsuario();
-  if (usuario.permisos.pagos === "ninguno") return null;
-  const novedades = await cantidadNotificaciones();
+  await obtenerUsuario();
+  const novedades = await notificacionesPendientes();
   if (!novedades) return null;
   return (
-    <Link href="/solicitudes-pago" className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-900 hover:bg-red-100 print:hidden">
+    <Link href="/notificaciones" className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-900 hover:bg-red-100 print:hidden">
       <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{novedades}</span>
-      {novedades === 1 ? "Hay una novedad" : `Hay ${novedades} novedades`} en Solicitudes de pagos →
+      🔔 {novedades === 1 ? "Tenés una notificación nueva" : `Tenés ${novedades} notificaciones nuevas`} →
     </Link>
   );
 }

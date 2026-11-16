@@ -3,6 +3,7 @@
   "regions": ["pdx1"],
   "crons": [
     { "path": "/api/cron/cheques", "schedule": "0 12 * * *" },
-    { "path": "/api/cron/demo", "schedule": "0 7 * * *" }
+    { "path": "/api/cron/demo", "schedule": "0 7 * * *" },
+    { "path": "/api/cron/tareas", "schedule": "0 11 * * *" }
   ]
 }

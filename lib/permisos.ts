@@ -11,6 +11,8 @@ export const SECCIONES = [
   { id: "operativa", nombre: "Empleados", href: "/empleados" },
   // Ver: crear solicitudes y seguir las propias. Editar: Contabilidad (todas, aprobar y registrar pagos).
   { id: "pagos", nombre: "Solicitudes de pagos", href: "/solicitudes-pago" },
+  // Ver: usar los tableros donde es integrante. Editar: además crear espacios de trabajo.
+  { id: "tareas", nombre: "Tareas", href: "/tareas" },
 ] as const;
 
 /**
@@ -37,6 +39,13 @@ export const MENU = [
       { nombre: "Cheques", href: "/cheques", permiso: "cheques" },
       { nombre: "Solicitudes de pagos", href: "/solicitudes-pago", permiso: "pagos" },
       { nombre: "Libros contables", href: "/contabilidad", permiso: "financiero" },
+    ],
+  },
+  {
+    grupo: "Tareas",
+    items: [
+      { nombre: "Tableros", href: "/tareas", permiso: "tareas" },
+      { nombre: "Mis tareas", href: "/tareas/mis-tareas", permiso: "tareas" },
     ],
   },
   {
@@ -77,5 +86,5 @@ export function alcanza(nivel: NivelPermiso, requerido: NivelPermiso) {
 }
 
 export function sinPermisos(): Permisos {
-  return { financiero: "ninguno", eventos: "ninguno", facturas: "ninguno", stock: "ninguno", facturar: "ninguno", presupuestos: "ninguno", cheques: "ninguno", livings: "ninguno", operativa: "ninguno", objetivos: "ninguno", pagos: "ninguno" };
+  return { financiero: "ninguno", eventos: "ninguno", facturas: "ninguno", stock: "ninguno", facturar: "ninguno", presupuestos: "ninguno", cheques: "ninguno", livings: "ninguno", operativa: "ninguno", objetivos: "ninguno", pagos: "ninguno", tareas: "ninguno" };
 }

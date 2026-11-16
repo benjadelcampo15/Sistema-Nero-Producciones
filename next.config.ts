@@ -14,7 +14,8 @@ const politicaContenido = [
   "frame-src " + (supabase || "'none'"),
   "font-src 'self'",
   // ws: para la recarga en caliente del servidor de desarrollo.
-  `connect-src 'self' ${supabase}${esDesarrollo ? " ws:" : ""}`,
+  // wss: tiempo real de Supabase (tableros de Tareas sincronizados entre usuarios).
+  `connect-src 'self' ${supabase} ${supabase.replace(/^http/, "ws")}${esDesarrollo ? " ws:" : ""}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

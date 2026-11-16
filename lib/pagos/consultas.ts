@@ -63,15 +63,15 @@ export const esContabilidad = (usuario: UsuarioActual) => puede(usuario, "pagos"
 
 export type Notificacion = { id: string; titulo: string; detalle: string | null; href: string | null; creado_en: string };
 
-/** Notificaciones sin leer del usuario actual. */
+/** Notificaciones sin leer de Solicitudes de pagos del usuario actual. */
 export async function notificacionesSinLeer(): Promise<Notificacion[]> {
   const supabase = await crearClienteServidor();
-  const { data } = await supabase.from("notificaciones").select("id, titulo, detalle, href, creado_en").eq("leida", false).order("creado_en", { ascending: false }).limit(50);
+  const { data } = await supabase.from("notificaciones").select("id, titulo, detalle, href, creado_en").eq("leida", false).like("href", "/solicitudes-pago%").order("creado_en", { ascending: false }).limit(50);
   return (data ?? []) as Notificacion[];
 }
 
 export async function cantidadNotificaciones(): Promise<number> {
   const supabase = await crearClienteServidor();
-  const { count } = await supabase.from("notificaciones").select("id", { count: "exact", head: true }).eq("leida", false);
+  const { count } = await supabase.from("notificaciones").select("id", { count: "exact", head: true }).eq("leida", false).like("href", "/solicitudes-pago%");
   return count ?? 0;
 }

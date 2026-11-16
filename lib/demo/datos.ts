@@ -49,6 +49,11 @@ export async function cargarDemo(sb: SupabaseClient, url: string, clave = CLAVE_
   ]) await vaciar(t);
   await vaciar("cuentas_bancarias");
   await vaciar("depositos");
+  // Tareas (se borra todo en cascada desde los espacios) y Solicitudes de pagos.
+  await vaciar("tareas_importaciones");
+  await vaciar("tareas_busquedas");
+  await vaciar("tareas_espacios");
+  await vaciar("solicitudes_pago");
   await vaciar("auditoria");
 
   // ─── 2. Usuario demo ─────────────────────────────────────────────────────────
@@ -68,9 +73,53 @@ export async function cargarDemo(sb: SupabaseClient, url: string, clave = CLAVE_
   await sb.from("perfiles").upsert({ id: idDemo, nombre: "Usuario Demo", email: EMAIL_DEMO, es_admin: false, activo: true, debe_cambiar_contrasena: false });
   await insertar(
     "permisos",
-    ["financiero", "objetivos", "facturas", "facturar", "cheques", "stock", "eventos", "presupuestos", "livings", "operativa", "pagos"].map((seccion) => ({ usuario_id: idDemo, seccion, nivel: "editar" })),
+    ["financiero", "objetivos", "facturas", "facturar", "cheques", "stock", "eventos", "presupuestos", "livings", "operativa", "pagos", "tareas"].map((seccion) => ({ usuario_id: idDemo, seccion, nivel: "editar" })),
     "usuario_id",
   );
+
+  // ─── 2b. Tareas: espacio RUTA con un tablero de ejemplo ──────────────────────
+  {
+    const [espacio] = await insertar("tareas_espacios", { nombre: "RUTA", descripcion: "Tableros del equipo de Ruta" });
+    await insertar("tareas_espacio_miembros", { espacio_id: espacio.id, usuario_id: idDemo, rol: "admin" }, "espacio_id");
+    const [tablero] = await insertar("tareas_tableros", { espacio_id: espacio.id, nombre: "Marketing", fondo: "c:oceano", descripcion: "Campañas y contenidos de Ruta" });
+    await insertar("tareas_tablero_miembros", { tablero_id: tablero.id, usuario_id: idDemo, rol: "admin" }, "tablero_id");
+    const listas = await insertar("tareas_listas", ["Por hacer", "En proceso", "En revisión", "Terminado"].map((nombre, i) => ({ tablero_id: tablero.id, nombre, posicion: (i + 1) * 1024 })));
+    const { data: etiquetas } = await sb.from("tareas_etiquetas").select("id, color").eq("tablero_id", tablero.id);
+    const etiqueta = async (color: string, nombre: string) => {
+      const e = etiquetas?.find((x) => x.color === color);
+      if (e) await sb.from("tareas_etiquetas").update({ nombre }).eq("id", e.id);
+      return e?.id;
+    };
+    const urgente = await etiqueta("rojo", "Urgente");
+    const cliente = await etiqueta("azul", "Cliente");
+    const diseno = await etiqueta("violeta", "Diseño");
+    const vence = (dias: number) => `${dia(dias)}T18:00:00-03:00`;
+    const tarjetas: { titulo: string; lista: number; dias?: number; etiquetas?: (string | undefined)[]; mia?: boolean; checklist?: [string, boolean][]; hecha?: boolean }[] = [
+      { titulo: "Preparar propuesta comercial", lista: 0, dias: 3, etiquetas: [cliente], mia: true },
+      { titulo: "Revisar campaña de Instagram", lista: 0, dias: -1, etiquetas: [urgente] },
+      { titulo: "Enviar presupuesto a Bodega Los Álamos", lista: 1, dias: 1, etiquetas: [cliente, urgente], mia: true },
+      { titulo: "Lanzamiento campaña de verano", lista: 1, dias: 7, etiquetas: [diseno], mia: true, checklist: [["Preparar textos", true], ["Diseñar piezas", true], ["Revisar contenido", true], ["Aprobar publicación", false], ["Programar campaña", false]] },
+      { titulo: "Diseñar contenido para redes", lista: 2, dias: 2, etiquetas: [diseno] },
+      { titulo: "Confirmar reunión con el cliente", lista: 3, dias: -2, hecha: true },
+    ];
+    for (const [i, t] of tarjetas.entries()) {
+      const [c] = await insertar("tareas_tarjetas", { lista_id: listas[t.lista].id, tablero_id: tablero.id, titulo: t.titulo, posicion: (i + 1) * 1024, vence: t.dias === undefined ? null : vence(t.dias), completada: !!t.hecha });
+      if (t.mia) await insertar("tareas_tarjeta_miembros", { tarjeta_id: c.id, usuario_id: idDemo }, "tarjeta_id");
+      for (const e of t.etiquetas ?? []) if (e) await insertar("tareas_tarjeta_etiquetas", { tarjeta_id: c.id, etiqueta_id: e }, "tarjeta_id");
+      if (t.checklist) {
+        const [ch] = await insertar("tareas_checklists", { tarjeta_id: c.id, nombre: "Lanzamiento", posicion: 1024 });
+        await insertar("tareas_checklist_items", t.checklist.map(([texto, hecho], k) => ({ checklist_id: ch.id, texto, hecho, posicion: (k + 1) * 1024 })));
+      }
+    }
+    await insertar("tareas_reglas", {
+      tablero_id: tablero.id,
+      nombre: "Al terminar, completar",
+      disparador: { tipo: "movida_a", dato: listas[3].id },
+      acciones: [{ tipo: "completar" }],
+    });
+    // Los avisos que generó la carga no son novedades reales.
+    await vaciar("notificaciones");
+  }
 
   // ─── 3. Bancos, depósitos y categorías ───────────────────────────────────────
   const [galicia, mp, caja] = await insertar("cuentas_bancarias", [

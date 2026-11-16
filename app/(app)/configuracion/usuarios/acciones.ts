@@ -28,6 +28,7 @@ const esquemaPermisos = z.object({
   operativa: z.enum(NIVELES),
   objetivos: z.enum(NIVELES),
   pagos: z.enum(NIVELES),
+  tareas: z.enum(NIVELES),
 });
 
 function leerPermisos(formData: FormData) {
