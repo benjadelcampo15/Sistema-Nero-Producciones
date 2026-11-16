@@ -68,7 +68,7 @@ export async function cargarDemo(sb: SupabaseClient, url: string, clave = CLAVE_
   await sb.from("perfiles").upsert({ id: idDemo, nombre: "Usuario Demo", email: EMAIL_DEMO, es_admin: false, activo: true, debe_cambiar_contrasena: false });
   await insertar(
     "permisos",
-    ["financiero", "objetivos", "facturas", "facturar", "cheques", "stock", "eventos", "presupuestos", "livings", "operativa"].map((seccion) => ({ usuario_id: idDemo, seccion, nivel: "editar" })),
+    ["financiero", "objetivos", "facturas", "facturar", "cheques", "stock", "eventos", "presupuestos", "livings", "operativa", "pagos"].map((seccion) => ({ usuario_id: idDemo, seccion, nivel: "editar" })),
     "usuario_id",
   );
 

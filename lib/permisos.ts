@@ -9,6 +9,8 @@ export const SECCIONES = [
   { id: "presupuestos", nombre: "Presupuestos", href: "/presupuestos" },
   { id: "livings", nombre: "Livings VIP", href: "/livings" },
   { id: "operativa", nombre: "Empleados", href: "/empleados" },
+  // Ver: crear solicitudes y seguir las propias. Editar: Contabilidad (todas, aprobar y registrar pagos).
+  { id: "pagos", nombre: "Solicitudes de pagos", href: "/solicitudes-pago" },
 ] as const;
 
 /**
@@ -33,6 +35,7 @@ export const MENU = [
       { nombre: "Proveedores", href: "/facturas", permiso: "facturas" },
       { nombre: "Clientes", href: "/facturar", permiso: "facturar" },
       { nombre: "Cheques", href: "/cheques", permiso: "cheques" },
+      { nombre: "Solicitudes de pagos", href: "/solicitudes-pago", permiso: "pagos" },
       { nombre: "Libros contables", href: "/contabilidad", permiso: "financiero" },
     ],
   },
@@ -74,5 +77,5 @@ export function alcanza(nivel: NivelPermiso, requerido: NivelPermiso) {
 }
 
 export function sinPermisos(): Permisos {
-  return { financiero: "ninguno", eventos: "ninguno", facturas: "ninguno", stock: "ninguno", facturar: "ninguno", presupuestos: "ninguno", cheques: "ninguno", livings: "ninguno", operativa: "ninguno", objetivos: "ninguno" };
+  return { financiero: "ninguno", eventos: "ninguno", facturas: "ninguno", stock: "ninguno", facturar: "ninguno", presupuestos: "ninguno", cheques: "ninguno", livings: "ninguno", operativa: "ninguno", objetivos: "ninguno", pagos: "ninguno" };
 }
