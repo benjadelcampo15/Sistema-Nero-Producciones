@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState, useTransition, createContext, useContext } from "react";
-import { calcularMesRuta, type Calculado, type EventoRuta, type MesRuta } from "@/lib/objetivos/ruta";
+import { calcularMesRuta, sincronizarOneShot, type Calculado, type EventoRuta, type MesRuta } from "@/lib/objetivos/ruta";
+import { SueldosOneShots, repartoInicial } from "./sueldos-one-shots";
 import { cambiarActivoPersonaRuta, cerrarMesRuta, crearPersonaRuta, guardarMesRuta, reabrirMesRuta } from "@/lib/objetivos/ruta-acciones";
 import { MESES } from "@/lib/objetivos/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
@@ -118,6 +119,15 @@ export function EditorRuta({
       p.activo ? `${p.nombre}: de baja para los meses nuevos` : `${p.nombre}: de alta otra vez`,
       () => (tipo === "cliente" ? setClientes : setColaboradores)((l) => l.map((x) => (x.id === p.id ? { ...x, activo: !x.activo } : x))),
     );
+
+  /** Cambia un one shot (partiendo de sus asignaciones al día con el reparto 20/80). */
+  const cambiarOneShot = (id: string, cambio: (o: MesRuta["one_shots"][number]) => MesRuta["one_shots"][number]) =>
+    cambiar((d) => ({ ...d, one_shots: d.one_shots.map((x) => (x.id === id ? sincronizarOneShot(cambio(sincronizarOneShot(x))) : x)) }));
+  const [osElegido, setOsElegido] = useState<string | null>(null);
+  const irALiquidacion = (id: string) => {
+    setOsElegido(id);
+    document.getElementById("sueldos-one-shots")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const totalMes = Math.round((c.rentabilidad.valor + c.variable.valor) * 100) / 100;
 
@@ -261,7 +271,7 @@ export function EditorRuta({
         </Seccion>
 
         {/* Sueldos */}
-        <Seccion titulo="Sueldos sobre fees" ayuda={`Total neto de fees del mes × porcentaje de cada colaborador. Los one shots asignados son aparte.`}>
+        <Seccion titulo="Sueldos sobre fees" ayuda={`Total neto de fees del mes × porcentaje de cada colaborador. One shots: la suma de sus asignaciones del mes (20/80 o a mano); el % de fees no se aplica a los one shots.`}>
           <table className="w-full text-sm">
             <thead className="text-xs text-stone-500">
               <tr>
@@ -372,20 +382,37 @@ export function EditorRuta({
                   </dl>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-xs font-medium uppercase tracking-wide text-stone-500">Asignaciones a empleados</p>
+                  <p className="flex items-center justify-between gap-2 text-xs font-medium uppercase tracking-wide text-stone-500">
+                    Asignaciones a empleados
+                    <button type="button" onClick={() => irALiquidacion(o.id)} className="normal-case tracking-normal text-stone-600 underline">
+                      {o.reparto ? "Liquidación 20/80 ↓" : "Liquidar con 20/80 ↓"}
+                    </button>
+                  </p>
+                  {o.reparto && (
+                    <p className="text-[11px] text-stone-500">Calculadas con el reparto 20/80: se cambian marcando participantes y habilitados abajo.</p>
+                  )}
                   {o.asignaciones.map((a, k) => (
                     <div key={a.colaborador_id} className="flex items-center gap-2 text-sm">
                       <span className="flex-1">{nombres.colaboradores.get(a.colaborador_id) ?? "Colaborador borrado"}</span>
                       <div className="w-36">
                         <CampoMonto
                           valor={a.monto}
-                          disabled={!editable}
+                          disabled={!editable || !!o.reparto}
                           etiqueta="Monto asignado"
                           alCambiar={(n) => editar({ asignaciones: o.asignaciones.map((x, j) => (j === k ? { ...x, monto: n } : x)) })}
                         />
                       </div>
                       {editable && (
-                        <button type="button" onClick={() => editar({ asignaciones: o.asignaciones.filter((_, j) => j !== k) })} className="px-1 text-stone-400 hover:text-red-700" aria-label="Quitar asignación">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            o.reparto
+                              ? cambiarOneShot(o.id, (x) => ({ ...x, reparto: x.reparto && { ...x.reparto, personas: x.reparto.personas.filter((y) => y.colaborador_id !== a.colaborador_id) } }))
+                              : editar({ asignaciones: o.asignaciones.filter((_, j) => j !== k) })
+                          }
+                          className="px-1 text-stone-400 hover:text-red-700"
+                          aria-label="Quitar asignación"
+                        >
                           ×
                         </button>
                       )}
@@ -394,7 +421,25 @@ export function EditorRuta({
                   {editable && libres.length > 0 && (
                     <select
                       value=""
-                      onChange={(e) => e.target.value && editar({ asignaciones: [...o.asignaciones, { colaborador_id: e.target.value, monto: 0 }] })}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        if (!id) return;
+                        // Con reparto 20/80: entra habilitado a la parte general (o se habilita si ya estaba sin marcar).
+                        if (o.reparto)
+                          cambiarOneShot(o.id, (x) => {
+                            const personas = x.reparto?.personas ?? [];
+                            return {
+                              ...x,
+                              reparto: x.reparto && {
+                                ...x.reparto,
+                                personas: personas.some((y) => y.colaborador_id === id)
+                                  ? personas.map((y) => (y.colaborador_id === id ? { ...y, general: true } : y))
+                                  : [...personas, { colaborador_id: id, participo: false, general: true }],
+                              },
+                            };
+                          });
+                        else editar({ asignaciones: [...o.asignaciones, { colaborador_id: id, monto: 0 }] });
+                      }}
                       aria-label="Asignar a un empleado"
                       className="campo mt-1 text-sm"
                     >
@@ -422,7 +467,7 @@ export function EditorRuta({
           <div className="px-3 py-2">
             <button
               type="button"
-              onClick={() => cambiar((d) => ({ ...d, one_shots: [...d.one_shots, { id: nuevoId(), cliente: "", descripcion: "", neto: 0, asignaciones: [] }] }))}
+              onClick={() => cambiar((d) => ({ ...d, one_shots: [...d.one_shots, { id: nuevoId(), cliente: "", descripcion: "", neto: 0, asignaciones: [], reparto: repartoInicial(d.porcentajes) }] }))}
               className="text-sm font-medium underline"
             >
               + Agregar one shot
@@ -430,6 +475,17 @@ export function EditorRuta({
           </div>
         )}
       </Seccion>
+
+      <SueldosOneShots
+        oneShots={datos.one_shots}
+        c={c}
+        porcentajes={datos.porcentajes}
+        colaboradores={colaboradores}
+        editable={editable}
+        elegido={osElegido}
+        elegir={setOsElegido}
+        cambiarOneShot={cambiarOneShot}
+      />
 
       <div className="grid gap-4 xl:grid-cols-3">
         <ListaGastos

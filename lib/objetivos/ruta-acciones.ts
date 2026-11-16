@@ -4,7 +4,7 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { exigirPermiso } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
-import { PRIMER_PERIODO_AUTOMATICO, esquemaMesRuta, periodo } from "./ruta";
+import { PRIMER_PERIODO_AUTOMATICO, esquemaMesRuta, periodo, sincronizarOneShot } from "./ruta";
 import { eventosRutaDelMes } from "./ruta-consultas";
 
 type Resultado = { error?: string };
@@ -37,7 +37,7 @@ export async function guardarMesRuta(anio: number, mes: number, datos: unknown):
     ...d,
     gastos_fijos: d.gastos_fijos.filter((g) => g.concepto || g.monto),
     gastos_variables: d.gastos_variables.filter((g) => g.concepto || g.monto),
-    one_shots: d.one_shots.map((o) => ({ ...o, asignaciones: o.asignaciones.filter((a) => a.monto) })),
+    one_shots: d.one_shots.map(sincronizarOneShot).map((o) => ({ ...o, asignaciones: o.asignaciones.filter((a) => a.monto) })),
     distribucion_mensual: d.distribucion_mensual.filter((r) => r.nombre || r.porcentaje),
     distribucion_variable: d.distribucion_variable.filter((r) => r.nombre || r.porcentaje),
   };

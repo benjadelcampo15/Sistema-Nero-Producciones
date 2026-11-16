@@ -27,6 +27,24 @@ const texto = (max: number) => z.string().trim().max(max);
 const fila = z.object({ concepto: texto(200), monto });
 const reparto = z.object({ nombre: texto(80), porcentaje });
 
+/**
+ * Sueldos sobre un one shot (20% / 80%): un porcentaje del precio va al fondo de
+ * colaboradores; una parte se reparte entre los que participaron del trabajo y
+ * el resto entre los habilitados a la parte general.
+ */
+export const esquemaRepartoOneShot = z.object({
+  // Precio para calcular el fondo; null = el neto del one shot.
+  precio: monto.nullable().default(null),
+  fondo: porcentaje.default(50),
+  // Parte por participación (20 = 20%); la general es el resto (80%).
+  participacion: porcentaje.default(20),
+  personas: z
+    .array(z.object({ colaborador_id: z.uuid(), participo: z.boolean().default(false), general: z.boolean().default(false) }))
+    .max(60)
+    .default([]),
+});
+export type RepartoOneShot = z.infer<typeof esquemaRepartoOneShot>;
+
 export const esquemaMesRuta = z.object({
   fees: z.array(z.object({ cliente_id: z.uuid(), neto: monto })).max(100).default([]),
   // Porcentaje de cada colaborador sobre el total neto de fees del mes (8 = 8%).
@@ -41,6 +59,8 @@ export const esquemaMesRuta = z.object({
         descripcion: texto(300),
         neto: monto,
         asignaciones: z.array(z.object({ colaborador_id: z.uuid(), monto })).max(60).default([]),
+        // Liquidación 20/80: si está, las asignaciones salen de acá (no se cargan a mano).
+        reparto: esquemaRepartoOneShot.optional(),
       }),
     )
     .max(100)
@@ -101,10 +121,65 @@ export const eventoRutaCompleto = (e: EventoRuta): EventoRuta =>
  */
 export type Calculado = { valor: number; formula: string; clave?: string; automatico?: number; manual?: boolean };
 
+/** Divide un importe en n partes iguales al centavo; los centavos que sobran van a los primeros. */
+export function dividirEnCentavos(total: number, n: number): number[] {
+  if (n <= 0) return [];
+  const centavos = Math.round(total * 100);
+  const base = Math.trunc(centavos / n);
+  const resto = centavos - base * n;
+  return Array.from({ length: n }, (_, i) => (base + (i < Math.abs(resto) ? Math.sign(resto) : 0)) / 100);
+}
+
+/** La liquidación 20/80 de un one shot: fondo, bolsas y lo que cobra cada uno. */
+export function calcularRepartoOneShot(o: { neto: number; reparto?: RepartoOneShot }) {
+  const r = o.reparto ?? esquemaRepartoOneShot.parse({});
+  const precio = r.precio ?? o.neto;
+  const fondo = r2((precio * r.fondo) / 100);
+  const bolsaParticipacion = r2((fondo * r.participacion) / 100);
+  // La general es el resto: las dos bolsas suman exacto el fondo.
+  const bolsaGeneral = r2(fondo - bolsaParticipacion);
+  const participan = r.personas.filter((x) => x.participo);
+  const generales = r.personas.filter((x) => x.general);
+  const partes20 = dividirEnCentavos(bolsaParticipacion, participan.length);
+  const partes80 = dividirEnCentavos(bolsaGeneral, generales.length);
+  const personas = r.personas.map((x) => {
+    const p20 = x.participo ? partes20[participan.indexOf(x)] : 0;
+    const p80 = x.general ? partes80[generales.indexOf(x)] : 0;
+    return { ...x, p20, p80, total: r2(p20 + p80) };
+  });
+  return {
+    precio,
+    precioEsNeto: r.precio === null,
+    fondoPorcentaje: r.fondo,
+    participacion: r.participacion,
+    general: r2(100 - r.participacion),
+    fondo,
+    bolsaParticipacion,
+    bolsaGeneral,
+    participantes: participan.length,
+    habilitados: generales.length,
+    // Sin nadie marcado, esa bolsa no se reparte (queda en el saldo del one shot).
+    sinAsignar: r2((participan.length ? 0 : bolsaParticipacion) + (generales.length ? 0 : bolsaGeneral)),
+    personas,
+    asignado: suma(personas.map((x) => x.total)),
+  };
+}
+
+/** Con reparto 20/80, las asignaciones del one shot son las que salen del reparto. */
+export function sincronizarOneShot<T extends { neto: number; asignaciones: { colaborador_id: string; monto: number }[]; reparto?: RepartoOneShot }>(o: T): T {
+  if (!o.reparto) return o;
+  const asignaciones = calcularRepartoOneShot(o)
+    .personas.filter((x) => x.total)
+    .map((x) => ({ colaborador_id: x.colaborador_id, monto: x.total }));
+  return { ...o, asignaciones };
+}
+
 const esEstructura = (nombre: string) => /estructura/i.test(nombre);
 const PARECE_IMPUESTO = /\biva\b|ingresos brutos|\biibb\b|\bib\b/i;
 
-export function calcularMesRuta(d: MesRuta, nombres: { clientes: Map<string, string>; colaboradores: Map<string, string> }, eventosOriginales: EventoRuta[]) {
+export function calcularMesRuta(datos: MesRuta, nombres: { clientes: Map<string, string>; colaboradores: Map<string, string> }, eventosOriginales: EventoRuta[]) {
+  // Los one shots con reparto 20/80 toman sus asignaciones del reparto.
+  const d = { ...datos, one_shots: datos.one_shots.map(sincronizarOneShot) };
   const cliente = (id: string) => nombres.clientes.get(id) ?? "Cliente borrado";
   const colaborador = (id: string) => nombres.colaboradores.get(id) ?? "Colaborador borrado";
   const ajustes = d.ajustes ?? {};
@@ -176,6 +251,30 @@ export function calcularMesRuta(d: MesRuta, nombres: { clientes: Map<string, str
     const os = suma(d.one_shots.flatMap((o) => o.asignaciones.filter((a) => a.colaborador_id === id).map((a) => a.monto)));
     return { colaborador_id: id, colaborador: colaborador(id), sueldo, oneShots: os, total: r2(sueldo + os) };
   });
+
+  // Liquidación de one shots por colaborador: cuántos trabajos, parte 20%, parte 80% y lo cargado a mano.
+  const repartos = new Map(d.one_shots.filter((o) => o.reparto).map((o) => [o.id, calcularRepartoOneShot(o)]));
+  const liquidacionOneShots = ids
+    .map((id) => {
+      const trabajos = d.one_shots
+        .map((o) => {
+          const r = repartos.get(o.id);
+          const x = r?.personas.find((p) => p.colaborador_id === id);
+          const aMano = r ? 0 : suma(o.asignaciones.filter((a) => a.colaborador_id === id).map((a) => a.monto));
+          return { id: o.id, nombre: [o.cliente, o.descripcion].filter(Boolean).join(" · ") || "One shot", p20: x?.p20 ?? 0, p80: x?.p80 ?? 0, aMano, total: r2((x?.total ?? 0) + aMano) };
+        })
+        .filter((t) => t.total);
+      return {
+        colaborador_id: id,
+        colaborador: colaborador(id),
+        trabajos,
+        p20: suma(trabajos.map((t) => t.p20)),
+        p80: suma(trabajos.map((t) => t.p80)),
+        aMano: suma(trabajos.map((t) => t.aMano)),
+        total: suma(trabajos.map((t) => t.total)),
+      };
+    })
+    .filter((l) => l.trabajos.length);
 
   const fijos = v("fijos:total", suma(d.gastos_fijos.map((g) => g.monto)), `Suma de ${d.gastos_fijos.length} gasto${d.gastos_fijos.length === 1 ? "" : "s"} fijo${d.gastos_fijos.length === 1 ? "" : "s"}`);
   const variables = v(
@@ -287,6 +386,8 @@ export function calcularMesRuta(d: MesRuta, nombres: { clientes: Map<string, str
     oneShots,
     totalOneShots,
     porColaborador,
+    repartos,
+    liquidacionOneShots,
     fijos,
     variables,
     ibPorcentaje: ib * 100,
