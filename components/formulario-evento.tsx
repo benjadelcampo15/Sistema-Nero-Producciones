@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
+import { MENSAJE_CIERRE, MENSAJE_REAPERTURA } from "@/app/(app)/eventos/[id]/estado-evento";
 import { guardarEvento } from "@/lib/eventos/acciones";
 import { ESTADOS_EVENTO, NOMBRE_ESTADO_EVENTO, type Evento } from "@/lib/eventos/tipos";
 import { hoy } from "@/lib/formato";
@@ -13,7 +14,17 @@ export function FormularioEvento({ evento, empresa = "nero" }: { evento?: Evento
   const v = (campo: string, inicial: string) => estado.valores?.[campo] ?? inicial;
 
   return (
-    <form action={accion} className="tarjeta max-w-2xl space-y-5">
+    <form
+      action={accion}
+      onSubmit={(e) => {
+        // Cerrar sincroniza con Financiero; reabrir un evento cerrado pausa lo pendiente: se confirma.
+        const nuevo = new FormData(e.currentTarget).get("estado");
+        if (!evento || nuevo === evento.estado) return;
+        if (nuevo === "cerrado" && !window.confirm(MENSAJE_CIERRE)) e.preventDefault();
+        else if (evento.estado === "cerrado" && evento.planilla_en_financiero && !window.confirm(MENSAJE_REAPERTURA)) e.preventDefault();
+      }}
+      className="tarjeta max-w-2xl space-y-5"
+    >
       {estado.error && <p className="alerta-error">{estado.error}</p>}
 
       <CampoEmpresa

@@ -2,12 +2,13 @@
 
 import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
+import { refresh } from "next/cache";
 import { z } from "zod";
 import { exigirAdmin, exigirPermiso } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { formatoPesos, hoy, parsearMonto } from "@/lib/formato";
 import { EMPRESAS } from "@/lib/empresas";
-import { ESTADOS_EVENTO } from "./tipos";
+import { ESTADOS_EVENTO, type EstadoEvento } from "./tipos";
 import { PLANILLA_VACIA, esquemaPlanilla, totalGasto, type Planilla } from "./planilla";
 import { conPagosDeCuenta, cuentaDeGastos } from "./cuenta-gastos";
 import { planillaDesdeMovimientos } from "./desde-movimientos";
@@ -58,12 +59,23 @@ export async function guardarEvento(
 
   const fila = { ...datos.data, presupuesto };
   const supabase = await crearClienteServidor();
+  let anterior: EstadoEvento | null = null;
+  if (id) {
+    const { data: actual } = await supabase.from("eventos").select("estado").eq("id", id).maybeSingle();
+    anterior = (actual?.estado as EstadoEvento | undefined) ?? null;
+  }
+  // Al editar, el estado no se guarda junto con lo demás: pasa por cambiarEstado (sincroniza o pausa).
+  const { estado: nuevoEstado, ...resto } = fila;
   const { data, error } = id
-    ? await supabase.from("eventos").update(fila).eq("id", id).select("id")
+    ? await supabase.from("eventos").update(resto).eq("id", id).select("id")
     : await supabase.from("eventos").insert(fila).select("id");
 
   if (error || !data?.length) {
     return { error: "No se pudo guardar el evento", valores };
+  }
+  if (id && anterior !== nuevoEstado) {
+    const r = await aplicarEstado(supabase, id, nuevoEstado);
+    if (r.error) return { error: r.error, valores };
   }
   // Los movimientos del evento van al financiero de la empresa del evento.
   if (id) {
@@ -126,21 +138,93 @@ export async function guardarPlanillaEvento(eventoId: string, datos: unknown): P
   const { error } = await supabase.from("planillas_evento").upsert({ evento_id: eventoId, datos: planilla }, { onConflict: "evento_id" });
   if (error) return { error: "No se pudo guardar la planilla" };
 
-  const { data: evento } = await supabase.from("eventos").select("fecha, planilla_en_financiero").eq("id", eventoId).maybeSingle();
-  if (evento?.planilla_en_financiero) {
-    const { data: categorias } = await supabase.from("categorias").select("id, nombre, tipo").eq("activa", true);
-    const { error: errorFinanciero } = await supabase.rpc("sincronizar_planilla", {
-      p_evento_id: eventoId,
-      p_movimientos: movimientosDePlanilla(planilla, evento, (categorias ?? []) as Categoria[], hoy()),
-    });
-    if (errorFinanciero) {
-      const motivo = /proveedor|cuenta corriente|pagos/.test(errorFinanciero.message) ? ` ${errorFinanciero.message.replace(/\$([\d,]+\.\d{2})/g,(_, n: string) => formatoPesos(Number(n.replace(/,/g, ""))))}.` : "";
-      return { error: `La planilla se guardó, pero no se pudo pasar a Financiero.${motivo} Corregilo y volvé a guardar.`, planilla: conPagosDeCuenta(planilla, cuentas) };
-    }
+  // Solo un evento CERRADO pasa a Financiero (y se actualizan sus movimientos, sin crear otros).
+  const { data: evento } = await supabase.from("eventos").select("estado, planilla_en_financiero").eq("id", eventoId).maybeSingle();
+  if (evento?.planilla_en_financiero && evento.estado === "cerrado") {
+    const r = await sincronizarEvento(supabase, eventoId, planilla);
+    if (r.error) return { error: `La planilla se guardó, pero no se pudo actualizar Financiero.${r.error} Corregilo y volvé a guardar.`, planilla: conPagosDeCuenta(planilla, cuentas) };
   }
-  // Proveedores vinculados con saldo a favor: se aplica a los gastos nuevos.
-  if (evento?.planilla_en_financiero && planilla.gastos.some((g) => g.proveedor_id)) await supabase.rpc("aplicar_saldo_evento", { p_evento_id: eventoId });
   return { planilla: conPagosDeCuenta(planilla, await cuentaDeGastos(eventoId)) };
+}
+
+type Supabase = Awaited<ReturnType<typeof crearClienteServidor>>;
+
+/**
+ * Pasa la planilla del evento (cerrado) a Financiero: cada renglón con su
+ * referencia, así nunca se duplica. Deja registrado si salió bien o con error.
+ */
+async function sincronizarEvento(supabase: Supabase, eventoId: string, planilla?: Planilla): Promise<{ error?: string }> {
+  const [{ data: evento }, { data: categorias }, guardada] = await Promise.all([
+    supabase.from("eventos").select("fecha").eq("id", eventoId).maybeSingle(),
+    supabase.from("categorias").select("id, nombre, tipo").eq("activa", true),
+    planilla ? Promise.resolve(null) : supabase.from("planillas_evento").select("datos").eq("evento_id", eventoId).maybeSingle(),
+  ]);
+  if (!evento) return { error: " El evento no existe." };
+  let p = planilla;
+  if (!p) {
+    const leida = esquemaPlanilla.safeParse(guardada?.data?.datos ?? {});
+    p = leida.success ? leida.data : PLANILLA_VACIA;
+  }
+  const { error } = await supabase.rpc("sincronizar_planilla", {
+    p_evento_id: eventoId,
+    p_movimientos: movimientosDePlanilla(p, evento, (categorias ?? []) as Categoria[], hoy()),
+  });
+  if (error) {
+    const motivo = /proveedor|cuenta corriente|pagos|cerrado/.test(error.message)
+      ? ` ${error.message.replace(/\$([\d,]+\.\d{2})/g, (_, n: string) => formatoPesos(Number(n.replace(/,/g, ""))))}.`
+      : "";
+    await supabase.rpc("marcar_sync_evento", { p_evento_id: eventoId, p_ok: false, p_error: error.message });
+    return { error: motivo || " Error al registrar los movimientos." };
+  }
+  // Proveedores vinculados con saldo a favor: se aplica a los gastos del evento.
+  if (p.gastos.some((g) => g.proveedor_id)) await supabase.rpc("aplicar_saldo_evento", { p_evento_id: eventoId });
+  await supabase.rpc("marcar_sync_evento", { p_evento_id: eventoId, p_ok: true });
+  return {};
+}
+
+/** Cambia el estado: al cerrar sincroniza con Financiero; al reabrir o cancelar pausa lo pendiente de la planilla. */
+async function aplicarEstado(supabase: Supabase, id: string, estado: EstadoEvento): Promise<{ error?: string; pausados?: number; quedan?: number }> {
+  const { data, error } = await supabase.rpc("cambiar_estado_evento", { p_evento_id: id, p_estado: estado });
+  if (error) return { error: "No se pudo cambiar el estado del evento" };
+  if (estado === "cerrado") {
+    const { data: evento } = await supabase.from("eventos").select("planilla_en_financiero").eq("id", id).maybeSingle();
+    if (evento?.planilla_en_financiero) {
+      const r = await sincronizarEvento(supabase, id);
+      if (r.error) return { error: `El evento quedó cerrado, pero la sincronización con Financiero no se completó.${r.error} Revisalo y tocá "Reintentar".` };
+    }
+    return {};
+  }
+  const r = (data ?? {}) as { pausados?: number; quedan?: number };
+  return { pausados: r.pausados ?? 0, quedan: r.quedan ?? 0 };
+}
+
+/** Cambio de estado desde la pantalla del evento (con la confirmación del lado de la pantalla). */
+export async function cambiarEstadoEvento(id: string, estado: EstadoEvento): Promise<{ error?: string; ok?: string }> {
+  await exigirPermiso("eventos", "editar");
+  if (!/^[0-9a-f-]{36}$/i.test(id) || !ESTADOS_EVENTO.includes(estado)) return { error: "Datos inválidos" };
+  const supabase = await crearClienteServidor();
+  const r = await aplicarEstado(supabase, id, estado);
+  refresh();
+  if (r.error) return { error: r.error };
+  if (estado === "cerrado") return { ok: "Evento cerrado: sus ingresos y gastos quedaron sincronizados con Financiero." };
+  if (r.pausados || r.quedan) {
+    return {
+      ok: `Estado cambiado. ${r.pausados ? `${r.pausados} movimiento${r.pausados === 1 ? "" : "s"} pendiente${r.pausados === 1 ? "" : "s"} del evento dej${r.pausados === 1 ? "ó" : "aron"} de contar en Financiero hasta que lo vuelvas a cerrar.` : ""}${r.quedan ? ` ${r.quedan} con pagos o cobros reales siguen en Financiero.` : ""}`,
+    };
+  }
+  return { ok: "Estado cambiado." };
+}
+
+/** Vuelve a intentar la sincronización de un evento cerrado que quedó con error. */
+export async function reintentarSincronizacion(id: string): Promise<{ error?: string }> {
+  await exigirPermiso("eventos", "editar");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { error: "Evento inválido" };
+  const supabase = await crearClienteServidor();
+  const { data: evento } = await supabase.from("eventos").select("estado").eq("id", id).maybeSingle();
+  if (evento?.estado !== "cerrado") return { error: "El evento no está cerrado" };
+  const r = await sincronizarEvento(supabase, id);
+  refresh();
+  return r.error ? { error: `No se pudo completar.${r.error}` } : {};
 }
 
 /**

@@ -26,8 +26,11 @@ export type Evento = {
   estado: EstadoEvento;
   presupuesto: number | null;
   notas: string | null;
-  /** Los eventos nuevos: la planilla se refleja en Financiero. */
+  /** Los eventos nuevos: la planilla se refleja en Financiero (al cerrarlos). */
   planilla_en_financiero: boolean;
+  /** Sincronización con Financiero: pendiente (sin cerrar), sincronizado o error. */
+  sync_estado: "pendiente" | "sincronizado" | "error";
+  sync_error: string | null;
 };
 
 export type Balance = { ingresos: number; egresos: number; resultado: number; movimientos: number };

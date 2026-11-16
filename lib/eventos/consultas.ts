@@ -9,7 +9,7 @@ import { ESTADOS_EVENTO, type Balance, type EstadoEvento, type Evento, type Even
 import { PLANILLA_VACIA, calcularPlanilla, esquemaPlanilla, type Planilla } from "./planilla";
 import type { Caja } from "./cajas";
 
-const CAMPOS_EVENTO = "id, empresa, nombre, fecha, lugar, estado, presupuesto, notas, planilla_en_financiero";
+const CAMPOS_EVENTO = "id, empresa, nombre, fecha, lugar, estado, presupuesto, notas, planilla_en_financiero, sync_estado, sync_error";
 
 type FilaBalance = { evento_id: string; ingresos: number; egresos: number; movimientos: number };
 

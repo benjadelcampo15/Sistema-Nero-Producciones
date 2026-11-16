@@ -38,8 +38,10 @@ const celdaTexto =
 export function PlanillaEvento({
   eventoId,
   inicial,
-  editable,
+  editable: puedeEditar,
   enFinanciero = false,
+  cerrado = false,
+  indicador,
   proveedores,
   empresa,
 }: {
@@ -47,10 +49,17 @@ export function PlanillaEvento({
   inicial: Planilla;
   editable: boolean;
   enFinanciero?: boolean;
+  /** Evento cerrado: la planilla ya está en Financiero; se modifica con una acción explícita. */
+  cerrado?: boolean;
+  /** Estado de la sincronización con Financiero. */
+  indicador?: React.ReactNode;
   /** Proveedores con cuenta corriente que se pueden vincular a un gasto (solo con la planilla en Financiero). */
   proveedores?: ProveedorCuenta[];
   empresa: string;
 }) {
+  const [desbloqueada, setDesbloqueada] = useState(false);
+  const bloqueada = enFinanciero && cerrado && !desbloqueada;
+  const editable = puedeEditar && !bloqueada;
   const conProveedor = enFinanciero && proveedores !== undefined;
   const columnasGasto = 9 + (conProveedor ? 1 : 0) + (editable ? 1 : 0);
   const [p, setP] = useState<Planilla>(inicial);
@@ -80,7 +89,10 @@ export function PlanillaEvento({
       if (r.error) setMensaje({ tipo: "error", texto: r.error });
       else {
         setSinGuardar(false);
-        setMensaje({ tipo: "ok", texto: enFinanciero ? "Planilla guardada y pasada a Financiero" : "Planilla guardada" });
+        setMensaje({
+          tipo: "ok",
+          texto: !enFinanciero ? "Planilla guardada" : cerrado ? "Planilla guardada y movimientos de Financiero actualizados" : "Planilla guardada (se envía a Financiero al cerrar el evento)",
+        });
       }
     });
 
@@ -130,6 +142,21 @@ export function PlanillaEvento({
 
   return (
     <div className="space-y-6">
+      {indicador && <div className="flex flex-wrap items-center gap-2 print:hidden">{indicador}</div>}
+      {puedeEditar && bloqueada && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-stone-300 bg-stone-50 px-4 py-3 text-sm print:hidden">
+          <span>🔒 Evento cerrado: la planilla está bloqueada porque sus movimientos ya están en Financiero.</span>
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm("Los cambios que hagas actualizan los movimientos del evento que ya están en Financiero (no se crean nuevos; los pagos y cobros se conservan). ¿Modificar la planilla?")) setDesbloqueada(true);
+            }}
+            className="boton-secundario py-1 text-sm"
+          >
+            Modificar planilla del evento cerrado
+          </button>
+        </div>
+      )}
       {editable && (
         <div className="sticky top-0 z-20 -mx-1 flex flex-wrap items-center gap-2 bg-stone-100/90 px-1 py-2 backdrop-blur print:hidden">
           <label className="flex items-center gap-2 text-sm">
@@ -138,7 +165,9 @@ export function PlanillaEvento({
           </label>
           {mensaje && <p className={`text-sm ${mensaje.tipo === "error" ? "text-red-700" : "text-green-700"}`}>{mensaje.texto}</p>}
           {enFinanciero ? (
-            <p className="ml-auto text-xs text-stone-500">Los ingresos y gastos se pasan solos a Financiero al guardar.</p>
+            <p className="ml-auto text-xs text-stone-500">
+              {cerrado ? "Evento cerrado: al guardar se actualizan sus movimientos en Financiero." : "Se guarda en el evento. Pasa a Financiero recién al cerrarlo."}
+            </p>
           ) : (
             <button type="button" onClick={armarDesdeMovimientos} disabled={guardando} className="boton-secundario ml-auto">Armar desde movimientos</button>
           )}

@@ -2,13 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
 import { cajasDeEvento, obtenerDetalleEvento, obtenerPlanillaEvento, type DesgloseCategoria } from "@/lib/eventos/consultas";
-import { COLOR_ESTADO_EVENTO, NOMBRE_ESTADO_EVENTO } from "@/lib/eventos/tipos";
 import { formatoFecha, formatoPesos } from "@/lib/formato";
 import { BarraPresupuesto } from "@/components/barra-presupuesto";
 import { TablaMovimientos } from "@/components/tabla-movimientos";
 import { SinAcceso } from "../../sin-acceso";
 import { EtiquetaEmpresa } from "@/components/empresa";
 import { PlanillaEvento } from "./planilla-evento";
+import { EstadoDelEvento, IndicadorSincronizacion } from "./estado-evento";
 import { CierreCajas } from "./cierre-cajas";
 import { LiquidacionIsidris } from "./liquidacion-isidris";
 import { obtenerLiquidacion } from "@/lib/eventos/consultas-liquidacion";
@@ -50,9 +50,7 @@ export default async function PaginaEvento({ params, searchParams }: PageProps<"
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-semibold">{evento.nombre}</h1>
               <EtiquetaEmpresa empresa={evento.empresa} />
-              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${COLOR_ESTADO_EVENTO[evento.estado]}`}>
-                {NOMBRE_ESTADO_EVENTO[evento.estado]}
-              </span>
+              <EstadoDelEvento evento={evento} editable={editaEvento} />
             </div>
             <p className="text-sm text-stone-500">
               {formatoFecha(evento.fecha)}
@@ -99,6 +97,8 @@ export default async function PaginaEvento({ params, searchParams }: PageProps<"
             inicial={planilla}
             editable={editaEvento}
             enFinanciero={evento.planilla_en_financiero}
+            cerrado={evento.estado === "cerrado"}
+            indicador={<IndicadorSincronizacion evento={evento} editable={editaEvento} />}
             proveedores={proveedores}
             empresa={evento.empresa}
           />
