@@ -13,6 +13,10 @@ export const SECCIONES = [
   { id: "pagos", nombre: "Solicitudes de pagos", href: "/solicitudes-pago" },
   // Ver: usar los tableros donde es integrante. Editar: además crear espacios de trabajo.
   { id: "tareas", nombre: "Tareas", href: "/tareas" },
+  // Ver / editar los proyectos Quilmes y su presupuesto comercial (lo que se le cobra al cliente).
+  { id: "quilmes", nombre: "Quilmes: presupuesto comercial", href: "/quilmes" },
+  // Información interna de Quilmes: gastos reales, planilla, rentabilidad y movimientos.
+  { id: "quilmes_costos", nombre: "Quilmes: costos internos y rentabilidad", href: "/quilmes" },
 ] as const;
 
 /**
@@ -60,6 +64,7 @@ export const MENU = [
     items: [
       { nombre: "Eventos", href: "/eventos", permiso: "eventos" },
       { nombre: "Presupuestos", href: "/presupuestos", permiso: "presupuestos" },
+      { nombre: "Quilmes", href: "/quilmes", permiso: "quilmes" },
       { nombre: "Livings VIP", href: "/livings", permiso: "livings" },
       { nombre: "Empleados", href: "/empleados", permiso: "operativa" },
     ],
@@ -86,5 +91,5 @@ export function alcanza(nivel: NivelPermiso, requerido: NivelPermiso) {
 }
 
 export function sinPermisos(): Permisos {
-  return { financiero: "ninguno", eventos: "ninguno", facturas: "ninguno", stock: "ninguno", facturar: "ninguno", presupuestos: "ninguno", cheques: "ninguno", livings: "ninguno", operativa: "ninguno", objetivos: "ninguno", pagos: "ninguno", tareas: "ninguno" };
+  return { financiero: "ninguno", eventos: "ninguno", facturas: "ninguno", stock: "ninguno", facturar: "ninguno", presupuestos: "ninguno", cheques: "ninguno", livings: "ninguno", operativa: "ninguno", objetivos: "ninguno", pagos: "ninguno", tareas: "ninguno", quilmes: "ninguno", quilmes_costos: "ninguno" };
 }

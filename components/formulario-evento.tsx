@@ -4,12 +4,13 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { MENSAJE_CIERRE, MENSAJE_REAPERTURA } from "@/app/(app)/eventos/[id]/estado-evento";
 import { guardarEvento } from "@/lib/eventos/acciones";
-import { ESTADOS_EVENTO, NOMBRE_ESTADO_EVENTO, type Evento } from "@/lib/eventos/tipos";
+import { ESTADOS_EVENTO, NOMBRE_ESTADO_EVENTO, type Evento, type TipoEvento } from "@/lib/eventos/tipos";
 import { hoy } from "@/lib/formato";
 import { leerEmpresa, type Empresa } from "@/lib/empresas";
 import { CampoEmpresa } from "@/components/empresa";
 
-export function FormularioEvento({ evento, empresa = "nero" }: { evento?: Evento; empresa?: Empresa }) {
+export function FormularioEvento({ evento, empresa = "nero", tipo = evento?.tipo ?? "evento" }: { evento?: Evento; empresa?: Empresa; tipo?: TipoEvento }) {
+  const base = tipo === "quilmes" ? "/quilmes" : "/eventos";
   const [estado, accion, enviando] = useActionState(guardarEvento.bind(null, evento?.id ?? null), {});
   const v = (campo: string, inicial: string) => estado.valores?.[campo] ?? inicial;
 
@@ -26,6 +27,7 @@ export function FormularioEvento({ evento, empresa = "nero" }: { evento?: Evento
       className="tarjeta max-w-2xl space-y-5"
     >
       {estado.error && <p className="alerta-error">{estado.error}</p>}
+      <input type="hidden" name="tipo" value={tipo} />
 
       <CampoEmpresa
         defecto={leerEmpresa(v("empresa", evento?.empresa ?? empresa))}
@@ -40,7 +42,7 @@ export function FormularioEvento({ evento, empresa = "nero" }: { evento?: Evento
           required
           maxLength={120}
           defaultValue={v("nombre", evento?.nombre ?? "")}
-          placeholder="Ej: Vino a la Nave – Edición Noviembre"
+          placeholder={tipo === "quilmes" ? "Ej: Quilmes – Activación Fiesta de la Cerveza" : "Ej: Vino a la Nave – Edición Noviembre"}
           className="campo"
         />
       </div>
@@ -93,7 +95,7 @@ export function FormularioEvento({ evento, empresa = "nero" }: { evento?: Evento
         <button type="submit" disabled={enviando} className="boton">
           {enviando ? "Guardando…" : evento ? "Guardar cambios" : "Crear evento"}
         </button>
-        <Link href={evento ? `/eventos/${evento.id}` : "/eventos"} className="text-sm text-stone-600 hover:text-stone-900">
+        <Link href={evento ? `${base}/${evento.id}` : base} className="text-sm text-stone-600 hover:text-stone-900">
           Cancelar
         </Link>
       </div>

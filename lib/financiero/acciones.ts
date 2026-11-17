@@ -74,7 +74,7 @@ export async function guardarTransaccion(
   }
 
   const conEvento = datos.data.evento_id !== null;
-  if (!puede(usuario, "financiero", "editar") && !(conEvento && puede(usuario, "eventos", "editar"))) {
+  if (!puede(usuario, "financiero", "editar") && !(conEvento && (puede(usuario, "eventos", "editar") || puede(usuario, "quilmes_costos", "editar")))) {
     return { error: "No tenés permiso para cargar este movimiento", valores };
   }
 
@@ -169,7 +169,7 @@ export async function editarCampoMovimiento(
   if (!t) return { error: "Movimiento no encontrado" };
   // Mismo permiso que el formulario: Financiero, o Eventos si el movimiento es (o pasa a ser) de un evento.
   const conEvento = t.evento_id !== null || (campo === "evento_id" && valor !== null);
-  if (!puede(usuario, "financiero", "editar") && !(conEvento && puede(usuario, "eventos", "editar"))) return { error: "No tenés permiso para editar este movimiento" };
+  if (!puede(usuario, "financiero", "editar") && !(conEvento && (puede(usuario, "eventos", "editar") || puede(usuario, "quilmes_costos", "editar")))) return { error: "No tenés permiso para editar este movimiento" };
 
   let cambio: Record<string, string | null>;
   if (campo === "fecha") {

@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
 import { obtenerEvento } from "@/lib/eventos/consultas";
 import { crearClienteServidor } from "@/lib/supabase/server";
@@ -13,6 +13,7 @@ export default async function PaginaEditarEvento({ params }: PageProps<"/eventos
   const { id } = await params;
   const evento = await obtenerEvento(id);
   if (!evento) notFound();
+  if (evento.tipo === "quilmes") redirect(`/quilmes/${id}/editar`);
   // Cuántos movimientos de plata quedarían sin evento (para avisar antes de borrar).
   const movimientos = usuario.esAdmin
     ? ((await (await crearClienteServidor()).from("transacciones").select("id", { count: "exact", head: true }).eq("evento_id", id).is("eliminado_en", null)).count ?? 0)

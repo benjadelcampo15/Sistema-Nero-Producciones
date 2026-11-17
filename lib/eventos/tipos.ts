@@ -17,8 +17,12 @@ export const COLOR_ESTADO_EVENTO: Record<EstadoEvento, string> = {
 
 import type { Empresa } from "@/lib/empresas";
 
+/** "evento": los eventos de siempre; "quilmes": proyectos Quilmes (planilla con Solicitudes y Gastos reales). */
+export type TipoEvento = "evento" | "quilmes";
+
 export type Evento = {
   id: string;
+  tipo: TipoEvento;
   empresa: Empresa;
   nombre: string;
   fecha: string;

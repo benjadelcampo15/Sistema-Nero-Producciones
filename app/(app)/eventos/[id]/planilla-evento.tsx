@@ -16,6 +16,9 @@ import {
 import { formatoPesos, colorResultado } from "@/lib/formato";
 import { CampoMonto } from "@/components/campo-monto";
 import { SelectorProveedor, type ProveedorCuenta } from "./selector-proveedor";
+import { guardarPlanillaQuilmes } from "@/lib/quilmes/acciones";
+import { conIngresosQuilmes, esIngresoQuilmes, type Solicitud } from "@/lib/quilmes/solicitudes";
+import { TablaSolicitudes } from "@/components/tabla-solicitudes-quilmes";
 
 /** Color de cada sector de gastos (fuerte para títulos y franja, suave para el fondo). */
 const COLOR_SECTOR: Record<string, { fuerte: string; suave: string }> = {
@@ -29,6 +32,9 @@ const COLOR_SECTOR: Record<string, { fuerte: string; suave: string }> = {
   "Seguros y aranceles": { fuerte: "#4338ca", suave: "#eef2ff" },
 };
 const colorSector = (nombre: string) => COLOR_SECTOR[nombre] ?? { fuerte: "#57534e", suave: "#f5f5f4" };
+/** Quilmes: gastos de cada solicitud y gastos adicionales. */
+const COLOR_SOLICITUD = { fuerte: "#0c4a6e", suave: "#f0f9ff" };
+const COLOR_ADICIONAL = { fuerte: "#57534e", suave: "#f5f5f4" };
 
 const pct = (v: number | null) => (v === null ? "—" : `${(v * 100).toFixed(1).replace(".", ",")}%`);
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -44,6 +50,7 @@ export function PlanillaEvento({
   indicador,
   proveedores,
   empresa,
+  solicitudes,
 }: {
   eventoId: string;
   inicial: Planilla;
@@ -56,18 +63,25 @@ export function PlanillaEvento({
   /** Proveedores con cuenta corriente que se pueden vincular a un gasto (solo con la planilla en Financiero). */
   proveedores?: ProveedorCuenta[];
   empresa: string;
+  /** Evento Quilmes: Solicitudes (precio de venta) arriba y gastos reales agrupados por solicitud. */
+  solicitudes?: Solicitud[];
 }) {
+  const quilmes = solicitudes !== undefined;
   const [desbloqueada, setDesbloqueada] = useState(false);
   const bloqueada = enFinanciero && cerrado && !desbloqueada;
   const editable = puedeEditar && !bloqueada;
   const conProveedor = enFinanciero && proveedores !== undefined;
-  const columnasGasto = 9 + (conProveedor ? 1 : 0) + (editable ? 1 : 0);
+  const columnasGasto = 9 + (conProveedor ? 1 : 0) + (editable ? 1 : 0) + (quilmes ? 1 : 0);
   const [p, setP] = useState<Planilla>(inicial);
+  const [sol, setSol] = useState<Solicitud[]>(solicitudes ?? []);
+  const [quitando, setQuitando] = useState<{ id: string; destino: string } | null>(null);
   const [sinGuardar, setSinGuardar] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const [soloPorPagar, setSoloPorPagar] = useState(false);
   const [guardando, iniciar] = useTransition();
-  const c = calcularPlanilla(p);
+  // Quilmes: el ingreso previsto sale de las Solicitudes (una sola vez), con los mismos cálculos de Eventos.
+  const efectiva = quilmes ? conIngresosQuilmes(p, sol) : p;
+  const c = calcularPlanilla(efectiva);
 
   const cambiar = (cambio: (p: Planilla) => Planilla) => {
     setP(cambio);
@@ -84,8 +98,10 @@ export function PlanillaEvento({
 
   const guardar = () =>
     iniciar(async () => {
-      const r = await guardarPlanillaEvento(eventoId, p);
+      const r = quilmes ? await guardarPlanillaQuilmes(eventoId, sol, p) : await guardarPlanillaEvento(eventoId, p);
       if (r.planilla) setP(r.planilla);
+      const guardadas = (r as { solicitudes?: Solicitud[] }).solicitudes;
+      if (guardadas) setSol(guardadas);
       if (r.error) setMensaje({ tipo: "error", texto: r.error });
       else {
         setSinGuardar(false);
@@ -137,8 +153,72 @@ export function PlanillaEvento({
         return nuevo;
       }),
     }));
-  const agregarGasto = (sector: string) =>
-    cambiar((p) => ({ ...p, gastos: [...p.gastos, { sector, detalle: "", neto: 0, tipo_factura: "", iva: 0, urgente: false, sena: 0, datos_bancarios: "" }] }));
+  const agregarGasto = (sector: string, solicitud_id: string | null = null) =>
+    cambiar((p) => ({ ...p, gastos: [...p.gastos, { sector, detalle: "", neto: 0, tipo_factura: "", iva: 0, urgente: false, sena: 0, datos_bancarios: "", solicitud_id }] }));
+
+  // ─── Quilmes ───
+  const cambiarSolicitudes = (lista: Solicitud[]) => {
+    setSol(lista);
+    setSinGuardar(true);
+    setMensaje(null);
+  };
+  // Una solicitud con gastos reales no se quita sin decidir qué pasa con ellos (nunca se borran).
+  const quitarSolicitud = (id: string) => {
+    if (p.gastos.some((g) => g.solicitud_id === id)) setQuitando({ id, destino: "" });
+    else cambiarSolicitudes(sol.filter((s) => s.id !== id));
+  };
+  const confirmarQuitar = () => {
+    if (!quitando) return;
+    cambiar((p) => ({ ...p, gastos: p.gastos.map((g) => (g.solicitud_id === quitando.id ? { ...g, solicitud_id: quitando.destino || null } : g)) }));
+    cambiarSolicitudes(sol.filter((s) => s.id !== quitando.id));
+    setQuitando(null);
+  };
+  const marcarCobroQuilmes = (id: string, pagado: boolean) =>
+    cambiar((p) => {
+      if (p.ingresos.some((i) => i.id === id)) return { ...p, ingresos: p.ingresos.map((i) => (i.id === id ? { ...i, pagado } : i)) };
+      const automatico = conIngresosQuilmes(p, sol).ingresos.find((i) => i.id === id);
+      return automatico ? { ...p, ingresos: [{ ...automatico, pagado }, ...p.ingresos] } : p;
+    });
+  const totalesDe = (lista: Gasto[]) => ({
+    neto: r2(lista.reduce((t, g) => t + g.neto, 0)),
+    iva: r2(lista.reduce((t, g) => t + g.iva, 0)),
+    total: r2(lista.reduce((t, g) => t + totalGasto(g), 0)),
+    sena: r2(lista.reduce((t, g) => t + g.sena, 0)),
+    diferencia: r2(lista.reduce((t, g) => t + diferenciaGasto(g), 0)),
+  });
+  const idsSolicitudes = new Set(sol.map((s) => s.id));
+  // Grupos de gastos: por sector (eventos) o por solicitud + adicionales (Quilmes).
+  const grupos = quilmes
+    ? [
+        ...sol.map((s, i) => ({
+          clave: s.id,
+          nombre: s.detalle.trim() || `Solicitud ${i + 1}`,
+          color: COLOR_SOLICITUD,
+          de: (g: Gasto) => g.solicitud_id === s.id,
+          agregar: () => agregarGasto("", s.id),
+          presupuestado: s.neto as number | null,
+        })),
+        {
+          clave: "adicionales",
+          nombre: "Gastos adicionales (no presupuestados)",
+          color: COLOR_ADICIONAL,
+          de: (g: Gasto) => !g.solicitud_id || !idsSolicitudes.has(g.solicitud_id),
+          agregar: () => agregarGasto("", null),
+          presupuestado: null as number | null,
+        },
+      ]
+    : c.sectores.map((s) => ({
+        clave: s.nombre,
+        nombre: s.nombre,
+        color: colorSector(s.nombre),
+        de: (g: Gasto) => (g.sector || "Otros") === s.nombre,
+        agregar: () => agregarGasto(s.nombre === "Otros" ? "" : s.nombre),
+        presupuestado: null as number | null,
+      }));
+  // Resultado provisorio mientras falten costos o el cobro.
+  const sinCosto = quilmes ? sol.filter((s) => s.neto && !p.gastos.some((g) => g.solicitud_id === s.id && totalGasto(g) > 0)).length : 0;
+  const sinCobrar = quilmes && efectiva.ingresos.some((i) => esIngresoQuilmes(i.id) && !i.pagado);
+  const provisorio = quilmes && (sinCosto > 0 || sinCobrar);
 
   return (
     <div className="space-y-6">
@@ -201,9 +281,29 @@ export function PlanillaEvento({
             % s/ neto facturado
           </label>
         </div>
-        <Cifra titulo="Rentabilidad real" valor={c.rentabilidad} color={colorResultado(c.rentabilidad)} nota={`${pct(c.margen)} sobre ingresos`} destacado />
+        <Cifra
+          titulo={provisorio ? "Rentabilidad real (provisoria)" : "Rentabilidad real"}
+          valor={c.rentabilidad}
+          color={colorResultado(c.rentabilidad)}
+          nota={
+            provisorio
+              ? `Provisoria: ${[sinCosto ? `${sinCosto} solicitud${sinCosto === 1 ? "" : "es"} sin costo cargado` : null, sinCobrar ? "presupuesto sin cobrar" : null].filter(Boolean).join(" · ")}`
+              : `${pct(c.margen)} sobre ingresos`
+          }
+          destacado
+        />
         <Cifra titulo="Falta pagar" valor={c.gastos.diferencia} color="text-amber-700" nota={`Pagado (señas): ${formatoPesos(c.gastos.sena)}`} />
       </section>
+
+      {quilmes && (
+        <section className="space-y-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-lg font-semibold">Solicitudes Quilmes <span className="text-sm font-normal text-stone-500">— precio de venta presupuestado</span></h2>
+            <p className="text-xs text-stone-500">El total entra solo a Ingresos (una vez). Es presupuesto: no es un cobro ni una factura.</p>
+          </div>
+          <TablaSolicitudes lista={sol} editable={editable} alCambiar={cambiarSolicitudes} alQuitar={quitarSolicitud} />
+        </section>
+      )}
 
       {/* Ingresos */}
       <section className="space-y-2">
@@ -223,7 +323,24 @@ export function PlanillaEvento({
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
-              {p.ingresos.map((ing, i) => (
+              {quilmes &&
+                efectiva.ingresos
+                  .filter((ing) => esIngresoQuilmes(ing.id))
+                  .map((ing) => (
+                    <tr key={ing.id} className="bg-sky-50/60">
+                      <td className="px-2 py-1">
+                        {ing.detalle} <span className="ml-1 rounded bg-sky-100 px-1 text-[10px] text-sky-900">automático</span>
+                      </td>
+                      <td className="px-2 py-1 text-right font-mono">{formatoPesos(ing.neto)}</td>
+                      <td className="px-2 py-1 text-right font-mono">{formatoPesos(ing.iva)}</td>
+                      <td className="px-2 py-1 text-right font-mono font-semibold">{formatoPesos(ing.bruto)}</td>
+                      <td className="px-2 py-1 text-right font-mono text-stone-600">{formatoPesos(iibbIngreso(ing, p.alicuota_iibb))}</td>
+                      <td className="px-2 py-1 text-center text-xs">{ing.factura ? "Sí" : "No"}</td>
+                      <td className="px-2 py-1 text-center"><input type="checkbox" checked={ing.pagado} disabled={!editable} aria-label="Cobrado" onChange={(e) => marcarCobroQuilmes(ing.id!, e.target.checked)} /></td>
+                      {editable && <td />}
+                    </tr>
+                  ))}
+              {p.ingresos.map((ing, i) => esIngresoQuilmes(ing.id) ? null : (
                 <tr key={i}>
                   <td className="px-1 py-0.5"><input value={ing.detalle} disabled={!editable} maxLength={200} aria-label="Detalle del ingreso" onChange={(e) => editarIngreso(i, { detalle: e.target.value })} className={`${celdaTexto} min-w-52`} /></td>
                   <td className="px-1 py-0.5"><CampoMonto valor={ing.neto} disabled={!editable} etiqueta="Neto" alCambiar={(neto) => editarIngreso(i, { neto })} /></td>
@@ -260,7 +377,14 @@ export function PlanillaEvento({
 
       {/* Gastos por sector */}
       <section className="space-y-2">
-        <h2 className="text-lg font-semibold">Gastos por sector</h2>
+        {quilmes ? (
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-lg font-semibold">Gastos reales <span className="text-sm font-normal text-stone-500">— costos internos por solicitud</span></h2>
+            <p className="text-xs text-stone-500">🔒 Información interna: nunca forma parte del presupuesto para Quilmes.</p>
+          </div>
+        ) : (
+          <h2 className="text-lg font-semibold">Gastos por sector</h2>
+        )}
         <div className="tarjeta max-h-[70vh] overflow-auto overscroll-contain p-0 print:max-h-none print:overflow-visible">
           <table className={`w-full ${conProveedor ? "min-w-[1280px]" : "min-w-[1100px]"} text-sm`}>
             <thead className={`sticky top-0 z-10 border-b shadow-sm border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500 print:static`}>
@@ -275,23 +399,28 @@ export function PlanillaEvento({
                 <th className="px-2 py-2 text-right">Diferencia</th>
                 {conProveedor && <th className="px-2 py-2">Proveedor (cta. cte.)</th>}
                 <th className="px-2 py-2">Datos bancarios</th>
+                {quilmes && <th className="px-2 py-2">Solicitud</th>}
                 {editable && <th className="w-6" />}
               </tr>
             </thead>
-            {c.sectores.map((s) => {
-              const filas = p.gastos.map((g, indice) => ({ g, indice })).filter(({ g }) => (g.sector || "Otros") === s.nombre && (!soloPorPagar || diferenciaGasto(g) > 0));
+            {grupos.map((s) => {
+              const todas = p.gastos.map((g, indice) => ({ g, indice })).filter(({ g }) => s.de(g));
+              const filas = todas.filter(({ g }) => !soloPorPagar || diferenciaGasto(g) > 0);
               if (soloPorPagar && !filas.length) return null;
-              const color = colorSector(s.nombre);
+              const totales = totalesDe(todas.map(({ g }) => g));
+              const color = s.color;
               // Franja de color a la izquierda de todas las filas del sector.
               const franja = { boxShadow: `inset 4px 0 0 ${color.fuerte}`, printColorAdjust: "exact" as const };
               return (
-                <tbody key={s.nombre} className="divide-y divide-stone-100 border-t-8 border-white first:border-t-0">
+                <tbody key={s.clave} className="divide-y divide-stone-100 border-t-8 border-white first:border-t-0">
                   <tr style={{ background: color.fuerte, printColorAdjust: "exact" }}>
                     <th colSpan={columnasGasto} className="px-3 py-2 text-left text-sm font-bold uppercase tracking-wide text-white">
                       {s.nombre}
                       <span className="ml-3 text-xs font-normal normal-case opacity-80">
-                        {s.gastos.length} gasto{s.gastos.length === 1 ? "" : "s"} · {formatoPesos(s.totales.total)}
+                        {todas.length} gasto{todas.length === 1 ? "" : "s"} · {formatoPesos(totales.total)}
+                        {s.presupuestado !== null && ` · presupuestado neto ${formatoPesos(s.presupuestado)} · costo neto ${formatoPesos(totales.neto)} · diferencia ${formatoPesos(r2(s.presupuestado - totales.neto))}`}
                       </span>
+                      {s.presupuestado !== null && !todas.length && <span className="ml-2 text-xs font-normal normal-case opacity-80">(sin costos cargados todavía)</span>}
                     </th>
                   </tr>
                   {filas.map(({ g, indice }) => (
@@ -328,6 +457,14 @@ export function PlanillaEvento({
                         </td>
                       )}
                       <td className="px-1 py-0.5"><input value={g.datos_bancarios} disabled={!editable} maxLength={300} placeholder="Alias / CBU" aria-label="Datos bancarios" onChange={(e) => editarGasto(indice, { datos_bancarios: e.target.value })} className={`${celdaTexto} font-mono text-xs`} /></td>
+                      {quilmes && (
+                        <td className="px-1 py-0.5">
+                          <select value={g.solicitud_id && idsSolicitudes.has(g.solicitud_id) ? g.solicitud_id : ""} disabled={!editable} aria-label="Solicitud del gasto" onChange={(e) => editarGasto(indice, { solicitud_id: e.target.value || null })} className="max-w-40 rounded border border-transparent bg-transparent px-1 py-0.5 text-xs hover:border-stone-200">
+                            <option value="">Adicional (sin solicitud)</option>
+                            {sol.map((x, k) => <option key={x.id} value={x.id}>{x.detalle.trim() || `Solicitud ${k + 1}`}</option>)}
+                          </select>
+                        </td>
+                      )}
                       {editable && (
                         <td><button type="button" onClick={() => cambiar((p) => ({ ...p, gastos: p.gastos.filter((_, j) => j !== indice) }))} className="px-1 text-stone-400 hover:text-red-700" aria-label="Quitar gasto">×</button></td>
                       )}
@@ -336,19 +473,19 @@ export function PlanillaEvento({
                   <tr className="font-semibold" style={{ ...franja, background: color.suave, color: color.fuerte }}>
                     <td className="px-2 py-1.5">
                       {editable && !soloPorPagar ? (
-                        <button type="button" onClick={() => agregarGasto(s.nombre === "Otros" ? "" : s.nombre)} className="text-xs font-normal text-stone-600 hover:text-stone-900">+ Agregar gasto</button>
+                        <button type="button" onClick={s.agregar} className="text-xs font-normal text-stone-600 hover:text-stone-900">+ Agregar gasto</button>
                       ) : (
                         <span className="text-xs uppercase text-stone-500">Total {s.nombre}</span>
                       )}
                     </td>
-                    <td className="px-2 py-1.5 text-right font-mono">{formatoPesos(s.totales.neto)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono">{formatoPesos(totales.neto)}</td>
                     <td />
-                    <td className="px-2 py-1.5 text-right font-mono">{formatoPesos(s.totales.iva)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono">{formatoPesos(s.totales.total)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono">{formatoPesos(totales.iva)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono">{formatoPesos(totales.total)}</td>
                     <td />
-                    <td className="px-2 py-1.5 text-right font-mono">{formatoPesos(s.totales.sena)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-amber-700">{formatoPesos(s.totales.diferencia)}</td>
-                    <td colSpan={(editable ? 2 : 1) + (conProveedor ? 1 : 0)} />
+                    <td className="px-2 py-1.5 text-right font-mono">{formatoPesos(totales.sena)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-amber-700">{formatoPesos(totales.diferencia)}</td>
+                    <td colSpan={(editable ? 2 : 1) + (conProveedor ? 1 : 0) + (quilmes ? 1 : 0)} />
                   </tr>
                 </tbody>
               );
@@ -363,19 +500,41 @@ export function PlanillaEvento({
                 <td />
                 <td className="px-2 py-2 text-right font-mono">{formatoPesos(c.gastos.sena)}</td>
                 <td className="px-2 py-2 text-right font-mono">{formatoPesos(c.gastos.diferencia)}</td>
-                <td colSpan={(editable ? 2 : 1) + (conProveedor ? 1 : 0)} />
+                <td colSpan={(editable ? 2 : 1) + (conProveedor ? 1 : 0) + (quilmes ? 1 : 0)} />
               </tr>
             </tfoot>
           </table>
         </div>
       </section>
 
-      <Entradas p={p} c={c.entradas} editable={editable} alCambiar={(entradas) => cambiar((p) => ({ ...p, entradas }))} />
+      {!quilmes && <Entradas p={p} c={c.entradas} editable={editable} alCambiar={(entradas) => cambiar((p) => ({ ...p, entradas }))} />}
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">Notas</h2>
         <textarea value={p.notas ?? ""} disabled={!editable} rows={3} maxLength={4000} aria-label="Notas de la planilla" onChange={(e) => cambiar((p) => ({ ...p, notas: e.target.value }))} className="campo" />
       </section>
+
+      {quitando && (
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 sm:items-center" onMouseDown={(e) => e.target === e.currentTarget && setQuitando(null)}>
+          <div role="dialog" aria-modal="true" aria-label="Quitar solicitud" className="w-full max-w-md space-y-3 rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl">
+            <h2 className="text-lg font-semibold">Quitar «{sol.find((x) => x.id === quitando.id)?.detalle || "solicitud"}»</h2>
+            <p className="text-sm text-stone-600">
+              Tiene {p.gastos.filter((g) => g.solicitud_id === quitando.id).length} gasto(s) real(es) cargado(s). Los gastos no se borran: elegí dónde quedan.
+            </p>
+            <label className="block">
+              <span className="etiqueta">Sus gastos reales pasan a</span>
+              <select value={quitando.destino} onChange={(e) => setQuitando({ ...quitando, destino: e.target.value })} className="campo">
+                <option value="">Gastos adicionales (sin solicitud)</option>
+                {sol.filter((x) => x.id !== quitando.id).map((x, k) => <option key={x.id} value={x.id}>{x.detalle.trim() || `Solicitud ${k + 1}`}</option>)}
+              </select>
+            </label>
+            <div className="flex gap-2">
+              <button type="button" onClick={confirmarQuitar} className="boton">Quitar solicitud</button>
+              <button type="button" onClick={() => setQuitando(null)} className="boton-secundario">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

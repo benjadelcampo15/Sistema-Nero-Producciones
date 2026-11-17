@@ -26,7 +26,7 @@ export function DuplicarPlanilla({ evento, className = "boton-secundario" }: { e
     if (!fecha) return setError("Elegí la fecha del evento nuevo");
     const texto =
       modo === "importes"
-        ? `Se crea "${nombre}" con la planilla de "${evento.nombre}" (conceptos, proveedores e importes). Señas, cobros y pagos quedan en $0 y no se genera nada en Financiero. ¿Duplicar?`
+        ? `Se crea "${nombre}" con la planilla de "${evento.nombre}" (${evento.tipo === "quilmes" ? "solicitudes, gastos reales" : "conceptos"}, proveedores e importes). Señas, cobros y pagos quedan en $0 y no se genera nada en Financiero. ¿Duplicar?`
         : `Se crea "${nombre}" con la estructura de la planilla de "${evento.nombre}" (sectores, conceptos y proveedores) e importes en $0. ¿Duplicar?`;
     if (!window.confirm(texto)) return;
     setError(null);
@@ -34,7 +34,7 @@ export function DuplicarPlanilla({ evento, className = "boton-secundario" }: { e
       const r = await duplicarPlanilla(evento.id, { nombre, fecha, lugar, empresa, estado, modo }, clave);
       if (r.error || !r.id) return setError(r.error ?? "No se pudo duplicar");
       setClave(crypto.randomUUID());
-      router.push(`/eventos/${r.id}`);
+      router.push(`/${evento.tipo === "quilmes" ? "quilmes" : "eventos"}/${r.id}`);
     });
   };
 

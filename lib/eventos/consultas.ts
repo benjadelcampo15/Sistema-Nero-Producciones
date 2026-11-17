@@ -5,11 +5,12 @@ import { sumar } from "@/lib/formato";
 import { CAMPOS_TRANSACCION, calcularTotales, normalizarTransacciones } from "@/lib/financiero/consultas";
 import type { Transaccion } from "@/lib/financiero/tipos";
 import type { Empresa } from "@/lib/empresas";
-import { ESTADOS_EVENTO, type Balance, type EstadoEvento, type Evento, type EventoConBalance, type ResumenEvento } from "./tipos";
+import { ESTADOS_EVENTO, type Balance, type EstadoEvento, type Evento, type EventoConBalance, type ResumenEvento, type TipoEvento } from "./tipos";
+import { conIngresosQuilmes, type Solicitud } from "@/lib/quilmes/solicitudes";
 import { PLANILLA_VACIA, calcularPlanilla, esquemaPlanilla, type Planilla } from "./planilla";
 import type { Caja } from "./cajas";
 
-const CAMPOS_EVENTO = "id, empresa, nombre, fecha, lugar, estado, presupuesto, notas, planilla_en_financiero, sync_estado, sync_error";
+const CAMPOS_EVENTO = "id, tipo, empresa, nombre, fecha, lugar, estado, presupuesto, notas, planilla_en_financiero, sync_estado, sync_error";
 
 type FilaBalance = { evento_id: string; ingresos: number; egresos: number; movimientos: number };
 
@@ -27,24 +28,31 @@ export function leerEstado(valor: unknown): EstadoEvento | undefined {
   return ESTADOS_EVENTO.find((e) => e === valor);
 }
 
-export async function listarEventos(empresa: Empresa, estado?: EstadoEvento): Promise<EventoConBalance[]> {
+export async function listarEventos(empresa: Empresa, estado?: EstadoEvento, tipo: TipoEvento = "evento"): Promise<EventoConBalance[]> {
   const supabase = await crearClienteServidor();
-  let consulta = supabase.from("eventos").select(CAMPOS_EVENTO).eq("empresa", empresa).order("fecha", { ascending: false });
+  let consulta = supabase.from("eventos").select(CAMPOS_EVENTO).eq("empresa", empresa).eq("tipo", tipo).order("fecha", { ascending: false });
   if (estado) consulta = consulta.eq("estado", estado);
 
-  const [{ data: eventos, error }, { data: balances }, { data: planillas }] = await Promise.all([
+  const [{ data: eventos, error }, { data: balances }, { data: planillas }, { data: solicitudes }] = await Promise.all([
     consulta,
     supabase.from("balance_eventos").select("evento_id, ingresos, egresos, movimientos"),
-    supabase.from("planillas_evento").select("evento_id, datos, eventos!inner(empresa)").eq("eventos.empresa", empresa),
+    supabase.from("planillas_evento").select("evento_id, datos, eventos!inner(empresa, tipo)").eq("eventos.empresa", empresa).eq("eventos.tipo", tipo),
+    tipo === "quilmes"
+      ? supabase.from("quilmes_solicitudes").select("evento_id, neto, iva, tipo_iva, eventos!inner(empresa)").eq("eventos.empresa", empresa)
+      : Promise.resolve({ data: [] as { evento_id: string; neto: number; iva: number; tipo_iva: string }[] }),
   ]);
   if (error) throw new Error(`No se pudieron leer los eventos: ${error.message}`);
 
   const porEvento = new Map(((balances ?? []) as FilaBalance[]).map((b) => [b.evento_id, b]));
   const planillaDe = new Map((planillas ?? []).map((p) => [p.evento_id as string, p.datos]));
+  const solicitudesDe = new Map<string, Pick<Solicitud, "neto" | "iva" | "tipo_iva">[]>();
+  for (const s of solicitudes ?? []) {
+    solicitudesDe.set(s.evento_id, [...(solicitudesDe.get(s.evento_id) ?? []), { neto: Number(s.neto), iva: Number(s.iva), tipo_iva: s.tipo_iva as Solicitud["tipo_iva"] }]);
+  }
   return ((eventos ?? []) as Evento[]).map((e) => ({
     ...aEvento(e),
     balance: aBalance(porEvento.get(e.id)),
-    resumen: resumenPlanilla(planillaDe.get(e.id)),
+    resumen: resumenPlanilla(planillaDe.get(e.id), tipo === "quilmes" ? (solicitudesDe.get(e.id) ?? []) : undefined),
   }));
 }
 
@@ -52,9 +60,11 @@ export async function listarEventos(empresa: Empresa, estado?: EstadoEvento): Pr
  * Los cinco indicadores de la planilla del evento, con la misma función que usa
  * la pantalla del evento (sin planilla cargada, todo en cero, igual que adentro).
  */
-function resumenPlanilla(datos: unknown): ResumenEvento {
+function resumenPlanilla(datos: unknown, solicitudes?: Pick<Solicitud, "neto" | "iva" | "tipo_iva">[]): ResumenEvento {
   const leida = esquemaPlanilla.safeParse(datos ?? {});
-  const c = calcularPlanilla(leida.success ? leida.data : PLANILLA_VACIA);
+  const p = leida.success ? leida.data : PLANILLA_VACIA;
+  // Quilmes: el ingreso previsto sale de las Solicitudes (igual que adentro).
+  const c = calcularPlanilla(solicitudes ? conIngresosQuilmes(p, solicitudes) : p);
   return { ingresos: c.ingresos.bruto, gastos: c.gastos.total, iva: c.ivaAPagar, iibb: c.iibb, rentabilidad: c.rentabilidad };
 }
 
@@ -150,6 +160,7 @@ export async function eventosDeHoy(hoy: string): Promise<Evento[]> {
     .gte("fecha", ayer.toISOString().slice(0, 10))
     .lte("fecha", hoy)
     .neq("estado", "cancelado")
+    .eq("tipo", "evento")
     .order("fecha");
   return ((data ?? []) as Evento[]).map(aEvento);
 }

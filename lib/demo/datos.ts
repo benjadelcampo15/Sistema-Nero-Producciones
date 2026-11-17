@@ -82,7 +82,7 @@ export async function cargarDemo(sb: SupabaseClient, url: string, clave = CLAVE_
   await sb.from("perfiles").upsert({ id: idDemo, nombre: "Usuario Demo", email: EMAIL_DEMO, es_admin: false, activo: true, debe_cambiar_contrasena: false });
   await insertar(
     "permisos",
-    ["financiero", "objetivos", "facturas", "facturar", "cheques", "stock", "eventos", "presupuestos", "livings", "operativa", "pagos", "tareas"].map((seccion) => ({ usuario_id: idDemo, seccion, nivel: "editar" })),
+    ["financiero", "objetivos", "facturas", "facturar", "cheques", "stock", "eventos", "presupuestos", "livings", "operativa", "pagos", "tareas", "quilmes", "quilmes_costos"].map((seccion) => ({ usuario_id: idDemo, seccion, nivel: "editar" })),
     "usuario_id",
   );
 
@@ -346,6 +346,51 @@ export async function cargarDemo(sb: SupabaseClient, url: string, clave = CLAVE_
   chequesFilas.push({ tipo: "recibido", estado: "pendiente", electronico: true, numero: "45879123", banco: "Banco Nación", monto: 6_000_000, fecha_emision: dia(-4), fecha_pago: dia(12), contraparte: "Club Social Mendoza", empresa: "nero" });
   await insertar("transacciones", movimientos);
   await insertar("cheques", chequesFilas);
+
+  // Un proyecto Quilmes: presupuesto comercial (Solicitudes) y algunos gastos reales internos.
+  {
+    const [q] = await insertar("eventos", { tipo: "quilmes", nombre: "Quilmes – Activación de verano", fecha: dia(20), lugar: "Paseo Costanera", estado: "planificado", empresa: "nero" });
+    const solicitudes = [
+      ["Técnica (sonido e iluminación)", 1_500_000, "A21"],
+      ["Escenario y ambientación", 900_000, "A21"],
+      ["Personal de activación", 400_000, "A21"],
+      ["Logística", 250_000, "sin"],
+    ].map(([detalle, neto, tipo_iva], orden) => ({
+      id: crypto.randomUUID(),
+      evento_id: q.id,
+      orden,
+      detalle,
+      neto,
+      tipo_iva,
+      iva: tipo_iva === "A21" ? Math.round((neto as number) * 21) / 100 : 0,
+    }));
+    await insertar("quilmes_solicitudes", solicitudes);
+    const gasto = (solicitud: number | null, detalle: string, neto: number, factura: string) => ({
+      id: crypto.randomUUID(),
+      sector: "",
+      detalle,
+      neto,
+      tipo_factura: factura,
+      iva: factura === "A21" ? Math.round(neto * 21) / 100 : 0,
+      urgente: false,
+      sena: 0,
+      datos_bancarios: "",
+      solicitud_id: solicitud === null ? null : solicitudes[solicitud].id,
+    });
+    await insertar(
+      "planillas_evento",
+      {
+        evento_id: q.id,
+        datos: {
+          alicuota_iibb: 4,
+          ingresos: [],
+          entradas: [],
+          gastos: [gasto(0, "Sonido", 700_000, "A21"), gasto(0, "Iluminación", 400_000, "A21"), gasto(1, "Escenario modular", 600_000, "A21"), gasto(null, "Flete adicional", 80_000, "")],
+        },
+      },
+      "evento_id",
+    );
+  }
 
   // ─── Cuentas corrientes: facturas de proveedores y a clientes sin pagar ────
   const cuitAndina = "30711111119";

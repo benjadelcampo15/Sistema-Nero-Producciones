@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
 import { cajasDeEvento, obtenerDetalleEvento, obtenerPlanillaEvento, type DesgloseCategoria } from "@/lib/eventos/consultas";
 import { formatoFecha, formatoPesos, colorResultado } from "@/lib/formato";
@@ -30,6 +30,7 @@ export default async function PaginaEvento({ params, searchParams }: PageProps<"
     enPlanilla ? obtenerLiquidacion(id) : null,
   ]);
   if (!detalle) notFound();
+  if (detalle.evento.tipo === "quilmes") redirect(`/quilmes/${id}${parametroVista === "movimientos" ? "?vista=movimientos" : ""}`);
   const { evento, transacciones, totales, desglose } = detalle;
   // Proveedores para vincular gastos con su cuenta corriente (solo si la planilla pasa a Financiero).
   const proveedores = planilla && evento.planilla_en_financiero ? await proveedoresParaEvento(evento.empresa) : undefined;

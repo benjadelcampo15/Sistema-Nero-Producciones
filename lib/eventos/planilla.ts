@@ -46,6 +46,8 @@ const esquemaGasto = z.object({
   proveedor_id: z.preprocess((v) => v || null, z.uuid().nullable()).optional(),
   // Solo para mostrar: lo pagado desde la cuenta corriente del proveedor (ya incluido en la seña).
   pagado_cuenta: z.number().min(0).max(1e13).optional(),
+  // Quilmes: la solicitud (concepto presupuestado) a la que corresponde este gasto real; sin ella es un gasto adicional.
+  solicitud_id: z.preprocess((v) => v || null, z.string().max(40).nullable()).optional(),
 });
 
 const esquemaEntrada = z.object({
@@ -152,6 +154,7 @@ export function planillaCopiada(p: Planilla, modo: "importes" | "estructura", pr
       sena: 0,
       datos_bancarios: g.datos_bancarios,
       proveedor_id: g.proveedor_id && proveedorValido(g.proveedor_id) ? g.proveedor_id : null,
+      ...(g.solicitud_id ? { solicitud_id: g.solicitud_id } : {}),
     })),
     entradas: p.entradas.map((e) => ({ detalle: e.detalle, valor: con ? e.valor : 0, cantidad: 0, proyectada: con ? e.proyectada : 0 })),
   };
