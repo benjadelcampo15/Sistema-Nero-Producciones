@@ -8,7 +8,7 @@ import {
   obtenerSinFecha,
   obtenerTransacciones,
 } from "@/lib/financiero/consultas";
-import { formatoPesos, hoy, periodosRapidos } from "@/lib/formato";
+import { formatoPesos, hoy, periodosRapidos, colorResultado } from "@/lib/formato";
 import { NOMBRE_ESTADO_MOVIMIENTO } from "@/lib/financiero/tipos";
 import { AlternarEmpresa } from "@/components/empresa";
 import { SinAcceso } from "../sin-acceso";
@@ -97,7 +97,7 @@ export default async function PaginaFinanciero({ searchParams }: PageProps<"/fin
               etiqueta={etiqueta}
               valor={principal.resultado}
               escenario={escenario?.resultado}
-              color={principal.resultado >= 0 ? "text-stone-900" : "text-red-700"}
+              color={colorResultado(principal.resultado)}
             />
           </div>
 

@@ -13,7 +13,7 @@ import {
   type Ingreso,
   type Planilla,
 } from "@/lib/eventos/planilla";
-import { formatoPesos } from "@/lib/formato";
+import { formatoPesos, colorResultado } from "@/lib/formato";
 import { CampoMonto } from "@/components/campo-monto";
 import { SelectorProveedor, type ProveedorCuenta } from "./selector-proveedor";
 
@@ -201,7 +201,7 @@ export function PlanillaEvento({
             % s/ neto facturado
           </label>
         </div>
-        <Cifra titulo="Rentabilidad real" valor={c.rentabilidad} nota={`${pct(c.margen)} sobre ingresos`} destacado />
+        <Cifra titulo="Rentabilidad real" valor={c.rentabilidad} color={colorResultado(c.rentabilidad)} nota={`${pct(c.margen)} sobre ingresos`} destacado />
         <Cifra titulo="Falta pagar" valor={c.gastos.diferencia} color="text-amber-700" nota={`Pagado (señas): ${formatoPesos(c.gastos.sena)}`} />
       </section>
 
@@ -384,7 +384,7 @@ function Cifra({ titulo, valor, color, nota, destacado }: { titulo: string; valo
   return (
     <div className={`tarjeta p-4 ${destacado ? "border-stone-900" : ""}`}>
       <p className="text-xs uppercase tracking-wide text-stone-500">{titulo}</p>
-      <p className={`mt-1 font-mono text-lg font-semibold ${valor < 0 ? "text-red-700" : (color ?? "")}`}>{formatoPesos(valor)}</p>
+      <p className={`mt-1 font-mono text-lg font-semibold ${color ?? (valor < 0 ? "text-red-700" : "")}`}>{formatoPesos(valor)}</p>
       {nota && <p className="text-xs text-stone-500">{nota}</p>}
     </div>
   );

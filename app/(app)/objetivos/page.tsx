@@ -2,7 +2,7 @@ import Link from "next/link";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
 import { aniosConDatos, mesesDelAnio } from "@/lib/objetivos/consultas";
 import { MESES, calcularMes } from "@/lib/objetivos/tipos";
-import { formatoPesos, hoy } from "@/lib/formato";
+import { formatoPesos, hoy, colorResultado } from "@/lib/formato";
 import { SinAcceso } from "../sin-acceso";
 import { AlternarEmpresa } from "@/components/empresa";
 import { leerEmpresa } from "@/lib/empresas";
@@ -73,7 +73,7 @@ export default async function PaginaObjetivos({ searchParams }: PageProps<"/obje
         </div>
         <div className="tarjeta">
           <p className="text-xs uppercase tracking-wide text-stone-500">Rentabilidad anual</p>
-          <p className={`mt-1 font-mono text-xl font-semibold ${total.final < 0 ? "text-red-700" : ""}`}>{formatoPesos(total.final)}</p>
+          <p className={`mt-1 font-mono text-xl font-semibold ${colorResultado(total.final)}`}>{formatoPesos(total.final)}</p>
           <p className="text-xs text-stone-500">{pct(total.ingreso ? total.final / total.ingreso : null)} sobre ventas</p>
         </div>
       </div>
@@ -101,9 +101,9 @@ export default async function PaginaObjetivos({ searchParams }: PageProps<"/obje
                 </td>
                 <td className="px-4 py-2 text-right font-mono text-green-700">{f.c ? formatoPesos(f.c.ingreso) : ""}</td>
                 <td className="px-4 py-2 text-right font-mono text-red-700">{f.c ? formatoPesos(f.c.costos) : ""}</td>
-                <td className={`px-4 py-2 text-right font-mono font-medium ${f.c && f.c.final < 0 ? "text-red-700" : ""}`}>{f.c ? formatoPesos(f.c.final) : ""}</td>
+                <td className={`px-4 py-2 text-right font-mono font-medium ${f.c ? colorResultado(f.c.final) : ""}`}>{f.c ? formatoPesos(f.c.final) : ""}</td>
                 <td className="px-4 py-2 text-right font-mono text-stone-600">{f.c ? pct(f.c.ratios.at(-1)!.valor) : ""}</td>
-                <td className={`px-4 py-2 text-right font-mono ${f.acumulado !== null && f.acumulado < 0 ? "text-red-700" : "text-stone-600"}`}>
+                <td className={`px-4 py-2 text-right font-mono ${colorResultado(f.acumulado)}`}>
                   {f.acumulado !== null ? formatoPesos(f.acumulado) : ""}
                 </td>
               </tr>

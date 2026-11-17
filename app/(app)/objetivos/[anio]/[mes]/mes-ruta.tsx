@@ -9,7 +9,7 @@ import {
   mesesRuta,
   resumenAnioRuta,
 } from "@/lib/objetivos/ruta-consultas";
-import { formatoPesos } from "@/lib/formato";
+import { formatoPesos, colorResultado } from "@/lib/formato";
 import { EtiquetaEmpresa } from "@/components/empresa";
 import { EditorRuta } from "./editor-ruta";
 import { NOMBRE_EMPRESA } from "@/lib/empresas";
@@ -115,8 +115,8 @@ function VistaHistorico({ h, acumulado }: { h: Historico; acumulado: number }) {
       <div className="grid gap-3 sm:grid-cols-4">
         <Cifra titulo="Total ingresos" valor={h.resultado.ingresos} />
         <Cifra titulo="Total gastos" valor={h.resultado.gastos} />
-        <Cifra titulo="Rentabilidad" valor={h.resultado.rentabilidad} nota={h.resultado.formula} />
-        <Cifra titulo="Acumulado del año" valor={Math.round(acumulado * 100) / 100} nota={h.anualPlanilla !== null ? `Planilla: ${formatoPesos(h.anualPlanilla)}` : undefined} />
+        <Cifra titulo="Rentabilidad" valor={h.resultado.rentabilidad} nota={h.resultado.formula} resultado />
+        <Cifra titulo="Acumulado del año" resultado valor={Math.round(acumulado * 100) / 100} nota={h.anualPlanilla !== null ? `Planilla: ${formatoPesos(h.anualPlanilla)}` : undefined} />
       </div>
 
       {h.extras.length > 0 && (
@@ -185,11 +185,11 @@ function VistaHistorico({ h, acumulado }: { h: Historico; acumulado: number }) {
   );
 }
 
-function Cifra({ titulo, valor: v, nota }: { titulo: string; valor: number | null; nota?: string }) {
+function Cifra({ titulo, valor: v, nota, resultado }: { titulo: string; valor: number | null; nota?: string; resultado?: boolean }) {
   return (
     <div className="tarjeta p-4">
       <p className="text-xs uppercase tracking-wide text-stone-500">{titulo}</p>
-      <p className={`mt-1 font-mono text-lg font-semibold ${v !== null && v < 0 ? "text-red-700" : ""}`}>{v === null ? "—" : formatoPesos(v)}</p>
+      <p className={`mt-1 font-mono text-lg font-semibold ${resultado ? colorResultado(v) : v !== null && v < 0 ? "text-red-700" : ""}`}>{v === null ? "—" : formatoPesos(v)}</p>
       {nota && <p className="mt-1 break-words font-mono text-[11px] text-stone-500">{nota}</p>}
     </div>
   );

@@ -85,3 +85,12 @@ export function proximosMeses(meses: number) {
   const [anio, mes] = hoy().split("-").map(Number);
   return rangoMeses(anio, mes, mes + meses - 1);
 }
+
+/**
+ * Color de un resultado o una rentabilidad: verde si es ganancia, rojo si es
+ * pérdida y gris si da cero. Solo cambia el color del importe (no el cálculo).
+ */
+export function colorResultado(n: number | null | undefined) {
+  if (n === null || n === undefined || !Number.isFinite(n) || Math.abs(n) < 0.005) return "text-stone-500";
+  return n > 0 ? "text-green-700" : "text-red-700";
+}

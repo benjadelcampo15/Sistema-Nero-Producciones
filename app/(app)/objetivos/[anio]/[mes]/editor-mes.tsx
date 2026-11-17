@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { guardarMes } from "@/lib/objetivos/acciones";
 import type { Empresa } from "@/lib/empresas";
 import { BLOQUES, MESES, calcularMes, type DatosMes, type Item, type ListaMes } from "@/lib/objetivos/tipos";
-import { formatoPesos, parsearMonto } from "@/lib/formato";
+import { formatoPesos, parsearMonto, colorResultado } from "@/lib/formato";
 
 const pct = (v: number | null) => (v === null ? "—" : `${(v * 100).toFixed(1).replace(".", ",")}%`);
 
@@ -99,8 +99,8 @@ export function EditorMes({
       <div className="grid gap-4 sm:grid-cols-4">
         <Cifra titulo="Total ingreso" valor={c.ingreso} color="text-green-700" />
         <Cifra titulo="Total costos" valor={c.costos} color="text-red-700" />
-        <Cifra titulo="Rentabilidad final" valor={c.final} nota={`${pct(c.ratios.at(-1)!.valor)} sobre ventas`} />
-        <Cifra titulo={`Rentabilidad anual (a ${MESES[mes - 1].toLowerCase()})`} valor={acumuladoAnterior + c.final} />
+        <Cifra titulo="Rentabilidad final" valor={c.final} color={colorResultado(c.final)} nota={`${pct(c.ratios.at(-1)!.valor)} sobre ventas`} />
+        <Cifra titulo={`Rentabilidad anual (a ${MESES[mes - 1].toLowerCase()})`} valor={acumuladoAnterior + c.final} color={colorResultado(acumuladoAnterior + c.final)} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1fr_1fr_20rem]">

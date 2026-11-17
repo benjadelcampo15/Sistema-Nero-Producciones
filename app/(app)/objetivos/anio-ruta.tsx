@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { aniosRuta, resumenAnioRuta } from "@/lib/objetivos/ruta-consultas";
 import { MESES } from "@/lib/objetivos/tipos";
-import { formatoPesos, hoy } from "@/lib/formato";
+import { formatoPesos, hoy, colorResultado } from "@/lib/formato";
 import { AlternarEmpresa } from "@/components/empresa";
 import { NOMBRE_EMPRESA } from "@/lib/empresas";
 
@@ -53,12 +53,12 @@ export async function AnioRuta({ anio }: { anio: number }) {
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="tarjeta">
           <p className="text-xs uppercase tracking-wide text-stone-500">Rentabilidad anual {anio}</p>
-          <p className={`mt-1 font-mono text-xl font-semibold ${anual < 0 ? "text-red-700" : ""}`}>{formatoPesos(anual)}</p>
+          <p className={`mt-1 font-mono text-xl font-semibold ${colorResultado(anual)}`}>{formatoPesos(anual)}</p>
           <p className="text-xs text-stone-500">Suma del resultado de cada mes (mensual + variable)</p>
         </div>
         <div className="tarjeta">
           <p className="text-xs uppercase tracking-wide text-stone-500">Rentabilidad variable (desde octubre)</p>
-          <p className={`mt-1 font-mono text-xl font-semibold ${variable < 0 ? "text-red-700" : ""}`}>{formatoPesos(variable)}</p>
+          <p className={`mt-1 font-mono text-xl font-semibold ${colorResultado(variable)}`}>{formatoPesos(variable)}</p>
           <p className="text-xs text-stone-500">Balance de los eventos de {NOMBRE_EMPRESA.ruta}</p>
         </div>
         <div className="tarjeta">
@@ -102,12 +102,12 @@ export async function AnioRuta({ anio }: { anio: number }) {
                         ? "Sin cargar"
                         : "—"}
                 </td>
-                <td className={`px-4 py-2 text-right font-mono ${"mensual" in f && (f.mensual ?? 0) < 0 ? "text-red-700" : ""}`}>{"mensual" in f && f.mensual !== undefined ? formatoPesos(f.mensual) : ""}</td>
-                <td className="px-4 py-2 text-right font-mono text-stone-600">
+                <td className={`px-4 py-2 text-right font-mono ${"mensual" in f && f.mensual !== undefined ? colorResultado(f.mensual) : ""}`}>{"mensual" in f && f.mensual !== undefined ? formatoPesos(f.mensual) : ""}</td>
+                <td className={`px-4 py-2 text-right font-mono ${f.modo === "automatico" ? colorResultado(f.variable) : "text-stone-600"}`}>
                   {f.modo === "automatico" ? formatoPesos(f.variable) : f.modo === "historico" ? <span className="text-xs">incluida</span> : ""}
                 </td>
-                <td className={`px-4 py-2 text-right font-mono font-medium ${f.total !== null && f.total < 0 ? "text-red-700" : ""}`}>{f.total !== null ? formatoPesos(f.total) : ""}</td>
-                <td className={`px-4 py-2 text-right font-mono ${f.acumulado !== null && f.acumulado < 0 ? "text-red-700" : "text-stone-600"}`}>
+                <td className={`px-4 py-2 text-right font-mono font-medium ${colorResultado(f.total)}`}>{f.total !== null ? formatoPesos(f.total) : ""}</td>
+                <td className={`px-4 py-2 text-right font-mono ${colorResultado(f.acumulado)}`}>
                   {f.acumulado !== null ? formatoPesos(f.acumulado) : ""}
                 </td>
                 <td className="px-4 py-2 text-xs">

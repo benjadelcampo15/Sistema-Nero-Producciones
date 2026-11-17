@@ -1,6 +1,6 @@
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
 import { leerEmpresa } from "@/lib/empresas";
-import { formatoFecha, formatoPesos, sumar } from "@/lib/formato";
+import { formatoFecha, formatoPesos, sumar, colorResultado } from "@/lib/formato";
 import { calcularSaldos, leerPeriodo, obtenerLibro, type FilaSaldo } from "@/lib/contabilidad/consultas";
 import { SinAcceso } from "../../sin-acceso";
 import { Avisos, EncabezadoContabilidad, Importe } from "../encabezado";
@@ -49,7 +49,7 @@ export default async function PaginaEstados({ searchParams }: PageProps<"/contab
       <div className="grid gap-3 sm:grid-cols-3">
         <Cifra titulo="Ingresos del período" valor={totalIngresos} />
         <Cifra titulo="Egresos del período" valor={totalEgresos} />
-        <Cifra titulo={resultado >= 0 ? "Ganancia" : "Pérdida"} valor={resultado} color={resultado >= 0 ? "text-green-700" : "text-red-700"} />
+        <Cifra titulo={resultado >= 0 ? "Ganancia" : "Pérdida"} valor={resultado} color={colorResultado(resultado)} />
       </div>
 
       <section className="space-y-2">
@@ -65,7 +65,7 @@ export default async function PaginaEstados({ searchParams }: PageProps<"/contab
             <tfoot className="border-t-2 border-stone-300 font-semibold">
               <tr>
                 <td className="px-4 py-3">Resultado del período</td>
-                <td className={`px-4 py-3 text-right font-mono ${resultado < 0 ? "text-red-700" : ""}`}>{formatoPesos(resultado)}</td>
+                <td className={`px-4 py-3 text-right font-mono ${colorResultado(resultado)}`}>{formatoPesos(resultado)}</td>
               </tr>
             </tfoot>
           </table>
@@ -97,7 +97,7 @@ export default async function PaginaEstados({ searchParams }: PageProps<"/contab
                 <Filas filas={patrimonio("3", -1)} />
                 <tr className="bg-stone-50/60 font-semibold">
                   <td className="px-4 py-1.5">Resultado del ejercicio {anio}</td>
-                  <td className={`px-4 py-1.5 text-right font-mono ${resultadoEjercicio < 0 ? "text-red-700" : ""}`}>{formatoPesos(resultadoEjercicio)}</td>
+                  <td className={`px-4 py-1.5 text-right font-mono ${colorResultado(resultadoEjercicio)}`}>{formatoPesos(resultadoEjercicio)}</td>
                 </tr>
               </tbody>
               <tfoot className="border-t-2 border-stone-300 font-semibold">

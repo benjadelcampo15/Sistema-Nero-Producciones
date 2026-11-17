@@ -6,7 +6,7 @@ import { calcularMesRuta, sincronizarOneShot, type Calculado, type EventoRuta, t
 import { SueldosOneShots, repartoInicial } from "./sueldos-one-shots";
 import { cambiarActivoPersonaRuta, cerrarMesRuta, crearPersonaRuta, guardarMesRuta, reabrirMesRuta } from "@/lib/objetivos/ruta-acciones";
 import { MESES } from "@/lib/objetivos/tipos";
-import { formatoFecha, formatoPesos } from "@/lib/formato";
+import { formatoFecha, formatoPesos, colorResultado } from "@/lib/formato";
 import { CampoMonto } from "@/components/campo-monto";
 import { NOMBRE_EMPRESA } from "@/lib/empresas";
 
@@ -180,10 +180,11 @@ export function EditorRuta({
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Cifra titulo="Fees netos" c={c.totalFees.neto} />
-        <Cifra titulo="Rentabilidad mensual" c={c.rentabilidad} />
-        <Cifra titulo="Rentabilidad variable" c={c.variable} />
+        <Cifra titulo="Rentabilidad mensual" c={c.rentabilidad} resultado />
+        <Cifra titulo="Rentabilidad variable" c={c.variable} resultado />
         <Cifra titulo="Caja estructura" c={c.cajaEstructura} />
         <Cifra
+          resultado
           titulo={`Acumulado del año (a ${MESES[mes - 1].toLowerCase()})`}
           c={{ valor: Math.round((acumuladoAnterior + totalMes) * 100) / 100, formula: `${formatoPesos(acumuladoAnterior)} meses anteriores + ${formatoPesos(totalMes)} de este mes (mensual + variable)` }}
         />
@@ -535,7 +536,7 @@ export function EditorRuta({
             ))}
             <div className="flex justify-between gap-2 border-t border-stone-200 pt-1 font-semibold">
               <dt>Rentabilidad mensual</dt>
-              <dd className={`font-mono ${c.rentabilidad.valor < 0 ? "text-red-700" : "text-green-700"}`}><ValorAjustable c={c.rentabilidad} /></dd>
+              <dd className={`font-mono ${colorResultado(c.rentabilidad.valor)}`}><ValorAjustable c={c.rentabilidad} /></dd>
             </div>
           </dl>
         </Seccion>
@@ -650,11 +651,11 @@ function Seccion({ titulo, ayuda, children }: { titulo: string; ayuda?: string; 
   );
 }
 
-function Cifra({ titulo, c }: { titulo: string; c: Calculado }) {
+function Cifra({ titulo, c, resultado }: { titulo: string; c: Calculado; resultado?: boolean }) {
   return (
     <div className="tarjeta p-4">
       <p className="text-xs uppercase tracking-wide text-stone-500">{titulo}</p>
-      <p className={`mt-1 font-mono text-lg font-semibold ${c.valor < 0 ? "text-red-700" : ""}`}><ValorAjustable c={c} /></p>
+      <p className={`mt-1 font-mono text-lg font-semibold ${resultado ? colorResultado(c.valor) : c.valor < 0 ? "text-red-700" : ""}`}><ValorAjustable c={c} /></p>
       <p className="mt-1 text-[11px] text-stone-500">{c.formula}</p>
     </div>
   );
@@ -671,7 +672,7 @@ function Celda({ valor, formula, negrita }: { valor: number; formula: string; ne
 /** Importe calculado (corregible a mano si tiene clave). signo: positivo en verde, negativo en rojo. */
 function CeldaC({ c, negrita, signo }: { c: Calculado; negrita?: boolean; signo?: boolean }) {
   return (
-    <td title={c.formula} className={`whitespace-nowrap px-3 py-1 text-right font-mono ${negrita ? "font-semibold" : ""} ${c.valor < 0 ? "text-red-700" : signo && c.valor > 0 ? "text-green-700" : ""}`}>
+    <td title={c.formula} className={`whitespace-nowrap px-3 py-1 text-right font-mono ${negrita ? "font-semibold" : ""} ${signo ? colorResultado(c.valor) : c.valor < 0 ? "text-red-700" : ""}`}>
       <ValorAjustable c={c} />
     </td>
   );
@@ -705,7 +706,7 @@ function leerImporte(texto: string) {
 function ValorAjustable({ c }: { c: Calculado }) {
   const { editable, ajustar } = useContext(Ajustes);
   const [texto, setTexto] = useState<string | null>(null);
-  const marca = c.manual ? "rounded bg-amber-100 px-1 text-amber-950 ring-1 ring-amber-300" : "";
+  const marca = c.manual ? "rounded bg-amber-100 px-1 ring-1 ring-amber-300" : "";
   const titulo = c.manual ? `Corregido a mano. Automático: ${formatoPesos(c.automatico ?? 0)} (${c.formula})` : c.formula;
   if (!editable || !c.clave) {
     return <span title={titulo} className={marca}>{formatoPesos(c.valor)}</span>;

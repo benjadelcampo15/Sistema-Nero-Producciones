@@ -2,7 +2,7 @@ import Link from "next/link";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
 import { eventosDeHoy, leerEstado, listarEventos } from "@/lib/eventos/consultas";
 import { COLOR_ESTADO_EVENTO, ESTADOS_EVENTO, NOMBRE_ESTADO_EVENTO } from "@/lib/eventos/tipos";
-import { formatoFecha, formatoPesos, hoy } from "@/lib/formato";
+import { formatoFecha, formatoPesos, hoy, colorResultado } from "@/lib/formato";
 import { BarraPresupuesto } from "@/components/barra-presupuesto";
 import { SinAcceso } from "../sin-acceso";
 import { AlternarEmpresa, EtiquetaEmpresa } from "@/components/empresa";
@@ -126,7 +126,7 @@ export default async function PaginaEventos({ searchParams }: PageProps<"/evento
                   ))}
                   <div className="flex justify-between gap-2 bg-green-100 px-3 py-1.5">
                     <dt className="text-xs font-bold uppercase tracking-wide text-stone-900">Rentabilidad real</dt>
-                    <dd className={`whitespace-nowrap font-mono font-semibold ${e.resumen.rentabilidad < 0 ? "text-red-700" : "text-green-800"}`}>
+                    <dd className={`whitespace-nowrap font-mono font-semibold ${colorResultado(e.resumen.rentabilidad)}`}>
                       {formatoPesos(e.resumen.rentabilidad)}
                     </dd>
                   </div>

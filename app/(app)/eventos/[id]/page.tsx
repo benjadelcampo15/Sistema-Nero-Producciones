@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
 import { cajasDeEvento, obtenerDetalleEvento, obtenerPlanillaEvento, type DesgloseCategoria } from "@/lib/eventos/consultas";
-import { formatoFecha, formatoPesos } from "@/lib/formato";
+import { formatoFecha, formatoPesos, colorResultado } from "@/lib/formato";
 import { BarraPresupuesto } from "@/components/barra-presupuesto";
 import { TablaMovimientos } from "@/components/tabla-movimientos";
 import { SinAcceso } from "../../sin-acceso";
@@ -124,7 +124,7 @@ export default async function PaginaEvento({ params, searchParams }: PageProps<"
         <Indicador
           titulo="Balance"
           valor={formatoPesos(total.resultado)}
-          color={total.resultado >= 0 ? "text-stone-900" : "text-red-700"}
+          color={colorResultado(total.resultado)}
           detalle={[margen !== null ? "Margen " + Math.round(margen * 100) + "%" : null, detalleReal(real.resultado, total.resultado)].filter(Boolean).join(" · ") || undefined}
         />
         <div className="tarjeta space-y-2 p-4">
