@@ -51,8 +51,8 @@ export async function leerLivingsDeExcel(archivo: File): Promise<{ livings: Livi
       personas: Math.max(0, Math.round(personas ?? 0)),
       consumicion: Math.max(0, consumicion ?? 0),
       notas: c.notas >= 0 ? texto(fila[c.notas]).slice(0, 500) || null : null,
-      // Columna Lugar opcional: "Salón" o "Jardín"; vacía = lo decide la app.
-      espacio: c.lugar >= 0 ? (/sal/i.test(texto(fila[c.lugar])) ? "salon" : /jard/i.test(texto(fila[c.lugar])) ? "jardin" : undefined) : undefined,
+      // Columna Lugar opcional: "VIP común" (o "Salón") o "Jardines"; vacía = lo decide la app.
+      espacio: c.lugar >= 0 ? (/vip|sal/i.test(texto(fila[c.lugar])) ? "salon" : /jard/i.test(texto(fila[c.lugar])) ? "jardin" : undefined) : undefined,
       x: null,
       y: null,
       mozo_id: null,
@@ -72,7 +72,7 @@ export function descargarModelo() {
     ["Living Pérez", 8, 600000, "Cumpleaños"],
     ["Living Gómez", 6, 450000, ""],
     ["Living Saigro", 10, 800000, ""],
-    ["Living Martínez", 4, 300000, "", "Salón"],
+    ["Living Martínez", 4, 300000, "", "VIP común"],
     ["Living Dante Robino", 8, 700000, "Sponsor"],
     ["Living López", 6, 400000, ""],
     ["Living Fernández", 5, 350000, "Despedida"],

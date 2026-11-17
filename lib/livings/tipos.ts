@@ -3,10 +3,10 @@ import { z } from "zod";
 /** Posiciones en proporción de la imagen del plano: 0 a 1 en cada eje. */
 const coordenada = z.number().min(0).max(1);
 
-/** Lugares del evento: el jardín (pasto) y el salón (piso gris). */
+/** Lugares del evento: los jardines (pasto) y la VIP común (piso gris). Los ids quedan como antes. */
 export const ESPACIOS = [
-  { id: "jardin", nombre: "Jardín" },
-  { id: "salon", nombre: "Salón" },
+  { id: "jardin", nombre: "Jardines" },
+  { id: "salon", nombre: "VIP común" },
 ] as const;
 export type Espacio = (typeof ESPACIOS)[number]["id"];
 // Opcional: lo guardado antes del salón es todo del jardín.
@@ -64,12 +64,25 @@ export const esquemaLiving = z.object({
   mozo_id: z.string().max(40).nullable(),
 });
 
+/** Medidas reales (en metros) de cada espacio. La VIP común puede ser en L: una franja extra en ángulo recto desde un extremo. */
+const metros = z.number().min(1).max(500);
+export const esquemaMedidas = z.object({
+  jardin: z.object({ largo: metros, ancho: metros }).optional(),
+  salon: z.object({ largo: metros, ancho: metros, en_l: z.boolean(), franja_ancho: metros, franja_largo: metros }).optional(),
+});
+export type Medidas = z.infer<typeof esquemaMedidas>;
+export const MEDIDAS_JARDIN = { largo: 10, ancho: 4 };
+export const MEDIDAS_SALON = { largo: 16, ancho: 4, en_l: false, franja_ancho: 2, franja_largo: 16 };
+export const medidasJardin = (doc: { medidas?: Medidas }) => doc.medidas?.jardin ?? MEDIDAS_JARDIN;
+export const medidasSalon = (doc: { medidas?: Medidas }) => doc.medidas?.salon ?? MEDIDAS_SALON;
+
 /** Lo que se guarda del plano (la imagen va aparte). */
 export const esquemaDocumento = z.object({
   tamano_living: z.number().min(0.005).max(0.3),
   proporcion: z.number().min(0.2).max(3),
   proporcion_salon: z.number().min(0.2).max(3).optional(),
   escenarios: z.object({ jardin: lado, salon: lado }).optional(),
+  medidas: esquemaMedidas.optional(),
   elementos: z.array(esquemaElemento).max(200),
   zonas: z.array(esquemaZona).max(100),
   referencia: z.object({ x: coordenada, y: coordenada }).nullable(),
@@ -98,6 +111,7 @@ export const PLANO_VACIO: DocumentoPlano = {
   proporcion: 0.667,
   proporcion_salon: 0.667,
   escenarios: {},
+  medidas: {},
   elementos: [],
   zonas: [],
   referencia: null,
@@ -295,7 +309,7 @@ export function resumenPorMozo(livings: Living[], mozos: Mozo[]) {
 }
 
 /** Datos de cada espacio para acomodar: sus zonas, su forma y su escenario. */
-export type DatosEspacio = { id: Espacio; zonas: Zona[]; relacion: number; referencia: { x: number; y: number } | null };
+export type DatosEspacio = { id: Espacio; zonas: Zona[]; relacion: number; referencia: { x: number; y: number } | null; anchoM?: number };
 
 /** Punto (fuera del rectángulo) del lado del escenario: los livings más cerca de él van adelante. */
 const PUNTO_LADO: Record<Lado, { x: number; y: number } | null> = {
@@ -308,14 +322,60 @@ const PUNTO_LADO: Record<Lado, { x: number; y: number } | null> = {
 
 export const ladoEscenario = (doc: DocumentoPlano, espacio: Espacio): Lado => doc.escenarios?.[espacio] ?? "ninguno";
 
-/** Cada espacio es entero el rectángulo de los livings con reserva. */
+/**
+ * Forma real de un espacio: el rectángulo que lo contiene (en metros) y las
+ * partes donde van livings, en proporción de ese rectángulo (0 a 1). Los
+ * Jardines y la VIP común son rectángulos (largo × ancho); la VIP común en L
+ * suma una franja que baja en ángulo recto desde su extremo derecho.
+ */
+export function formaEspacio(doc: DocumentoPlano, espacio: Espacio) {
+  if (espacio === "jardin") {
+    const m = medidasJardin(doc);
+    return { anchoM: m.largo, altoM: m.ancho, partes: [{ x: 0, y: 0, w: 1, h: 1 }], texto: `${m.largo} × ${m.ancho} m` };
+  }
+  const m = medidasSalon(doc);
+  if (!m.en_l) return { anchoM: m.largo, altoM: m.ancho, partes: [{ x: 0, y: 0, w: 1, h: 1 }], texto: `${m.largo} × ${m.ancho} m` };
+  const anchoM = m.largo + m.franja_ancho;
+  const altoM = Math.max(m.ancho, m.franja_largo);
+  return {
+    anchoM,
+    altoM,
+    partes: [
+      { x: 0, y: 0, w: m.largo / anchoM, h: m.ancho / altoM },
+      { x: m.largo / anchoM, y: 0, w: m.franja_ancho / anchoM, h: m.franja_largo / altoM },
+    ],
+    texto: `en L: ${m.largo} × ${m.ancho} m + franja ${m.franja_ancho} × ${m.franja_largo} m`,
+  };
+}
+
+/** El punto dentro del espacio más cercano a `p` (para que un living no quede fuera de la L). */
+export function dentroDelEspacio(doc: DocumentoPlano, espacio: Espacio, p: { x: number; y: number }) {
+  const { partes, anchoM, altoM } = formaEspacio(doc, espacio);
+  let mejor = p;
+  let distancia = Infinity;
+  for (const z of partes) {
+    const q = { x: Math.min(z.x + z.w, Math.max(z.x, p.x)), y: Math.min(z.y + z.h, Math.max(z.y, p.y)) };
+    const d = Math.hypot((q.x - p.x) * anchoM, (q.y - p.y) * altoM);
+    if (d < distancia) [mejor, distancia] = [q, d];
+  }
+  return mejor;
+}
+
+/** Cada espacio con sus partes (zonas) según sus medidas reales; los livings se acomodan adentro. */
 export function datosEspacios(doc: DocumentoPlano): DatosEspacio[] {
-  return ESPACIOS.map(({ id }) => ({
-    id,
-    zonas: [{ id: `todo-${id}`, espacio: id, x: 0.015, y: 0.015, w: 0.97, h: 0.97 }],
-    relacion: id === "salon" ? (doc.proporcion_salon ?? 0.667) : doc.proporcion,
-    referencia: PUNTO_LADO[ladoEscenario(doc, id)],
-  }));
+  return ESPACIOS.map(({ id }) => {
+    const f = formaEspacio(doc, id);
+    // Un margen chico (en metros) para que los livings no toquen el borde.
+    const mx = 0.12 / f.anchoM;
+    const my = 0.12 / f.altoM;
+    return {
+      id,
+      zonas: f.partes.map((z, i) => ({ id: `${id}-${i}`, espacio: id, x: z.x + mx, y: z.y + my, w: z.w - 2 * mx, h: z.h - 2 * my })),
+      relacion: f.altoM / f.anchoM,
+      anchoM: f.anchoM,
+      referencia: PUNTO_LADO[ladoEscenario(doc, id)],
+    };
+  });
 }
 
 /**
@@ -324,7 +384,8 @@ export function datosEspacios(doc: DocumentoPlano): DatosEspacio[] {
  * espacio. Los que traen espacio fijo (columna Lugar del Excel) van a ese.
  */
 export function distribuirEspacios(livings: Living[], espacios: DatosEspacio[], respetarEspacio: boolean) {
-  const superficie = (e: DatosEspacio) => e.zonas.reduce((s, z) => s + z.w * z.h * e.relacion, 0);
+  // Superficie real (m²): cada espacio tiene su propio ancho en metros.
+  const superficie = (e: DatosEspacio) => e.zonas.reduce((s, z) => s + z.w * z.h * e.relacion, 0) * (e.anchoM ?? 1) ** 2;
   const total = espacios.reduce((s, e) => s + superficie(e), 0);
   const grupos = new Map<Espacio, Living[]>(espacios.map((e) => [e.id, []]));
 

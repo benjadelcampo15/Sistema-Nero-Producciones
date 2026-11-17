@@ -5,7 +5,12 @@ import { guardarPlano } from "@/lib/livings/acciones";
 import { descargarModelo, leerLivingsDeExcel } from "@/lib/livings/excel";
 import {
   ESPACIOS,
-  FORMAS,
+  MEDIDAS_JARDIN,
+  MEDIDAS_SALON,
+  dentroDelEspacio,
+  formaEspacio,
+  medidasJardin,
+  medidasSalon,
   LADOS,
   asignarMozosEspacios,
   colorMozo,
@@ -27,7 +32,7 @@ import { formatoPesos } from "@/lib/formato";
 type Punto = { x: number; y: number };
 
 const AYUDA =
-  "Arrastrá los livings para moverlos (también del jardín al salón y al revés). Tocá uno para editarlo y estiralo desde la esquina de abajo a la derecha.";
+  "Arrastrá los livings para moverlos (también de los Jardines a la VIP común y al revés). Tocá uno para editarlo y estiralo desde la esquina de abajo a la derecha. Si cambiás las medidas o la forma, tocá “Distribuir livings”.";
 
 /** Piso de cada espacio: pasto en franjas o baldosas grises. */
 const FONDO: Record<Espacio, React.CSSProperties> = {
@@ -82,7 +87,7 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
     const resultado = doc.mozos.length ? asignarMozosEspacios(r.livings, doc.mozos, espacios) : r.livings;
     cambiar((d) => ({ ...d, livings: resultado }));
     const cuenta = (e: Espacio) => resultado.filter((l) => espacioDe(l) === e && l.x !== null).length;
-    return { sinLugar: r.sinLugar, resumen: `${cuenta("jardin")} en el jardín y ${cuenta("salon")} en el salón` };
+    return { sinLugar: r.sinLugar, resumen: `${cuenta("salon")} en la VIP común y ${cuenta("jardin")} en los Jardines` };
   };
 
   const importarExcel = async (archivo: File) => {
@@ -112,7 +117,7 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
       return;
     }
     cambiar((d) => ({ ...d, livings: asignarMozosEspacios(d.livings, d.mozos, espacios) }));
-    setMensaje({ tipo: "ok", texto: "Mozos asignados por sectores en el jardín y en el salón. Podés cambiar el mozo de cada living tocándolo." });
+    setMensaje({ tipo: "ok", texto: "Mozos asignados por sectores en la VIP común y en los Jardines. Podés cambiar el mozo de cada living tocándolo." });
   };
 
   const actualizarMozos = (texto: string) => {
@@ -172,23 +177,25 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
       )}
 
       <div className="grid gap-4 xl:grid-cols-[1fr_18rem]">
-        {/* Jardín y salón, uno al lado del otro. */}
-        <div className="grid gap-4 lg:grid-cols-2 print:grid-cols-2">
-          {ESPACIOS.map((e) => {
+        {/* VIP común y Jardines, con sus medidas reales. */}
+        <div className="space-y-5">
+          {[...ESPACIOS].reverse().map((e) => {
+            // Misma escala en metros para los dos espacios: el más largo ocupa todo el ancho.
+            const escala = (formaEspacio(doc, e.id).anchoM / Math.max(...ESPACIOS.map((x) => formaEspacio(doc, x.id).anchoM))) * 100;
             const suyos = doc.livings.filter((l) => espacioDe(l) === e.id && l.x !== null);
             return (
-              <section key={e.id} className="space-y-1.5">
+              <section key={e.id} className="min-w-0 space-y-1.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h2 className="font-semibold">
                     {e.nombre}{" "}
                     <span className="text-xs font-normal text-stone-500">
-                      {suyos.length} livings · {suyos.reduce((s, l) => s + l.personas, 0)} personas
+                      {formaEspacio(doc, e.id).texto} · {suyos.length} livings · {suyos.reduce((s, l) => s + l.personas, 0)} personas
                     </span>
                   </h2>
                   {editable && (
                     <div className="flex gap-1 print:hidden">
                     <select
-                      aria-label={`Escenario del ${e.nombre.toLowerCase()}`}
+                      aria-label={`Escenario de ${e.nombre}`}
                       value={ladoEscenario(doc, e.id)}
                       onChange={(ev) => cambiar((d) => ({ ...d, escenarios: { ...d.escenarios, [e.id]: ev.target.value as Lado } }))}
                       className="rounded border border-stone-300 bg-white px-1.5 py-0.5 text-xs"
@@ -197,19 +204,11 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
                         <option key={l.id} value={l.id}>{l.nombre}</option>
                       ))}
                     </select>
-                    <select
-                      aria-label={`Forma del ${e.nombre.toLowerCase()}`}
-                      value={relacionDe(e.id)}
-                      onChange={(ev) => cambiar((d) => (e.id === "salon" ? { ...d, proporcion_salon: Number(ev.target.value) } : { ...d, proporcion: Number(ev.target.value) }))}
-                      className="rounded border border-stone-300 bg-white px-1.5 py-0.5 text-xs print:hidden"
-                    >
-                      {FORMAS.map((f) => (
-                        <option key={f.proporcion} value={f.proporcion}>{f.nombre}</option>
-                      ))}
-                    </select>
+                    <MedidasEspacio espacio={e.id} doc={doc} alCambiar={cambiar} />
                     </div>
                   )}
                 </div>
+                <div style={{ width: `${escala}%` }}>
                 <ConEscenario lado={ladoEscenario(doc, e.id)}>
                   <Lienzo
                     espacio={e.id}
@@ -219,9 +218,9 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
                     seleccionado={seleccionado}
                     alSeleccionar={setSeleccionado}
                     alCambiar={cambiar}
-                    relacionDe={relacionDe}
                   />
                 </ConEscenario>
+                </div>
               </section>
             );
           })}
@@ -254,7 +253,7 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
               )}
               {editable && (
                 <button type="button" onClick={descargarModelo} className="text-left text-xs text-stone-500 underline">
-                  Descargar Excel de ejemplo (Nombre, Personas, Consumición, Notas y Lugar opcional: Jardín o Salón)
+                  Descargar Excel de ejemplo (Nombre, Personas, Consumición, Notas y Lugar opcional: VIP común o Jardines)
                 </button>
               )}
               {sinUbicar.length > 0 && (
@@ -284,7 +283,7 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
                 className="campo"
               />
               <p className="text-xs text-stone-500">
-                Después tocá “Asignar mozos”: se reparten entre jardín y salón según la gente, y en cada lugar por sectores con cantidades de personas parejas.
+                Después tocá “Asignar mozos”: se reparten entre la VIP común y los Jardines según la gente, y en cada lugar por sectores con cantidades de personas parejas.
               </p>
             </section>
           )}
@@ -309,7 +308,7 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
                     <li key={l.id} className="flex justify-between gap-2">
                       <button type="button" onClick={() => setSeleccionado(l.id)} className="truncate text-left hover:underline">
                         {l.nombre}
-                        {espacioDe(l) === "salon" && <span className="ml-1 text-xs text-stone-500">(salón)</span>}
+                        {espacioDe(l) === "salon" && <span className="ml-1 text-xs text-stone-500">(VIP)</span>}
                       </button>
                       <span className="shrink-0 text-stone-500">{l.personas} p.</span>
                     </li>
@@ -321,6 +320,56 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
         </section>
       )}
     </div>
+  );
+}
+
+/** Medidas reales del espacio (metros) y, en la VIP común, si es en L. */
+function MedidasEspacio({ espacio, doc, alCambiar }: { espacio: Espacio; doc: DocumentoPlano; alCambiar: (c: (d: DocumentoPlano) => DocumentoPlano) => void }) {
+  const metros = (v: string, antes: number) => {
+    const n = Number(v.replace(",", "."));
+    return Number.isFinite(n) && n >= 1 && n <= 500 ? Math.round(n * 10) / 10 : antes;
+  };
+  const campo = (valor: number, etiqueta: string, cambio: (n: number) => void) => (
+    <input
+      key={`${etiqueta}-${valor}`}
+      defaultValue={String(valor).replace(".", ",")}
+      inputMode="decimal"
+      aria-label={etiqueta}
+      title={etiqueta}
+      onBlur={(e) => cambio(metros(e.target.value, valor))}
+      onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+      className="w-10 rounded border border-stone-300 bg-white px-1 py-0.5 text-right text-xs"
+    />
+  );
+  if (espacio === "jardin") {
+    const m = medidasJardin(doc);
+    const poner = (c: Partial<typeof MEDIDAS_JARDIN>) => alCambiar((d) => ({ ...d, medidas: { ...d.medidas, jardin: { ...medidasJardin(d), ...c } } }));
+    return (
+      <span className="flex items-center gap-1 text-xs text-stone-600">
+        {campo(m.largo, "Largo de los Jardines (m)", (largo) => poner({ largo }))} ×{campo(m.ancho, "Ancho de los Jardines (m)", (ancho) => poner({ ancho }))} m
+      </span>
+    );
+  }
+  const m = medidasSalon(doc);
+  const poner = (c: Partial<typeof MEDIDAS_SALON>) => alCambiar((d) => ({ ...d, medidas: { ...d.medidas, salon: { ...medidasSalon(d), ...c } } }));
+  return (
+    <span className="flex flex-wrap items-center gap-1 text-xs text-stone-600">
+      {campo(m.largo, "Largo de la VIP común (m)", (largo) => poner({ largo }))} ×{campo(m.ancho, "Ancho de la VIP común (m)", (ancho) => poner({ ancho }))} m
+      <select
+        aria-label="Forma de la VIP común"
+        value={m.en_l ? "l" : "rectangulo"}
+        onChange={(e) => poner({ en_l: e.target.value === "l" })}
+        className="rounded border border-stone-300 bg-white px-1.5 py-0.5 text-xs"
+      >
+        <option value="rectangulo">Rectángulo</option>
+        <option value="l">En L</option>
+      </select>
+      {m.en_l && (
+        <>
+          franja {campo(m.franja_ancho, "Ancho de la franja (m)", (franja_ancho) => poner({ franja_ancho }))} ×{campo(m.franja_largo, "Largo de la franja (m)", (franja_largo) => poner({ franja_largo }))} m
+        </>
+      )}
+    </span>
   );
 }
 
@@ -356,7 +405,6 @@ function Lienzo({
   seleccionado,
   alSeleccionar,
   alCambiar,
-  relacionDe,
 }: {
   espacio: Espacio;
   relacion: number;
@@ -365,7 +413,6 @@ function Lienzo({
   seleccionado: string | null;
   alSeleccionar: (id: string | null) => void;
   alCambiar: (cambio: (d: DocumentoPlano) => DocumentoPlano) => void;
-  relacionDe: (e: Espacio) => number;
 }) {
   const caja = useRef<HTMLDivElement>(null);
   const [anchoPx, setAnchoPx] = useState(600);
@@ -400,7 +447,7 @@ function Lienzo({
     // Si hay un living elegido sin ubicar, se pone donde se tocó (en este espacio).
     const elegido = doc.livings.find((l) => l.id === seleccionado);
     if (elegido && elegido.x === null) {
-      const p = punto(e);
+      const p = dentroDelEspacio(doc, espacio, punto(e));
       const medidas = elegido.w && elegido.h ? {} : medidasPorDefecto(doc.livings.filter(deAca), relacion);
       alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === elegido.id ? { ...l, ...medidas, ...p, espacio } : l)) }));
     } else alSeleccionar(null);
@@ -429,13 +476,13 @@ function Lienzo({
         .find((el) => el instanceof HTMLElement && el.dataset.espacio && el.dataset.espacio !== espacio) as HTMLElement | undefined;
       if (destino) {
         const otro = destino.dataset.espacio as Espacio;
-        const p = relativo(e, destino);
+        const p = dentroDelEspacio(doc, otro, relativo(e, destino));
         // Las medidas se guardan en proporción de cada espacio: se mantiene el alto real.
-        const factor = relacion / relacionDe(otro);
-        alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === id ? { ...l, ...p, espacio: otro, h: l.h ? Math.min(1, l.h * factor) : l.h } : l)) }));
+        const [desde, hasta] = [formaEspacio(doc, espacio), formaEspacio(doc, otro)];
+        alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === id ? { ...l, ...p, espacio: otro, w: l.w ? Math.min(1, (l.w * desde.anchoM) / hasta.anchoM) : l.w, h: l.h ? Math.min(1, (l.h * desde.altoM) / hasta.altoM) : l.h } : l)) }));
       } else {
-        // Soltado acá (o fuera de los dos espacios): queda dentro del rectángulo.
-        const p = punto(e);
+        // Soltado acá (o fuera de los dos espacios): queda dentro de la forma del espacio.
+        const p = dentroDelEspacio(doc, espacio, punto(e));
         alCambiar((d) => ({ ...d, livings: d.livings.map((l) => (l.id === id ? { ...l, ...p } : l)) }));
       }
     }
@@ -446,18 +493,29 @@ function Lienzo({
 
   // Livings sin medidas propias: tamaño fijo, que no depende de los demás.
   const porDefecto = medidasPorDefecto([], relacion);
+  const forma = formaEspacio(doc, espacio);
+  const entero = forma.partes.length === 1;
 
   return (
     <div
       ref={caja}
       data-espacio={espacio}
-      className={`relative w-full touch-none select-none rounded-md border ${arrastrando ? "z-30 overflow-visible" : "overflow-hidden"} ${espacio === "jardin" ? "border-green-900/30" : "border-stone-400"}`}
-      style={{ aspectRatio: `1 / ${relacion}`, ...FONDO[espacio], printColorAdjust: "exact" }}
+      className={`relative w-full touch-none select-none rounded-md ${entero ? "border" : ""} ${arrastrando ? "z-30 overflow-visible" : "overflow-hidden"} ${espacio === "jardin" ? "border-green-900/30" : "border-stone-400"}`}
+      style={{ aspectRatio: `1 / ${relacion}`, ...(entero ? FONDO[espacio] : {}), printColorAdjust: "exact" }}
       onPointerDown={alApretarFondo}
       onPointerMove={alMover}
       onPointerUp={alSoltar}
       onPointerCancel={alSoltar}
     >
+      {/* En L: el piso solo donde hay espacio (lo demás queda vacío). */}
+      {!entero &&
+        forma.partes.map((z, i) => (
+          <div
+            key={i}
+            className={`pointer-events-none absolute border ${espacio === "jardin" ? "border-green-900/30" : "border-stone-400"}`}
+            style={{ left: `${z.x * 100}%`, top: `${z.y * 100}%`, width: `${z.w * 100}%`, height: `${z.h * 100}%`, ...FONDO[espacio], printColorAdjust: "exact" }}
+          />
+        ))}
       {doc.livings
         .filter((l) => deAca(l) && l.x !== null && l.y !== null)
         .map((l) => {
@@ -594,7 +652,7 @@ function DetalleLiving({
         <label className="etiqueta" htmlFor="living-notas">Notas</label>
         <input id="living-notas" disabled={!editable} value={living.notas ?? ""} maxLength={500} onChange={(e) => alEditar({ notas: e.target.value || null })} className="campo" />
       </div>
-      {living.x === null && <p className="text-xs text-amber-800">Sin ubicar: tocá el jardín o el salón donde va.</p>}
+      {living.x === null && <p className="text-xs text-amber-800">Sin ubicar: tocá la VIP común o los Jardines donde va.</p>}
       {editable && (
         <div className="flex gap-3 text-xs">
           {living.x !== null && (
