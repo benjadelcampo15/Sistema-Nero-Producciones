@@ -9,6 +9,7 @@ import { SinAcceso } from "../../sin-acceso";
 import { EtiquetaEmpresa } from "@/components/empresa";
 import { PlanillaEvento } from "./planilla-evento";
 import { EstadoDelEvento, IndicadorSincronizacion } from "./estado-evento";
+import { DuplicarPlanilla } from "./duplicar-planilla";
 import { CierreCajas } from "./cierre-cajas";
 import { LiquidacionIsidris } from "./liquidacion-isidris";
 import { obtenerLiquidacion } from "@/lib/eventos/consultas-liquidacion";
@@ -61,6 +62,7 @@ export default async function PaginaEvento({ params, searchParams }: PageProps<"
             {editaEvento && (
               <Link href={`/eventos/${evento.id}/editar`} className="boton-secundario">Editar evento</Link>
             )}
+            {editaEvento && <DuplicarPlanilla evento={evento} />}
             {editaMovimientos && (
               <Link href={`/eventos/${evento.id}/movimiento`} className="boton">+ Movimiento</Link>
             )}
@@ -98,7 +100,12 @@ export default async function PaginaEvento({ params, searchParams }: PageProps<"
             editable={editaEvento}
             enFinanciero={evento.planilla_en_financiero}
             cerrado={evento.estado === "cerrado"}
-            indicador={<IndicadorSincronizacion evento={evento} editable={editaEvento} />}
+            indicador={
+              <>
+                <IndicadorSincronizacion evento={evento} editable={editaEvento} />
+                {editaEvento && <DuplicarPlanilla evento={evento} className="ml-auto text-sm underline print:hidden" />}
+              </>
+            }
             proveedores={proveedores}
             empresa={evento.empresa}
           />

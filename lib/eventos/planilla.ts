@@ -120,3 +120,39 @@ export function calcularPlanilla(p: Planilla) {
     entradas,
   };
 }
+
+/**
+ * Planilla para un evento nuevo copiada de otra: la estructura (sectores,
+ * conceptos, proveedores, facturas, IVA, alícuota, entradas) como presupuesto.
+ * Nunca copia lo operado: señas y cobros en cero, sin ids de renglón (al
+ * guardar se crean otros, independientes del original). Con "estructura", los
+ * importes también quedan en cero. Los proveedores que no sirven para la
+ * empresa del evento nuevo se quitan.
+ */
+export function planillaCopiada(p: Planilla, modo: "importes" | "estructura", proveedorValido: (id: string) => boolean): Planilla {
+  const con = modo === "importes";
+  return {
+    alicuota_iibb: p.alicuota_iibb,
+    notas: p.notas,
+    ingresos: p.ingresos.map((i) => ({
+      detalle: i.detalle,
+      neto: con ? i.neto : 0,
+      iva: con ? i.iva : 0,
+      bruto: con ? i.bruto : 0,
+      factura: i.factura,
+      pagado: false,
+    })),
+    gastos: p.gastos.map((g) => ({
+      sector: g.sector,
+      detalle: g.detalle,
+      neto: con ? g.neto : 0,
+      tipo_factura: g.tipo_factura,
+      iva: con ? g.iva : 0,
+      urgente: false,
+      sena: 0,
+      datos_bancarios: g.datos_bancarios,
+      proveedor_id: g.proveedor_id && proveedorValido(g.proveedor_id) ? g.proveedor_id : null,
+    })),
+    entradas: p.entradas.map((e) => ({ detalle: e.detalle, valor: con ? e.valor : 0, cantidad: 0, proyectada: con ? e.proyectada : 0 })),
+  };
+}
