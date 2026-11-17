@@ -41,6 +41,15 @@ export async function cargarDemo(sb: SupabaseClient, url: string, clave = CLAVE_
   const dia = (dias: number) => new Date(hoy.getTime() + dias * 86_400_000).toISOString().slice(0, 10);
 
   // ─── 1. Vaciar la base de la demo ────────────────────────────────────────────
+  // Consumido (FUDO): antes que productos y eventos (las recetas y los conteos los referencian).
+  await vaciar("consumo_fisico");
+  await vaciar("fudo_importaciones");
+  await vaciar("fudo_productos");
+  await sb.from("fudo_config").update({ tolerancia_unid: 0, tolerancia_pct: 0 }).not("empresa", "is", null);
+  {
+    const { data: archivos } = await sb.storage.from("fudo").list("reportes", { limit: 1000 });
+    if (archivos?.length) await sb.storage.from("fudo").remove(archivos.map((a) => `reportes/${a.name}`));
+  }
   for (const t of [
     "movimientos_stock", "salidas_stock", "entradas_stock", "pedido_items", "pedidos", "proveedor_productos", "productos",
     "extracto_lineas", "extractos", "cheques", "saldos_bancarios", "pago_aplicaciones", "comprobantes_emitidos", "transacciones", "pagos_cuenta", "facturas",

@@ -7,6 +7,7 @@ const ENLACES = [
   { href: "/stock/productos", nombre: "Productos" },
   { href: "/stock/depositos", nombre: "Depósitos" },
   { href: "/stock/importar", nombre: "Importar Excel" },
+  { href: "/stock/consumido", nombre: "Consumido (FUDO)" },
 ];
 
 /** Sub-navegación de la sección Stock. */
