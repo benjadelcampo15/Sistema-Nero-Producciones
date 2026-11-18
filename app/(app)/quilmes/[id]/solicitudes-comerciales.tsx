@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useCambiosPendientes, useDatosDelServidor } from "@/lib/cambios-pendientes";
 import { guardarSolicitudesQuilmes } from "@/lib/quilmes/acciones";
 import type { Solicitud } from "@/lib/quilmes/solicitudes";
 import { TablaSolicitudes } from "@/components/tabla-solicitudes-quilmes";
@@ -24,6 +25,7 @@ export function SolicitudesComerciales({ eventoId, inicial, editable }: { evento
     setSinGuardar(true);
     setMensaje(null);
   };
+  useDatosDelServidor(inicial, sinGuardar, setLista);
   const guardar = () =>
     iniciar(async () => {
       const r = await guardarSolicitudesQuilmes(eventoId, lista);
@@ -32,6 +34,8 @@ export function SolicitudesComerciales({ eventoId, inicial, editable }: { evento
       setSinGuardar(false);
       setMensaje({ tipo: "ok", texto: "Solicitudes guardadas" });
     });
+
+  useCambiosPendientes(sinGuardar && editable, "Solicitudes Quilmes", guardar);
 
   return (
     <section className="space-y-3">

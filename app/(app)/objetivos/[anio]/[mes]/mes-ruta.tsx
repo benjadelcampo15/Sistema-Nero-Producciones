@@ -13,6 +13,8 @@ import { formatoPesos, colorResultado } from "@/lib/formato";
 import { EtiquetaEmpresa } from "@/components/empresa";
 import { EditorRuta } from "./editor-ruta";
 import { NOMBRE_EMPRESA } from "@/lib/empresas";
+import { crearClienteServidor } from "@/lib/supabase/server";
+import { versionDe } from "@/lib/version";
 
 /** Un mes de los objetivos de Ruta: foto de la planilla (histórico) o cálculo automático. */
 export async function MesRuta({ anio, mes, editable }: { anio: number; mes: number; editable: boolean }) {
@@ -56,7 +58,12 @@ export async function MesRuta({ anio, mes, editable }: { anio: number; mes: numb
     );
   }
 
-  const [clientes, colaboradores, eventosEnVivo] = await Promise.all([listarClientesRuta(), listarColaboradoresRuta(), eventosRutaDelMes(anio, mes)]);
+  const [clientes, colaboradores, eventosEnVivo, version] = await Promise.all([
+    listarClientesRuta(),
+    listarColaboradoresRuta(),
+    eventosRutaDelMes(anio, mes),
+    crearClienteServidor().then((s) => versionDe(s, "ruta_meses", { periodo: p })),
+  ]);
   const nuevo = fila?.modo === "automatico" ? null : await mesNuevoRuta(anio, mes, clientes, colaboradores);
   const cerrado = fila?.modo === "automatico" && fila.cerrado;
   const eventos = fila?.modo === "automatico" && fila.eventosAlCierre ? fila.eventosAlCierre : eventosEnVivo;
@@ -77,6 +84,7 @@ export async function MesRuta({ anio, mes, editable }: { anio: number; mes: numb
         eventos={eventos}
         acumuladoAnterior={Math.round(acumuladoAnterior * 100) / 100}
         editable={editable}
+        version={version}
       />
     </div>
   );

@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition, type PointerEvent as EventoPuntero } from "react";
+import { useRouter } from "next/navigation";
+import { useCambiosPendientes, useDatosDelServidor } from "@/lib/cambios-pendientes";
+import { AvisoConflicto } from "@/components/aviso-conflicto";
 import { guardarPlano } from "@/lib/livings/acciones";
 import { descargarModelo, leerLivingsDeExcel } from "@/lib/livings/excel";
 import {
@@ -44,13 +47,22 @@ const FONDO: Record<Espacio, React.CSSProperties> = {
   },
 };
 
-export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; editable: boolean }) {
+export function EditorPlano({ inicial, editable, version }: { inicial: DocumentoPlano; editable: boolean; version?: string | null }) {
   const [doc, setDoc] = useState<DocumentoPlano>(inicial);
   const [seleccionado, setSeleccionado] = useState<string | null>(null);
   const [sinGuardar, setSinGuardar] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string; detalles?: string[] } | null>(null);
   const [mozosTexto, setMozosTexto] = useState(inicial.mozos.map((m) => m.nombre).join("\n"));
   const [guardando, iniciarGuardado] = useTransition();
+  const [ver, setVer] = useState(version);
+  const [conflicto, setConflicto] = useState(false);
+  const router = useRouter();
+  // Datos nuevos del servidor ("Actualizar"): se toman si no hay cambios sin guardar.
+  useDatosDelServidor(inicial, sinGuardar, (d) => {
+    setDoc(d);
+    setMozosTexto(d.mozos.map((m) => m.nombre).join("\n"));
+  });
+  useDatosDelServidor(version, sinGuardar, setVer);
 
   const espacios = datosEspacios(doc);
   const relacionDe = (e: Espacio) => espacios.find((x) => x.id === e)!.relacion;
@@ -66,20 +78,28 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
     return () => window.removeEventListener("beforeunload", avisar);
   }, [sinGuardar]);
 
-  const guardar = () =>
+  const guardar = (forzar = false) =>
     iniciarGuardado(async () => {
-      const r = await guardarPlano({
+      const r = await guardarPlano(
+        {
         ...doc,
         referencia: null,
         // Un nombre borrado no impide guardar.
         livings: doc.livings.map((l) => ({ ...l, nombre: l.nombre.trim() || "Living" })),
-      });
+        },
+        ver,
+        forzar,
+      );
+      setConflicto(!!r.conflicto);
+      if (r.version !== undefined) setVer(r.version);
       if (r.error) setMensaje({ tipo: "error", texto: r.error });
       else {
         setSinGuardar(false);
         setMensaje({ tipo: "ok", texto: "Plano guardado" });
       }
     });
+
+  useCambiosPendientes(sinGuardar && editable, "Plano de Livings VIP", () => guardar());
 
   /** Reparte los livings entre jardín y salón y los acomoda en columnas. */
   const acomodar = (livings: Living[], respetarEspacio: boolean) => {
@@ -151,7 +171,7 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
           <button type="button" onClick={redistribuir} disabled={!doc.livings.length} className="boton-secundario">Distribuir livings</button>
           <button type="button" onClick={repartirMozos} disabled={!doc.livings.length} className="boton-secundario">Asignar mozos</button>
           <button type="button" onClick={() => window.print()} className="boton-secundario">Imprimir</button>
-          <button type="button" onClick={guardar} disabled={guardando || !sinGuardar} className="boton ml-auto">
+          <button type="button" onClick={() => guardar()} disabled={guardando || !sinGuardar} className="boton ml-auto">
             {guardando ? "Guardando…" : sinGuardar ? "Guardar" : "Guardado"}
           </button>
         </div>
@@ -168,6 +188,18 @@ export function EditorPlano({ inicial, editable }: { inicial: DocumentoPlano; ed
         </div>
       )}
 
+      {conflicto && editable && (
+        <AvisoConflicto
+          pendiente={guardando}
+          alVerSuVersion={() => {
+            setSinGuardar(false);
+            setConflicto(false);
+            setMensaje(null);
+            router.refresh();
+          }}
+          alGuardarIgual={() => guardar(true)}
+        />
+      )}
       {editable && <p className="text-xs text-stone-500 print:hidden">{AYUDA}</p>}
       {doc.livings.length > 0 && (
         <p className={`text-sm ${sinUbicar.length ? "font-medium text-amber-800" : "text-stone-600"} print:hidden`}>

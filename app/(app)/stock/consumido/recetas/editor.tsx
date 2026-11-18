@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useCambiosPendientes } from "@/lib/cambios-pendientes";
 import { guardarReceta } from "@/lib/stock/acciones-consumido";
 import type { RecetaGuardada } from "@/lib/stock/consumido";
 import type { Producto } from "@/lib/stock/fudo";
@@ -50,6 +51,7 @@ function Receta({ receta, productos, edita }: { receta: RecetaGuardada; producto
   const [items, setItems] = useState<Item[]>(receta.items.map((i) => ({ producto_id: i.producto_id, cantidad: String(i.cantidad).replace(".", ","), detalle: i.detalle ?? "" })));
   const [error, setError] = useState<string | null>(null);
   const [pendiente, iniciar] = useTransition();
+  useCambiosPendientes(abierto, `Receta de ${receta.nombre}`);
   const nombre = (id: string) => productos.find((p) => p.id === id);
   const cambiar = (i: number, c: Partial<Item>) => setItems(items.map((x, j) => (j === i ? { ...x, ...c } : x)));
   const guardar = () =>

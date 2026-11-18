@@ -8,6 +8,8 @@ import { EditorMes } from "./editor-mes";
 import { MesRuta } from "./mes-ruta";
 import { EtiquetaEmpresa } from "@/components/empresa";
 import { leerEmpresa } from "@/lib/empresas";
+import { crearClienteServidor } from "@/lib/supabase/server";
+import { versionDe } from "@/lib/version";
 
 export default async function PaginaMesObjetivos({ params, searchParams }: PageProps<"/objetivos/[anio]/[mes]">) {
   const usuario = await obtenerUsuario();
@@ -20,7 +22,10 @@ export default async function PaginaMesObjetivos({ params, searchParams }: PageP
   if (!Number.isInteger(anio) || anio < 2000 || anio > 2100 || !Number.isInteger(mes) || mes < 1 || mes > 12) notFound();
   if (empresa === "ruta") return <MesRuta anio={anio} mes={mes} editable={puede(usuario, "objetivos", "editar")} />;
 
-  const meses = await mesesDelAnio(empresa, anio);
+  const [meses, version] = await Promise.all([
+    mesesDelAnio(empresa, anio),
+    crearClienteServidor().then((s) => versionDe(s, "objetivos_meses", { empresa, anio, mes })),
+  ]);
   // Rentabilidad acumulada del año hasta el mes anterior (la del mes se suma en pantalla).
   let acumuladoAnterior = 0;
   for (let i = 1; i < mes; i++) {
@@ -48,6 +53,7 @@ export default async function PaginaMesObjetivos({ params, searchParams }: PageP
         anio={anio}
         mes={mes}
         inicial={meses.get(mes) ?? MES_VACIO}
+        version={version}
         anterior={anterior}
         acumuladoAnterior={acumuladoAnterior}
         editable={puede(usuario, "objetivos", "editar")}

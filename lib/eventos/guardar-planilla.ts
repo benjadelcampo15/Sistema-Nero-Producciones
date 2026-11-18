@@ -5,6 +5,10 @@ import { formatoPesos } from "@/lib/formato";
 import { esquemaPlanilla, totalGasto, type Planilla } from "./planilla";
 import { conPagosDeCuenta, cuentaDeGastos } from "./cuenta-gastos";
 import { sincronizarEvento } from "./sincronizar";
+import { guardarConVersion, type Version } from "@/lib/version";
+
+/** Lo que devuelve guardar una planilla: la guardada (con ids y su versión nueva) o el error / conflicto. */
+export type ResultadoPlanilla = { error?: string; conflicto?: boolean; planilla?: Planilla; version?: Version };
 
 /**
  * Guarda la planilla entera del evento (ya validado el permiso). Si el evento
@@ -16,7 +20,8 @@ export async function guardarPlanillaDelEvento(
   eventoId: string,
   datos: unknown,
   ajustar?: (p: Planilla) => Planilla,
-): Promise<{ error?: string; planilla?: Planilla }> {
+  control: { version?: Version; forzar?: boolean } = {},
+): Promise<ResultadoPlanilla> {
   if (!/^[0-9a-f-]{36}$/i.test(eventoId)) return { error: "Evento inválido" };
   const validos = esquemaPlanilla.safeParse(datos);
   if (!validos.success) return { error: "Datos inválidos: revisá los montos" };
@@ -59,14 +64,16 @@ export async function guardarPlanillaDelEvento(
   const planilla: Planilla = { ...enPantalla, gastos };
 
   const supabase = await crearClienteServidor();
-  const { error } = await supabase.from("planillas_evento").upsert({ evento_id: eventoId, datos: planilla }, { onConflict: "evento_id" });
-  if (error) return { error: "No se pudo guardar la planilla" };
+  // Si otra persona la guardó mientras se editaba, no se pisa: se avisa (conflicto).
+  const g = await guardarConVersion(supabase, "planillas_evento", { evento_id: eventoId }, { datos: planilla }, control.version, control.forzar);
+  if (g.conflicto) return { conflicto: true, error: "Otra persona guardó cambios en esta planilla mientras editabas" };
+  if (g.error) return { error: "No se pudo guardar la planilla" };
 
   // Solo un evento CERRADO pasa a Financiero (y se actualizan sus movimientos, sin crear otros).
   const { data: evento } = await supabase.from("eventos").select("estado, planilla_en_financiero").eq("id", eventoId).maybeSingle();
   if (evento?.planilla_en_financiero && evento.estado === "cerrado") {
     const r = await sincronizarEvento(supabase, eventoId, planilla);
-    if (r.error) return { error: `La planilla se guardó, pero no se pudo actualizar Financiero.${r.error} Corregilo y volvé a guardar.`, planilla: conPagosDeCuenta(planilla, cuentas) };
+    if (r.error) return { error: `La planilla se guardó, pero no se pudo actualizar Financiero.${r.error} Corregilo y volvé a guardar.`, planilla: conPagosDeCuenta(planilla, cuentas), version: g.version };
   }
-  return { planilla: conPagosDeCuenta(planilla, await cuentaDeGastos(eventoId)) };
+  return { planilla: conPagosDeCuenta(planilla, await cuentaDeGastos(eventoId)), version: g.version };
 }

@@ -11,7 +11,8 @@ import { ESTADOS_EVENTO, type EstadoEvento, type TipoEvento } from "./tipos";
 import { PLANILLA_VACIA, esquemaPlanilla, type Planilla } from "./planilla";
 import { planillaDesdeMovimientos } from "./desde-movimientos";
 import { aplicarEstado, sincronizarEvento } from "./sincronizar";
-import { guardarPlanillaDelEvento } from "./guardar-planilla";
+import { guardarPlanillaDelEvento, type ResultadoPlanilla } from "./guardar-planilla";
+import type { Version } from "@/lib/version";
 import { exigirPermisoEvento, puedeEnEvento, tipoDeEvento } from "./permiso";
 
 /** Pantalla de un evento según su tipo. */
@@ -102,10 +103,10 @@ export async function guardarEvento(
  * además, actualiza sus movimientos en Financiero. Devuelve la planilla
  * guardada (con el id de cada renglón). Los Quilmes guardan con su propia acción.
  */
-export async function guardarPlanillaEvento(eventoId: string, datos: unknown): Promise<{ error?: string; planilla?: Planilla }> {
+export async function guardarPlanillaEvento(eventoId: string, datos: unknown, version?: Version, forzar = false): Promise<ResultadoPlanilla> {
   const { tipo } = await exigirPermisoEvento(eventoId, "costos", "editar");
   if (tipo === "quilmes") return { error: "Este es un evento Quilmes: guardalo desde su planilla" };
-  return guardarPlanillaDelEvento(eventoId, datos);
+  return guardarPlanillaDelEvento(eventoId, datos, undefined, { version, forzar });
 }
 
 /** Cambio de estado desde la pantalla del evento (con la confirmación del lado de la pantalla). */

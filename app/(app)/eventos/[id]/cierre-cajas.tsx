@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useCambiosPendientes, useDatosDelServidor } from "@/lib/cambios-pendientes";
 import { borrarCaja, crearCaja, guardarCaja } from "@/lib/eventos/acciones-cajas";
 import { BILLETES, TEXTO_RESULTADO, cruceCaja, cruceEfectivo, crucePosnet, totalBilletes, totalesCajas, type Billetes, type Caja, type Cruce } from "@/lib/eventos/cajas";
 import { formatoPesos } from "@/lib/formato";
@@ -113,6 +114,13 @@ function TarjetaCaja({ caja, editable }: { caja: Caja; editable: boolean }) {
       else setSinGuardar(false);
     });
   };
+  // "Actualizar": toma lo que guardaron otros en esta caja si acá no hay cambios sin guardar (y avisa si los hay).
+  useDatosDelServidor(caja, sinGuardar, (k) => {
+    setC(k);
+    setPorBilletes(k.billetes !== null);
+    setBilletes(k.billetes ?? {});
+  });
+  useCambiosPendientes(sinGuardar && !bloqueada, `Caja ${caja.nombre}`, () => guardar());
 
   return (
     <section className={`tarjeta space-y-4 p-4 ${cerrada ? "bg-stone-50" : ""}`}>

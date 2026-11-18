@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useCambiosPendientes, useDatosDelServidor } from "@/lib/cambios-pendientes";
+import { AvisoConflicto } from "@/components/aviso-conflicto";
 import { armarPlanillaDesdeMovimientos, guardarPlanillaEvento } from "@/lib/eventos/acciones";
 import {
   TIPOS_FACTURA,
@@ -51,6 +54,7 @@ export function PlanillaEvento({
   proveedores,
   empresa,
   solicitudes,
+  version,
 }: {
   eventoId: string;
   inicial: Planilla;
@@ -65,6 +69,8 @@ export function PlanillaEvento({
   empresa: string;
   /** Evento Quilmes: Solicitudes (precio de venta) arriba y gastos reales agrupados por solicitud. */
   solicitudes?: Solicitud[];
+  /** Versión de la planilla guardada: si otra persona la guarda mientras se edita, no se pisa. */
+  version?: string | null;
 }) {
   const quilmes = solicitudes !== undefined;
   const [desbloqueada, setDesbloqueada] = useState(false);
@@ -75,6 +81,9 @@ export function PlanillaEvento({
   const [p, setP] = useState<Planilla>(inicial);
   const [sol, setSol] = useState<Solicitud[]>(solicitudes ?? []);
   const [quitando, setQuitando] = useState<{ id: string; destino: string } | null>(null);
+  const [ver, setVer] = useState(version);
+  const [conflicto, setConflicto] = useState(false);
+  const router = useRouter();
   const [sinGuardar, setSinGuardar] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const [soloPorPagar, setSoloPorPagar] = useState(false);
@@ -96,9 +105,21 @@ export function PlanillaEvento({
     return () => window.removeEventListener("beforeunload", avisar);
   }, [sinGuardar]);
 
-  const guardar = () =>
+  // Al tocar "Actualizar" (o después de guardar) llegan los datos del servidor: se toman si no hay cambios sin guardar.
+  useDatosDelServidor(inicial, sinGuardar, setP);
+  useDatosDelServidor(solicitudes, sinGuardar, (s) => s && setSol(s));
+  useDatosDelServidor(version, sinGuardar, setVer);
+
+  const guardar = (forzar = false) =>
     iniciar(async () => {
-      const r = quilmes ? await guardarPlanillaQuilmes(eventoId, sol, p) : await guardarPlanillaEvento(eventoId, p);
+      const r = quilmes ? await guardarPlanillaQuilmes(eventoId, sol, p, ver, forzar) : await guardarPlanillaEvento(eventoId, p, ver, forzar);
+      if (r.conflicto) {
+        setConflicto(true);
+        setMensaje({ tipo: "error", texto: r.error ?? "Otra persona guardó cambios mientras editabas" });
+        return;
+      }
+      setConflicto(false);
+      if (r.version !== undefined) setVer(r.version);
       if (r.planilla) setP(r.planilla);
       const guardadas = (r as { solicitudes?: Solicitud[] }).solicitudes;
       if (guardadas) setSol(guardadas);
@@ -111,6 +132,15 @@ export function PlanillaEvento({
         });
       }
     });
+
+  useCambiosPendientes(sinGuardar && puedeEditar, quilmes ? "Planilla Quilmes" : "Planilla del evento", () => guardar());
+  /** Descarta lo propio y trae lo que guardó la otra persona. */
+  const verSuVersion = () => {
+    setSinGuardar(false);
+    setConflicto(false);
+    setMensaje(null);
+    router.refresh();
+  };
 
   const armarDesdeMovimientos = () => {
     if ((p.ingresos.length || p.gastos.length) && !window.confirm("Se reemplazan los ingresos y gastos de la planilla por los movimientos del evento en Financiero (las entradas y notas quedan). ¿Seguir?")) return;
@@ -252,11 +282,13 @@ export function PlanillaEvento({
             <button type="button" onClick={armarDesdeMovimientos} disabled={guardando} className="boton-secundario ml-auto">Armar desde movimientos</button>
           )}
           <button type="button" onClick={() => window.print()} className="boton-secundario">Imprimir</button>
-          <button type="button" onClick={guardar} disabled={guardando || !sinGuardar} className="boton">
+          <button type="button" onClick={() => guardar()} disabled={guardando || !sinGuardar} className="boton">
             {guardando ? "Guardando…" : sinGuardar ? "Guardar planilla" : "Guardada"}
           </button>
         </div>
       )}
+
+      {conflicto && editable && <AvisoConflicto pendiente={guardando} alVerSuVersion={verSuVersion} alGuardarIgual={() => guardar(true)} />}
 
       {/* Resumen del evento */}
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">

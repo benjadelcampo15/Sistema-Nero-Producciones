@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Fragment, useState, useTransition } from "react";
+import { useCambiosPendientes } from "@/lib/cambios-pendientes";
 import { anularImportacion, borrarFisico, guardarFisico, guardarTolerancia, traerDeStock } from "@/lib/stock/acciones-consumido";
 import type { DatosConsumido } from "@/lib/stock/consumido";
 import { COLOR_ESTADO, NOMBRE_ESTADO, consumoFisico, justificado, type EstadoComparacion, type Fisico } from "@/lib/stock/fudo";
@@ -279,6 +280,7 @@ function FilaFisico({ eventoId, productoId, nombre, unidad, inicial, edita, esAd
       />
     </td>
   );
+  useCambiosPendientes(!guardado && edita, `Conteo de ${nombre}`);
   const consumo = consumoFisico(v);
   const vendido = Math.round((consumo - justificado(v)) * 1000) / 1000;
   return (

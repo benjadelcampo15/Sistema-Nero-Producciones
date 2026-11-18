@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useCambiosPendientes, useDatosDelServidor } from "@/lib/cambios-pendientes";
+import { AvisoConflicto } from "@/components/aviso-conflicto";
 import { guardarMes } from "@/lib/objetivos/acciones";
 import type { Empresa } from "@/lib/empresas";
 import { BLOQUES, MESES, calcularMes, type DatosMes, type Item, type ListaMes } from "@/lib/objetivos/tipos";
@@ -24,6 +27,7 @@ export function EditorMes({
   anterior,
   acumuladoAnterior,
   editable,
+  version,
 }: {
   empresa: Empresa;
   anio: number;
@@ -32,12 +36,19 @@ export function EditorMes({
   anterior: DatosMes | null;
   acumuladoAnterior: number;
   editable: boolean;
+  version?: string | null;
 }) {
   const [datos, setDatos] = useState<DatosMes>(inicial);
   const [sinGuardar, setSinGuardar] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const [guardando, iniciar] = useTransition();
+  const [ver, setVer] = useState(version);
+  const [conflicto, setConflicto] = useState(false);
+  const router = useRouter();
   const c = calcularMes(datos);
+  // Datos nuevos del servidor ("Actualizar" o después de guardar): se toman si no hay cambios sin guardar.
+  useDatosDelServidor(inicial, sinGuardar, setDatos);
+  useDatosDelServidor(version, sinGuardar, setVer);
 
   const cambiar = (cambio: (d: DatosMes) => DatosMes) => {
     setDatos(cambio);
@@ -52,15 +63,19 @@ export function EditorMes({
     return () => window.removeEventListener("beforeunload", avisar);
   }, [sinGuardar]);
 
-  const guardar = () =>
+  const guardar = (forzar = false) =>
     iniciar(async () => {
-      const r = await guardarMes(empresa, anio, mes, datos);
+      const r = await guardarMes(empresa, anio, mes, datos, ver, forzar);
+      setConflicto(!!r.conflicto);
+      if (r.version !== undefined) setVer(r.version);
       if (r.error) setMensaje({ tipo: "error", texto: r.error });
       else {
         setSinGuardar(false);
         setMensaje({ tipo: "ok", texto: "Guardado" });
       }
     });
+
+  useCambiosPendientes(sinGuardar && editable, "Objetivos del mes", () => guardar());
 
   const copiarAnterior = () => {
     if (!anterior) return;
@@ -90,10 +105,23 @@ export function EditorMes({
             </button>
           )}
           {mensaje && <p className={`text-sm ${mensaje.tipo === "error" ? "text-red-700" : "text-green-700"}`}>{mensaje.texto}</p>}
-          <button type="button" onClick={guardar} disabled={guardando || !sinGuardar} className="boton ml-auto">
+          <button type="button" onClick={() => guardar()} disabled={guardando || !sinGuardar} className="boton ml-auto">
             {guardando ? "Guardando…" : sinGuardar ? "Guardar" : "Guardado"}
           </button>
         </div>
+      )}
+
+      {conflicto && editable && (
+        <AvisoConflicto
+          pendiente={guardando}
+          alVerSuVersion={() => {
+            setSinGuardar(false);
+            setConflicto(false);
+            setMensaje(null);
+            router.refresh();
+          }}
+          alGuardarIgual={() => guardar(true)}
+        />
       )}
 
       <div className="grid gap-4 sm:grid-cols-4">

@@ -1,5 +1,6 @@
 "use server";
 
+import { guardarConVersion, type Version } from "@/lib/version";
 import { refresh } from "next/cache";
 import { z } from "zod";
 import { exigirPermiso } from "@/lib/auth/sesion";
@@ -23,7 +24,7 @@ async function estaCerrado(p: string) {
 }
 
 /** Guarda los datos de un mes automático (fees, porcentajes, gastos, one shots, repartos). */
-export async function guardarMesRuta(anio: number, mes: number, datos: unknown): Promise<Resultado> {
+export async function guardarMesRuta(anio: number, mes: number, datos: unknown, version?: Version, forzar = false): Promise<{ error?: string; conflicto?: boolean; version?: Version }> {
   await exigirPermiso("objetivos", "editar");
   const p = periodoAutomatico(anio, mes);
   if (!p) return { error: "Ese mes es histórico: no se edita" };
@@ -42,10 +43,12 @@ export async function guardarMesRuta(anio: number, mes: number, datos: unknown):
     distribucion_variable: d.distribucion_variable.filter((r) => r.nombre || r.porcentaje),
   };
   const supabase = await crearClienteServidor();
-  const { error } = await supabase.from("ruta_meses").upsert({ periodo: p, modo: "automatico", datos: limpio }, { onConflict: "periodo" });
-  if (error) return { error: "No se pudo guardar" };
+  // Si otra persona guardó el mes mientras se editaba, no se pisa: se avisa.
+  const g = await guardarConVersion(supabase, "ruta_meses", { periodo: p }, { modo: "automatico", datos: limpio }, version, forzar);
+  if (g.conflicto) return { conflicto: true, error: "Otra persona guardó cambios en este mes mientras editabas" };
+  if (g.error) return { error: "No se pudo guardar" };
   refresh();
-  return {};
+  return { version: g.version };
 }
 
 /** Cierra el mes: deja de editarse y la rentabilidad variable queda con los balances de hoy. */

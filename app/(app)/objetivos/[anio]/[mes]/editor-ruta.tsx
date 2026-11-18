@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState, useTransition, createContext, useContext } from "react";
+import { useRouter } from "next/navigation";
+import { useCambiosPendientes, useDatosDelServidor } from "@/lib/cambios-pendientes";
+import { AvisoConflicto } from "@/components/aviso-conflicto";
 import { calcularMesRuta, sincronizarOneShot, type Calculado, type EventoRuta, type MesRuta } from "@/lib/objetivos/ruta";
 import { SueldosOneShots, repartoInicial } from "./sueldos-one-shots";
 import { cambiarActivoPersonaRuta, cerrarMesRuta, crearPersonaRuta, guardarMesRuta, reabrirMesRuta } from "@/lib/objetivos/ruta-acciones";
@@ -31,6 +34,7 @@ export function EditorRuta({
   eventos,
   acumuladoAnterior,
   editable: puedeEditar,
+  version,
 }: {
   anio: number;
   mes: number;
@@ -43,6 +47,7 @@ export function EditorRuta({
   eventos: EventoRuta[];
   acumuladoAnterior: number;
   editable: boolean;
+  version?: string | null;
 }) {
   const [datos, setDatos] = useState<MesRuta>(inicial);
   const [clientes, setClientes] = useState(clientesIniciales);
@@ -51,6 +56,14 @@ export function EditorRuta({
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const [pendiente, iniciar] = useTransition();
   const editable = puedeEditar && !cerrado;
+  const [ver, setVer] = useState(version);
+  const [conflicto, setConflicto] = useState(false);
+  const router = useRouter();
+  // Datos nuevos del servidor ("Actualizar" o después de guardar): se toman si no hay cambios sin guardar.
+  useDatosDelServidor(inicial, sinGuardar, setDatos);
+  useDatosDelServidor(clientesIniciales, sinGuardar, setClientes);
+  useDatosDelServidor(colaboradoresIniciales, sinGuardar, setColaboradores);
+  useDatosDelServidor(version, sinGuardar, setVer);
 
   const nombres = { clientes: new Map(clientes.map((c) => [c.id, c.nombre])), colaboradores: new Map(colaboradores.map((c) => [c.id, c.nombre])) };
   const c = calcularMesRuta(datos, nombres, eventos);
@@ -78,7 +91,15 @@ export function EditorRuta({
       }
     });
 
-  const guardar = () => correr(() => guardarMesRuta(anio, mes, datos), "Guardado", () => setSinGuardar(false));
+  /** Guarda el mes sin pisar lo que haya guardado otra persona mientras tanto (salvo que se pida). */
+  const guardarRuta = async (d: MesRuta, forzar = false) => {
+    const r = await guardarMesRuta(anio, mes, d, ver, forzar);
+    setConflicto(!!r.conflicto);
+    if (r.version !== undefined) setVer(r.version);
+    return r;
+  };
+  const guardar = (forzar = false) => correr(() => guardarRuta(datos, forzar), "Guardado", () => setSinGuardar(false));
+  useCambiosPendientes(sinGuardar && editable, "Objetivos del mes (Ruta)", () => guardar());
 
   /** Corrige a mano un importe calculado (o lo vuelve al automático) y lo guarda en el momento. */
   const ajustar = (clave: string, valor: number | null) => {
@@ -88,13 +109,13 @@ export function EditorRuta({
     const nuevos = { ...datos, ajustes };
     setDatos(nuevos);
     setMensaje(null);
-    correr(() => guardarMesRuta(anio, mes, nuevos), valor === null ? "Se restauró el cálculo automático" : "Ajuste guardado", () => setSinGuardar(false));
+    correr(() => guardarRuta(nuevos), valor === null ? "Se restauró el cálculo automático" : "Ajuste guardado", () => setSinGuardar(false));
   };
   const restaurarTodos = () => {
     if (!window.confirm(`¿Restaurar el cálculo automático de los ${c.ajustesVigentes.length} importes corregidos a mano?`)) return;
     const nuevos = { ...datos, ajustes: {} };
     setDatos(nuevos);
-    correr(() => guardarMesRuta(anio, mes, nuevos), "Se restauraron todos los cálculos automáticos", () => setSinGuardar(false));
+    correr(() => guardarRuta(nuevos), "Se restauraron todos los cálculos automáticos", () => setSinGuardar(false));
   };
   const cerrar = () => {
     if (sinGuardar) return setMensaje({ tipo: "error", texto: "Guardá los cambios antes de cerrar el mes" });
@@ -154,6 +175,18 @@ export function EditorRuta({
         </p>
       )}
 
+      {conflicto && editable && (
+        <AvisoConflicto
+          pendiente={pendiente}
+          alVerSuVersion={() => {
+            setSinGuardar(false);
+            setConflicto(false);
+            setMensaje(null);
+            router.refresh();
+          }}
+          alGuardarIgual={() => guardar(true)}
+        />
+      )}
       {puedeEditar && (
         <div className="flex flex-wrap items-center gap-2">
           {mensaje && <p className={`text-sm ${mensaje.tipo === "error" ? "text-red-700" : "text-green-700"}`}>{mensaje.texto}</p>}
@@ -169,7 +202,7 @@ export function EditorRuta({
                     Cerrar mes
                   </button>
                 )}
-                <button type="button" onClick={guardar} disabled={pendiente || !sinGuardar} className="boton">
+                <button type="button" onClick={() => guardar()} disabled={pendiente || !sinGuardar} className="boton">
                   {pendiente ? "Guardando…" : sinGuardar ? "Guardar" : "Guardado"}
                 </button>
               </>

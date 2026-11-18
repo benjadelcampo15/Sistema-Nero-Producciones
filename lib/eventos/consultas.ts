@@ -116,6 +116,13 @@ export async function obtenerDetalleEvento(id: string) {
   };
 }
 
+/** Versión de la planilla guardada (para detectar si otro la guardó mientras se editaba). */
+export async function versionPlanilla(eventoId: string): Promise<string | null> {
+  const supabase = await crearClienteServidor();
+  const { data } = await supabase.from("planillas_evento").select("actualizado_en").eq("evento_id", eventoId).maybeSingle();
+  return (data?.actualizado_en as string | undefined) ?? null;
+}
+
 /** La planilla del evento (resumen, ingresos, gastos por sector y entradas). */
 export async function obtenerPlanillaEvento(eventoId: string): Promise<Planilla> {
   const supabase = await crearClienteServidor();

@@ -7,6 +7,7 @@ import { MODO_DEMO } from "@/lib/cliente";
 import { EnlacesMenu, type GrupoMenu } from "./enlaces-menu";
 import { BarraLateral } from "./barra-lateral";
 import { EtiquetasTablas } from "./etiquetas-tablas";
+import { BotonActualizar } from "@/components/boton-actualizar";
 import Link from "next/link";
 import { centralConfigurada } from "@/lib/solicitudes/central";
 import { cantidadNovedades } from "@/lib/solicitudes/consultas";
@@ -37,6 +38,10 @@ export default function LayoutApp({ children }: LayoutProps<"/">) {
         </Suspense>
       </aside>
       <main className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8 print:p-0">
+        {/* Actualizar: trae lo que guardaron los demás sin recargar la página (en todas las pantallas). */}
+        <div className="-mt-3 mb-2 flex justify-end md:-mt-5 print:hidden">
+          <BotonActualizar />
+        </div>
         {MODO_DEMO && (
           <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900 print:hidden">
             <span className="font-semibold">Modo demo:</span> los datos son ficticios y se reinician todas las noches. Probá lo que quieras.

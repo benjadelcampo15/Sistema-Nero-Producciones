@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
-import { cajasDeEvento, obtenerDetalleEvento, obtenerPlanillaEvento, type DesgloseCategoria } from "@/lib/eventos/consultas";
+import { cajasDeEvento, obtenerDetalleEvento, obtenerPlanillaEvento, versionPlanilla, type DesgloseCategoria } from "@/lib/eventos/consultas";
 import { formatoFecha, formatoPesos, colorResultado } from "@/lib/formato";
 import { BarraPresupuesto } from "@/components/barra-presupuesto";
 import { TablaMovimientos } from "@/components/tabla-movimientos";
@@ -23,11 +23,12 @@ export default async function PaginaEvento({ params, searchParams }: PageProps<"
   const { vista: parametroVista } = await searchParams;
   const vista = parametroVista === "movimientos" || parametroVista === "cajas" ? parametroVista : "planilla";
   const enPlanilla = vista === "planilla";
-  const [detalle, planilla, cajas, liquidacion] = await Promise.all([
+  const [detalle, planilla, cajas, liquidacion, version] = await Promise.all([
     obtenerDetalleEvento(id),
     enPlanilla ? obtenerPlanillaEvento(id) : null,
     vista === "cajas" ? cajasDeEvento(id) : null,
     enPlanilla ? obtenerLiquidacion(id) : null,
+    enPlanilla ? versionPlanilla(id) : null,
   ]);
   if (!detalle) notFound();
   if (detalle.evento.tipo === "quilmes") redirect(`/quilmes/${id}${parametroVista === "movimientos" ? "?vista=movimientos" : ""}`);
@@ -98,6 +99,7 @@ export default async function PaginaEvento({ params, searchParams }: PageProps<"
             key={evento.id}
             eventoId={evento.id}
             inicial={planilla}
+            version={version}
             editable={editaEvento}
             enFinanciero={evento.planilla_en_financiero}
             cerrado={evento.estado === "cerrado"}

@@ -5,6 +5,8 @@ import { crearClienteServidor } from "@/lib/supabase/server";
 import { exigirPermisoEvento, puedeEnEvento } from "@/lib/eventos/permiso";
 import { guardarPlanillaDelEvento } from "@/lib/eventos/guardar-planilla";
 import type { Planilla } from "@/lib/eventos/planilla";
+import type { ResultadoPlanilla } from "@/lib/eventos/guardar-planilla";
+import { versionDe, type Version } from "@/lib/version";
 import { conIngresosQuilmes, esquemaSolicitudes, ivaSugerido, type Solicitud } from "./solicitudes";
 import { datosPresupuesto, huellaPresupuesto } from "./presupuesto";
 
@@ -38,7 +40,7 @@ async function eventoQuilmes(eventoId: string) {
  * Un gasto no puede quedar apuntando a una solicitud que se quitó: la pantalla
  * pide decidir antes (conservar como adicional o reasignar), nunca se borra.
  */
-export async function guardarPlanillaQuilmes(eventoId: string, lista: unknown, planilla: unknown): Promise<{ error?: string; planilla?: Planilla; solicitudes?: Solicitud[] }> {
+export async function guardarPlanillaQuilmes(eventoId: string, lista: unknown, planilla: unknown, version?: Version, forzar = false): Promise<ResultadoPlanilla & { solicitudes?: Solicitud[] }> {
   if (!/^[0-9a-f-]{36}$/i.test(eventoId)) return { error: "Evento inválido" };
   await exigirPermisoEvento(eventoId, "evento", "editar");
   await exigirPermisoEvento(eventoId, "costos", "editar");
@@ -50,10 +52,14 @@ export async function guardarPlanillaQuilmes(eventoId: string, lista: unknown, p
   if (gastos.some((g) => g.solicitud_id && !ids.has(g.solicitud_id))) {
     return { error: "Hay gastos reales vinculados a una solicitud que quitaste: elegí si quedan como adicionales o a qué solicitud pasan" };
   }
+  // Si otra persona guardó la planilla mientras se editaba, no se guarda nada (ni las solicitudes).
+  if (version !== undefined && !forzar && (await versionDe(await crearClienteServidor(), "planillas_evento", { evento_id: eventoId })) !== version) {
+    return { conflicto: true, error: "Otra persona guardó cambios en esta planilla mientras editabas" };
+  }
   const r = await guardarTabla(eventoId, n.solicitudes);
   if (r.error) return r;
   // El ingreso previsto sale de las Solicitudes recién guardadas (y, si está cerrado, se actualiza Financiero).
-  const g = await guardarPlanillaDelEvento(eventoId, planilla, (p) => conIngresosQuilmes(p, n.solicitudes!));
+  const g = await guardarPlanillaDelEvento(eventoId, planilla, (p) => conIngresosQuilmes(p, n.solicitudes!), { version, forzar });
   return { ...g, solicitudes: n.solicitudes };
 }
 

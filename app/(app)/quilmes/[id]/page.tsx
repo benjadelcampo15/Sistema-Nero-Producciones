@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { obtenerUsuario, puede } from "@/lib/auth/sesion";
-import { obtenerDetalleEvento, obtenerEvento, obtenerPlanillaEvento } from "@/lib/eventos/consultas";
+import { obtenerDetalleEvento, obtenerEvento, obtenerPlanillaEvento, versionPlanilla } from "@/lib/eventos/consultas";
 import { proveedoresParaEvento } from "@/lib/eventos/cuenta-gastos";
 import { solicitudesEvento } from "@/lib/quilmes/consultas";
 import { datosPresupuesto, presupuestoEmitido, versionesPresupuesto, type DocumentoPresupuesto } from "@/lib/quilmes/presupuesto";
@@ -41,7 +41,7 @@ export default async function PaginaEventoQuilmes({ params, searchParams }: Page
   if (evento.tipo !== "quilmes") redirect(`/eventos/${id}`);
 
   const version = typeof sp.v === "string" && /^\d+$/.test(sp.v) ? Number(sp.v) : null;
-  const [solicitudes, planilla, detalle, documento, versiones] = await Promise.all([
+  const [solicitudes, planilla, detalle, documento, versiones, versionGuardada] = await Promise.all([
     vista === "planilla" || vista === "solicitudes" ? solicitudesEvento(id) : null,
     vista === "planilla" ? obtenerPlanillaEvento(id) : null,
     vista === "movimientos" ? obtenerDetalleEvento(id) : null,
@@ -51,6 +51,7 @@ export default async function PaginaEventoQuilmes({ params, searchParams }: Page
         : datosPresupuesto(id).then((d): DocumentoPresupuesto | null => (d ? { ...d, numero: null, version: null, emitido_en: null } : null))
       : null,
     vista === "presupuesto" ? versionesPresupuesto(id) : null,
+    vista === "planilla" ? versionPlanilla(id) : null,
   ]);
   const proveedores = planilla && evento.planilla_en_financiero ? await proveedoresParaEvento(evento.empresa) : undefined;
   const editaMovimientos = editaCostos || puede(usuario, "financiero", "editar");
@@ -103,6 +104,7 @@ export default async function PaginaEventoQuilmes({ params, searchParams }: Page
           key={evento.id}
           eventoId={evento.id}
           inicial={planilla}
+          version={versionGuardada}
           solicitudes={solicitudes}
           editable={edita && editaCostos}
           enFinanciero={evento.planilla_en_financiero}

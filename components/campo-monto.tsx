@@ -31,6 +31,12 @@ export function CampoMonto({
 }) {
   // Mientras se escribe se muestra lo tecleado; si no, el valor (que puede cambiar por un cálculo automático).
   const [borrador, setBorrador] = useState<string | null>(null);
+  // Si el valor cambia desde afuera (por ejemplo, al tocar "Actualizar"), se muestra el nuevo.
+  const [valorPrevio, setValorPrevio] = useState(valor);
+  if (valor !== valorPrevio) {
+    setValorPrevio(valor);
+    if (borrador !== null && (borrador.trim() ? leerMonto(borrador) : 0) !== valor) setBorrador(null);
+  }
   const error = borrador !== null && borrador.trim() !== "" && leerMonto(borrador) === null;
 
   return (
