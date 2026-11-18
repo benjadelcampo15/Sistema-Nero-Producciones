@@ -2,7 +2,7 @@
 
 import { refresh } from "next/cache";
 import { z } from "zod";
-import { exigirPermiso } from "@/lib/auth/sesion";
+import { exigirAdmin, exigirPermiso } from "@/lib/auth/sesion";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { hoy, parsearMonto } from "@/lib/formato";
 import { DIAS_AVISO, ESTADOS, sumarDias, type EstadoCheque, type TipoCheque } from "./tipos";
@@ -86,6 +86,26 @@ export async function borrarCheque(id: string): Promise<{ error?: string }> {
   const supabase = await crearClienteServidor();
   const { data } = await supabase.from("cheques").delete().eq("id", id).select("id");
   if (!data?.length) return { error: "No se pudo borrar el cheque" };
+  refresh();
+  return {};
+}
+
+/** Elige quiénes reciben el mail de cheques por vencer (solo administradores). Lista vacía = el criterio de antes. */
+export async function guardarDestinatariosCheques(ids: string[]): Promise<{ error?: string }> {
+  await exigirAdmin();
+  const v = z.array(z.uuid()).max(100).safeParse(ids);
+  if (!v.success) return { error: "Datos inválidos" };
+  const supabase = await crearClienteServidor();
+  const { data: actuales } = await supabase.from("cheques_aviso_destinatarios").select("usuario_id");
+  const quitar = (actuales ?? []).map((a) => a.usuario_id as string).filter((id) => !v.data.includes(id));
+  if (quitar.length) {
+    const { error } = await supabase.from("cheques_aviso_destinatarios").delete().in("usuario_id", quitar);
+    if (error) return { error: "No se pudo guardar" };
+  }
+  if (v.data.length) {
+    const { error } = await supabase.from("cheques_aviso_destinatarios").upsert(v.data.map((usuario_id) => ({ usuario_id })), { onConflict: "usuario_id", ignoreDuplicates: true });
+    if (error) return { error: "No se pudo guardar" };
+  }
   refresh();
   return {};
 }

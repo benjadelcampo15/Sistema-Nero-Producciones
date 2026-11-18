@@ -9,6 +9,8 @@ import { SinAcceso } from "../../sin-acceso";
 import { AccionesCheque, FormularioCheque } from "./formulario-cheque";
 import { AlternarEmpresa } from "@/components/empresa";
 import { NOMBRE_EMPRESA, leerEmpresa } from "@/lib/empresas";
+import { destinatariosElegidos, usuariosParaAviso } from "@/lib/cheques/aviso";
+import { DestinatariosAviso } from "./destinatarios-aviso";
 
 export default async function PaginaChequesPorTipo({ params, searchParams }: PageProps<"/cheques/[tipo]">) {
   const usuario = await obtenerUsuario();
@@ -20,7 +22,12 @@ export default async function PaginaChequesPorTipo({ params, searchParams }: Pag
   const empresa = leerEmpresa((await searchParams).empresa);
   const editable = puede(usuario, "cheques", "editar");
 
-  const [cheques, eventos] = await Promise.all([listarCheques(tipo, empresa), editable ? obtenerEventosResumidos() : []]);
+  const [cheques, eventos, elegidos, usuarios] = await Promise.all([
+    listarCheques(tipo, empresa),
+    editable ? obtenerEventosResumidos() : [],
+    destinatariosElegidos(),
+    usuario.esAdmin ? usuariosParaAviso() : Promise.resolve([]),
+  ]);
   const fechaHoy = hoy();
   const pendientes = cheques.filter((c) => c.estado === "pendiente");
   // Historial: lo último primero.
@@ -77,9 +84,12 @@ export default async function PaginaChequesPorTipo({ params, searchParams }: Pag
         </details>
       )}
 
-      <p className="text-xs text-stone-500">
-        Se avisa por mail {DIAS_AVISO} días antes de la fecha de pago de cada cheque pendiente.
-      </p>
+      <DestinatariosAviso
+        dias={DIAS_AVISO}
+        esAdmin={usuario.esAdmin}
+        elegidos={elegidos.map((e) => e.id)}
+        usuarios={usuario.esAdmin ? usuarios : elegidos.map(({ id, nombre }) => ({ id, nombre, email: "" }))}
+      />
 
       <Lista titulo="Pendientes" cheques={pendientes} fechaHoy={fechaHoy} editable={editable} eventos={eventos} vacio={`No hay cheques pendientes de ${NOMBRE_EMPRESA[empresa]}.`} />
       {resto.length > 0 && <Lista titulo="Historial" cheques={resto} fechaHoy={fechaHoy} editable={editable} eventos={eventos} />}

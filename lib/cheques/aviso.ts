@@ -9,10 +9,13 @@ import { NOMBRE_EMPRESA } from "@/lib/empresas";
 type ChequeAviso = { id: string; empresa: "nero" | "ruta"; tipo: TipoCheque; monto: number; fecha_pago: string; contraparte: string; banco: string | null; numero: string | null };
 
 /**
- * A quién avisar: CHEQUES_AVISO_PARA (emails separados por coma) si está
- * configurado; si no, los usuarios activos que pueden ver la sección (los admin siempre).
+ * A quién avisar: los usuarios que eligió un administrador en Cheques (si hay);
+ * si no, CHEQUES_AVISO_PARA (emails separados por coma) si está configurado;
+ * si no, los usuarios activos que pueden ver la sección (los admin siempre).
  */
 async function destinatarios() {
+  const elegidos = await destinatariosElegidos();
+  if (elegidos.length) return elegidos.map((u) => u.email);
   const fijos = (process.env.CHEQUES_AVISO_PARA ?? "").split(",").map((e) => e.trim()).filter(Boolean);
   if (fijos.length) return fijos;
   const admin = crearClienteAdmin();
@@ -95,4 +98,19 @@ export async function avisarChequesPorVencer() {
     .update({ aviso_enviado_en: new Date().toISOString() })
     .in("id", cheques.map((c) => c.id));
   return { cheques: cheques.length, para };
+}
+
+/** Usuarios activos elegidos para recibir el aviso de cheques (vacío = se usa el criterio de antes). */
+export async function destinatariosElegidos() {
+  const admin = crearClienteAdmin();
+  const { data } = await admin.from("cheques_aviso_destinatarios").select("usuario_id, perfiles!inner(nombre, email, activo)");
+  return ((data ?? []) as unknown as { usuario_id: string; perfiles: { nombre: string; email: string; activo: boolean } }[])
+    .filter((d) => d.perfiles.activo && d.perfiles.email)
+    .map((d) => ({ id: d.usuario_id, nombre: d.perfiles.nombre, email: d.perfiles.email }));
+}
+
+/** Los usuarios activos (para elegir quién recibe el aviso). */
+export async function usuariosParaAviso() {
+  const { data } = await crearClienteAdmin().from("perfiles").select("id, nombre, email").eq("activo", true).order("nombre");
+  return (data ?? []) as { id: string; nombre: string; email: string }[];
 }
