@@ -85,6 +85,7 @@ export default async function PaginaEventoQuilmes({ params, searchParams }: Page
             {veCostos && <Link href={`/quilmes/${id}`} className="boton-secundario">Ver rentabilidad interna</Link>}
             {edita && <Link href={`/quilmes/${id}/editar`} className="boton-secundario">Editar evento</Link>}
             {edita && <DuplicarPlanilla evento={evento} />}
+            {puede(usuario, "stock", "ver") && <Link href={`/stock/eventos/${id}`} className="boton-secundario">Stock del evento</Link>}
             {editaMovimientos && <Link href={`/eventos/${id}/movimiento`} className="boton-secundario">+ Movimiento</Link>}
           </div>
         </div>

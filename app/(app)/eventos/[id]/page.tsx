@@ -65,6 +65,7 @@ export default async function PaginaEvento({ params, searchParams }: PageProps<"
               <Link href={`/eventos/${evento.id}/editar`} className="boton-secundario">Editar evento</Link>
             )}
             {editaEvento && <DuplicarPlanilla evento={evento} />}
+            {puede(usuario, "stock", "ver") && <Link href={`/stock/eventos/${evento.id}`} className="boton-secundario">Stock del evento</Link>}
             {editaMovimientos && (
               <Link href={`/eventos/${evento.id}/movimiento`} className="boton">+ Movimiento</Link>
             )}
