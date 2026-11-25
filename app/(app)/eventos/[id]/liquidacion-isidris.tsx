@@ -127,6 +127,9 @@ export function LiquidacionIsidris({
         <span className="text-sm text-stone-500">
           {cantidad(resumen.entradas.vendidas)} entradas · {formatoPesos(resumen.entradas.vendido)} · Isidris {formatoPesos(resumen.totalIsidris)}
         </span>
+        <a href={`/eventos/${eventoId}/liquidacion/excel`} onClick={(e) => e.stopPropagation()} className="boton-secundario py-1 text-sm print:hidden">
+          Descargar Excel liquidación
+        </a>
       </summary>
 
       <div className="space-y-5 border-t border-stone-200 p-4">

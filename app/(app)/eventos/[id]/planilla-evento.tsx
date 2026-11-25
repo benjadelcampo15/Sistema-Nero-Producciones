@@ -252,7 +252,12 @@ export function PlanillaEvento({
 
   return (
     <div className="space-y-6">
-      {indicador && <div className="flex flex-wrap items-center gap-2 print:hidden">{indicador}</div>}
+      {(indicador || (!editable && !quilmes)) && (
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
+          {indicador}
+          {!editable && !quilmes && <BotonExcel href={`/eventos/${eventoId}/excel`} sinGuardar={false} />}
+        </div>
+      )}
       {puedeEditar && bloqueada && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-stone-300 bg-stone-50 px-4 py-3 text-sm print:hidden">
           <span>🔒 Evento cerrado: la planilla está bloqueada porque sus movimientos ya están en Financiero.</span>
@@ -282,6 +287,7 @@ export function PlanillaEvento({
             <button type="button" onClick={armarDesdeMovimientos} disabled={guardando} className="boton-secundario ml-auto">Armar desde movimientos</button>
           )}
           <button type="button" onClick={() => window.print()} className="boton-secundario">Imprimir</button>
+          {!quilmes && <BotonExcel href={`/eventos/${eventoId}/excel`} sinGuardar={sinGuardar} />}
           <button type="button" onClick={() => guardar()} disabled={guardando || !sinGuardar} className="boton">
             {guardando ? "Guardando…" : sinGuardar ? "Guardar planilla" : "Guardada"}
           </button>
@@ -568,6 +574,21 @@ export function PlanillaEvento({
         </div>
       )}
     </div>
+  );
+}
+
+/** Descarga el Excel de la planilla (lo guardado; si hay cambios sin guardar, avisa). */
+function BotonExcel({ href, sinGuardar }: { href: string; sinGuardar: boolean }) {
+  return (
+    <a
+      href={href}
+      onClick={(e) => {
+        if (sinGuardar && !window.confirm("Hay cambios sin guardar: el Excel tiene la planilla guardada. ¿Descargar igual?")) e.preventDefault();
+      }}
+      className="boton-secundario"
+    >
+      Descargar Excel
+    </a>
   );
 }
 
