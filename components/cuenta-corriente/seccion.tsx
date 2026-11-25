@@ -34,6 +34,13 @@ export async function SeccionCuentaCorriente({
     <section id="cuenta" className="scroll-mt-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-semibold">Cuenta corriente</h2>
+        <a
+          href={`/${tipo === "pago" ? "facturas" : "facturar"}/cuentas/${id}/excel?empresa=${empresa}`}
+          className="boton-secundario ml-auto py-1 text-sm print:hidden"
+          title="Baja el extracto (debe, haber y saldo) y los comprobantes pendientes con esta empresa"
+        >
+          Descargar Excel
+        </a>
         {empresas.length > 1 && (
           <div className="flex rounded-full border border-stone-300 bg-white p-0.5" role="group" aria-label="Empresa">
             {empresas.map((e) => (
