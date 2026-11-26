@@ -58,10 +58,11 @@ export async function cargarDemo(sb: SupabaseClient, url: string, clave = CLAVE_
   ]) await vaciar(t);
   await vaciar("cuentas_bancarias");
   await vaciar("depositos");
-  // Tareas (se borra todo en cascada desde los espacios) y Solicitudes de pagos.
+  // Tareas (se borra todo en cascada desde los espacios), Propuestas y Solicitudes de pagos.
   await vaciar("tareas_importaciones");
   await vaciar("tareas_busquedas");
   await vaciar("tareas_espacios");
+  await vaciar("propuestas_pago");
   await vaciar("solicitudes_pago");
   await vaciar("auditoria");
 
