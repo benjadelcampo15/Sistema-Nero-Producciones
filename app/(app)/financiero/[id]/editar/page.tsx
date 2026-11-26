@@ -18,7 +18,7 @@ export default async function PaginaEditarMovimiento({ params, searchParams }: P
 
   const [categorias, eventos, cheque] = await Promise.all([obtenerCategorias(), obtenerEventosResumidos(), obtenerChequeDeMovimiento(id)]);
   const volverA =
-    typeof volver_a === "string" && /^\/(financiero|eventos)/.test(volver_a) ? volver_a : "/financiero";
+    typeof volver_a === "string" && /^\/(financiero|eventos|cuadro-anual)/.test(volver_a) ? volver_a : "/financiero";
 
   return (
     <div className="space-y-6">

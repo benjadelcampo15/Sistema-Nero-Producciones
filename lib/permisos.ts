@@ -28,6 +28,7 @@ export const MENU = [
     grupo: "Administración",
     items: [
       { nombre: "Financiero", href: "/financiero", permiso: "financiero" },
+      { nombre: "Cuadro anual", href: "/cuadro-anual", permiso: "financiero" },
       { nombre: "Cashflow", href: "/cashflow", permiso: "financiero" },
       { nombre: "Saldos bancarios", href: "/saldos", permiso: "financiero" },
       { nombre: "Extractos bancarios", href: "/extractos", permiso: "financiero" },

@@ -52,7 +52,7 @@ const esquemaTransaccion = z.object({
 /** Solo se vuelve a pantallas propias (evita redirecciones a sitios externos). */
 function destinoSeguro(valor: FormDataEntryValue | null) {
   const texto = typeof valor === "string" ? valor : "";
-  return /^\/(financiero|eventos)(\/[\w-]*)*(\?[\w=&%.+-]*)?$/.test(texto) ? texto : "/financiero";
+  return /^\/(financiero|eventos|cuadro-anual)(\/[\w-]*)*(\?[\w=&%.+:-]*)?(#[\w-]+)?$/.test(texto) ? texto : "/financiero";
 }
 
 /** Crea (id = null) o edita una transacción. La base valida permisos con RLS. */
